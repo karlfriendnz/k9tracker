@@ -10,10 +10,12 @@ const schema = z.object({
 
 export async function POST(
   req: Request,
-  { params }: { params: { templateId: string } }
+  { params }: { params: Promise<{ templateId: string }> }
 ) {
   const session = await auth()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { templateId } = await params
 
   const trainerProfile = await prisma.trainerProfile.findUnique({
     where: { userId: session.user.id },
@@ -23,7 +25,7 @@ export async function POST(
 
   // Verify template belongs to trainer
   const template = await prisma.trainingTemplate.findFirst({
-    where: { id: params.templateId, trainerId: trainerProfile.id },
+    where: { id: templateId, trainerId: trainerProfile.id },
     include: { tasks: { orderBy: [{ dayOffset: 'asc' }, { order: 'asc' }] } },
   })
   if (!template) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -48,13 +50,11 @@ export async function POST(
     date.setDate(date.getDate() + (t.dayOffset - 1))
     return {
       clientId,
-      trainerId: trainerProfile.id,
       title: t.title,
       description: t.description,
       repetitions: t.repetitions,
       videoUrl: t.videoUrl,
       date,
-      order: t.order,
     }
   })
 

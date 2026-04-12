@@ -38,8 +38,11 @@ export async function POST(req: Request) {
   })
   if (!clientProfile) return NextResponse.json({ error: 'Client not found' }, { status: 404 })
 
+  const dogAge = clientProfile.dog?.dob
+    ? `${Math.floor((Date.now() - clientProfile.dog.dob.getTime()) / 31557600000)} years old`
+    : 'unknown age'
   const dogInfo = clientProfile.dog
-    ? `The dog is a ${clientProfile.dog.breed ?? 'mixed breed'}, ${clientProfile.dog.age ?? 'unknown age'} years old, named ${clientProfile.dog.name}.`
+    ? `The dog is a ${clientProfile.dog.breed ?? 'mixed breed'}, ${dogAge}, named ${clientProfile.dog.name}.`
     : 'No dog information available.'
 
   const prompt = `You are an expert dog trainer assistant. Generate a structured ${durationWeeks}-week training plan for the following scenario:
@@ -56,13 +59,18 @@ Return a JSON array of training tasks, each with:
 
 Focus on progressive skill building. Space tasks every 2-3 days. Return ONLY valid JSON, no markdown.`
 
-  const message = await client.messages.create({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 2048,
-    messages: [{ role: 'user', content: prompt }],
-  })
-
-  const text = message.content[0].type === 'text' ? message.content[0].text : ''
+  let text: string
+  try {
+    const message = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 2048,
+      messages: [{ role: 'user', content: prompt }],
+    })
+    text = message.content[0].type === 'text' ? message.content[0].text : ''
+  } catch (err) {
+    console.error('Anthropic API error:', err)
+    return NextResponse.json({ error: 'AI service unavailable. Check your ANTHROPIC_API_KEY.' }, { status: 502 })
+  }
 
   let tasks: unknown[]
   try {

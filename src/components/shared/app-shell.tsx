@@ -4,30 +4,49 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut } from 'next-auth/react'
 import { cn } from '@/lib/utils'
-import type { LucideIcon } from 'lucide-react'
+import {
+  LayoutDashboard, Users, BookOpen, BarChart2, Calendar, Layers,
+  MessageSquare, Settings, HelpCircle, Sparkles, User, Bell,
+} from 'lucide-react'
 
-interface NavItem {
-  href: string
-  label: string
-  icon: LucideIcon
-}
+const TRAINER_NAV = [
+  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/clients', label: 'Clients', icon: Users },
+  { href: '/diary', label: 'Training Diary', icon: BookOpen },
+  { href: '/schedule', label: 'Schedule', icon: Calendar },
+  { href: '/templates', label: 'Templates', icon: Layers },
+  { href: '/progress', label: 'Progress', icon: BarChart2 },
+  { href: '/messages', label: 'Messages', icon: MessageSquare },
+  { href: '/ai-tools', label: 'AI Tools', icon: Sparkles },
+  { href: '/settings', label: 'Settings', icon: Settings },
+  { href: '/help', label: 'Help', icon: HelpCircle },
+]
+
+const CLIENT_NAV = [
+  { href: '/my-diary', label: 'My Diary', icon: BookOpen },
+  { href: '/my-messages', label: 'Messages', icon: MessageSquare },
+  { href: '/my-profile', label: 'My Profile', icon: User },
+  { href: '/notifications', label: 'Notifications', icon: Bell },
+  { href: '/my-help', label: 'Help', icon: HelpCircle },
+]
 
 interface AppShellProps {
-  navItems: NavItem[]
+  role: 'TRAINER' | 'CLIENT'
   children: React.ReactNode
-  trainerName?: string
+  userName?: string
   trainerLogo?: string | null
   businessName?: string
 }
 
 export function AppShell({
-  navItems,
+  role,
   children,
-  trainerName,
+  userName,
   trainerLogo,
   businessName,
 }: AppShellProps) {
   const pathname = usePathname()
+  const navItems = role === 'TRAINER' ? TRAINER_NAV : CLIENT_NAV
 
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
@@ -51,6 +70,7 @@ export function AppShell({
         <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
           {navItems.map((item) => {
             const active = pathname === item.href || pathname.startsWith(item.href + '/')
+            const Icon = item.icon
             return (
               <Link
                 key={item.href}
@@ -62,7 +82,7 @@ export function AppShell({
                     : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                 )}
               >
-                <item.icon className="h-5 w-5 flex-shrink-0" />
+                <Icon className="h-5 w-5 flex-shrink-0" />
                 {item.label}
               </Link>
             )
@@ -73,9 +93,9 @@ export function AppShell({
         <div className="border-t border-slate-100 p-4">
           <div className="flex items-center gap-3 mb-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600">
-              {trainerName?.[0]?.toUpperCase() ?? '?'}
+              {userName?.[0]?.toUpperCase() ?? '?'}
             </div>
-            <span className="text-sm font-medium text-slate-700 truncate">{trainerName}</span>
+            <span className="text-sm font-medium text-slate-700 truncate">{userName}</span>
           </div>
           <button
             onClick={() => signOut({ callbackUrl: '/login' })}
@@ -91,6 +111,7 @@ export function AppShell({
         <div className="flex">
           {navItems.slice(0, 5).map((item) => {
             const active = pathname === item.href || pathname.startsWith(item.href + '/')
+            const Icon = item.icon
             return (
               <Link
                 key={item.href}
@@ -100,7 +121,7 @@ export function AppShell({
                   active ? 'text-blue-600' : 'text-slate-500'
                 )}
               >
-                <item.icon className="h-5 w-5" />
+                <Icon className="h-5 w-5" />
                 <span className="text-[10px]">{item.label}</span>
               </Link>
             )

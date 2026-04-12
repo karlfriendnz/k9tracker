@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: 'My Diary' }
 export default async function ClientDiaryPage({
   searchParams,
 }: {
-  searchParams: { date?: string }
+  searchParams: Promise<{ date?: string }>
 }) {
   const session = await auth()
   if (!session) redirect('/login')
@@ -23,8 +23,9 @@ export default async function ClientDiaryPage({
   })
   if (!clientProfile) redirect('/login')
 
+  const params = await searchParams
   const today = new Date().toISOString().split('T')[0]
-  const selectedDate = searchParams.date ?? today
+  const selectedDate = params.date ?? today
 
   const tasks = await prisma.trainingTask.findMany({
     where: {

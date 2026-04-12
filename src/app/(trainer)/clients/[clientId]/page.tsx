@@ -14,10 +14,12 @@ export const metadata: Metadata = { title: 'Client profile' }
 export default async function ClientDetailPage({
   params,
 }: {
-  params: { clientId: string }
+  params: Promise<{ clientId: string }>
 }) {
   const session = await auth()
   if (!session) redirect('/login')
+
+  const { clientId } = await params
 
   const trainerProfile = await prisma.trainerProfile.findUnique({
     where: { userId: session.user.id },
@@ -26,7 +28,7 @@ export default async function ClientDetailPage({
   if (!trainerProfile) redirect('/onboarding')
 
   const client = await prisma.clientProfile.findFirst({
-    where: { id: params.clientId, trainerId: trainerProfile.id },
+    where: { id: clientId, trainerId: trainerProfile.id },
     include: {
       user: { select: { name: true, email: true, createdAt: true } },
       dog: true,

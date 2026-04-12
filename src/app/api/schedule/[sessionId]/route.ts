@@ -4,12 +4,14 @@ import { prisma } from '@/lib/prisma'
 
 export async function DELETE(
   _req: Request,
-  { params }: { params: { sessionId: string } }
+  { params }: { params: Promise<{ sessionId: string }> }
 ) {
   const session = await auth()
   if (!session || session.user.role !== 'TRAINER') {
     return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
   }
+
+  const { sessionId } = await params
 
   const trainerProfile = await prisma.trainerProfile.findUnique({
     where: { userId: session.user.id },
@@ -18,7 +20,7 @@ export async function DELETE(
   if (!trainerProfile) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
 
   const trainingSession = await prisma.trainingSession.findFirst({
-    where: { id: params.sessionId, trainerId: trainerProfile.id },
+    where: { id: sessionId, trainerId: trainerProfile.id },
   })
   if (!trainingSession) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
@@ -32,6 +34,6 @@ export async function DELETE(
     }
   }
 
-  await prisma.trainingSession.delete({ where: { id: params.sessionId } })
+  await prisma.trainingSession.delete({ where: { id: sessionId } })
   return NextResponse.json({ ok: true })
 }

@@ -11,13 +11,14 @@ const schema = z.object({
 
 export async function POST(
   req: Request,
-  { params }: { params: { taskId: string } }
+  { params }: { params: Promise<{ taskId: string }> }
 ) {
   const session = await auth()
   if (!session || session.user.role !== 'CLIENT') {
     return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
   }
 
+  const { taskId } = await params
   const body = await req.json()
   const parsed = schema.safeParse(body)
   if (!parsed.success) {
@@ -32,14 +33,14 @@ export async function POST(
 
   // Verify client owns this task
   const task = await prisma.trainingTask.findFirst({
-    where: { id: params.taskId, clientId: clientProfile.id },
+    where: { id: taskId, clientId: clientProfile.id },
   })
   if (!task) return NextResponse.json({ error: 'Task not found' }, { status: 404 })
 
   const completion = await prisma.taskCompletion.upsert({
-    where: { taskId: params.taskId },
+    where: { taskId },
     create: {
-      taskId: params.taskId,
+      taskId,
       note: parsed.data.note || null,
       videoUrl: parsed.data.videoUrl || null,
       videoS3Key: parsed.data.videoS3Key || null,

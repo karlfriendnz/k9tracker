@@ -8,9 +8,11 @@ import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Edit Template' }
 
-export default async function EditTemplatePage({ params }: { params: { templateId: string } }) {
+export default async function EditTemplatePage({ params }: { params: Promise<{ templateId: string }> }) {
   const session = await auth()
   if (!session) redirect('/login')
+
+  const { templateId } = await params
 
   const trainerProfile = await prisma.trainerProfile.findUnique({
     where: { userId: session.user.id },
@@ -19,7 +21,7 @@ export default async function EditTemplatePage({ params }: { params: { templateI
   if (!trainerProfile) redirect('/onboarding')
 
   const template = await prisma.trainingTemplate.findFirst({
-    where: { id: params.templateId, trainerId: trainerProfile.id },
+    where: { id: templateId, trainerId: trainerProfile.id },
     include: { tasks: { orderBy: [{ dayOffset: 'asc' }, { order: 'asc' }] } },
   })
   if (!template) notFound()

@@ -41,19 +41,19 @@ export async function POST(req: Request) {
 
   const tasks = await prisma.trainingTask.findMany({
     where: { clientId, date: { gte: thirtyDaysAgo } },
-    include: { completions: { take: 1 } },
+    include: { completion: true },
     orderBy: { date: 'asc' },
   })
 
   const totalTasks = tasks.length
-  const completedTasks = tasks.filter(t => t.completions.length > 0).length
+  const completedTasks = tasks.filter(t => t.completion).length
   const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
 
   const taskSummary = tasks.map(t => ({
     date: t.date.toISOString().split('T')[0],
     title: t.title,
-    completed: t.completions.length > 0,
-    note: t.completions[0]?.note ?? null,
+    completed: !!t.completion,
+    note: t.completion?.note ?? null,
   }))
 
   const prompt = `You are an expert dog trainer assistant. Write a concise progress summary for a trainer to review.
@@ -73,13 +73,17 @@ Write a 2-3 paragraph summary covering:
 
 Use an encouraging, professional tone. Write in plain text, no markdown formatting.`
 
-  const message = await client.messages.create({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 1024,
-    messages: [{ role: 'user', content: prompt }],
-  })
+  try {
+    const message = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 1024,
+      messages: [{ role: 'user', content: prompt }],
+    })
 
-  const summary = message.content[0].type === 'text' ? message.content[0].text : ''
-
-  return NextResponse.json({ summary, stats: { totalTasks, completedTasks, completionRate } })
+    const summary = message.content[0].type === 'text' ? message.content[0].text : ''
+    return NextResponse.json({ summary, stats: { totalTasks, completedTasks, completionRate } })
+  } catch (err) {
+    console.error('Anthropic API error:', err)
+    return NextResponse.json({ error: 'AI service unavailable. Check your ANTHROPIC_API_KEY.' }, { status: 502 })
+  }
 }

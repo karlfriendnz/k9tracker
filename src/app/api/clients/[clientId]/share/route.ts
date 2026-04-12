@@ -10,13 +10,14 @@ const schema = z.object({
 
 export async function POST(
   req: Request,
-  { params }: { params: { clientId: string } }
+  { params }: { params: Promise<{ clientId: string }> }
 ) {
   const session = await auth()
   if (!session || session.user.role !== 'TRAINER') {
     return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
   }
 
+  const { clientId } = await params
   const body = await req.json()
   const parsed = schema.safeParse(body)
   if (!parsed.success) {
@@ -33,7 +34,7 @@ export async function POST(
 
   // Verify this trainer owns the client
   const client = await prisma.clientProfile.findFirst({
-    where: { id: params.clientId, trainerId: myProfile.id },
+    where: { id: clientId, trainerId: myProfile.id },
   })
   if (!client) return NextResponse.json({ error: 'Client not found' }, { status: 404 })
 

@@ -11,18 +11,19 @@ const schema = z.object({
   isActive: z.boolean().optional(),
 })
 
-export async function PATCH(req: Request, { params }: { params: { planId: string } }) {
+export async function PATCH(req: Request, { params }: { params: Promise<{ planId: string }> }) {
   const session = await auth()
   if (!session || session.user.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
   }
 
+  const { planId } = await params
   const body = await req.json()
   const parsed = schema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
 
   const plan = await prisma.subscriptionPlan.update({
-    where: { id: params.planId },
+    where: { id: planId },
     data: parsed.data,
   })
 

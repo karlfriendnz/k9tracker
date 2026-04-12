@@ -11,11 +11,12 @@ const patchSchema = z.object({
 
 export async function PATCH(
   req: Request,
-  { params }: { params: { dogId: string } }
+  { params }: { params: Promise<{ dogId: string }> }
 ) {
   const session = await auth()
   if (!session) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
 
+  const { dogId } = await params
   const body = await req.json()
   const parsed = patchSchema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
@@ -26,12 +27,12 @@ export async function PATCH(
     select: { dogId: true },
   })
 
-  if (clientProfile?.dogId !== params.dogId) {
+  if (clientProfile?.dogId !== dogId) {
     return NextResponse.json({ error: 'Unauthorised' }, { status: 403 })
   }
 
   const dog = await prisma.dog.update({
-    where: { id: params.dogId },
+    where: { id: dogId },
     data: parsed.data,
   })
 
