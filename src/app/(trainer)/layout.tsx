@@ -23,7 +23,7 @@ const trainerNav = [
   { href: '/templates', label: 'Templates', icon: Layers },
   { href: '/progress', label: 'Progress', icon: BarChart2 },
   { href: '/messages', label: 'Messages', icon: MessageSquare },
-  { href: '/ai-assistant', label: 'AI Assistant', icon: Sparkles },
+  { href: '/ai-tools', label: 'AI Tools', icon: Sparkles },
   { href: '/settings', label: 'Settings', icon: Settings },
   { href: '/help', label: 'Help', icon: HelpCircle },
 ]
