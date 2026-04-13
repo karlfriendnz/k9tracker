@@ -57,7 +57,7 @@ export async function PUT(
             dayOffset: t.dayOffset,
             title: t.title,
             description: t.description || null,
-            repetitions: t.repetitions && t.repetitions !== '' ? Number(t.repetitions) : null,
+            repetitions: t.repetitions ? Number(t.repetitions) : null,
             videoUrl: t.videoUrl && t.videoUrl !== '' ? t.videoUrl : null,
             order: t.order,
           })),

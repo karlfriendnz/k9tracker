@@ -18,7 +18,7 @@ const schema = z.object({
   notifyPush: z.boolean(),
   dogName: z.string().min(1).optional(),
   dogBreed: z.string().optional(),
-  dogWeight: z.coerce.number().positive().optional().or(z.literal('')),
+  dogWeight: z.number().positive().optional().or(z.literal('')),
 })
 
 type FormData = z.infer<typeof schema>

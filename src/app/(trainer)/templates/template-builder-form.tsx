@@ -12,12 +12,12 @@ import { Alert } from '@/components/ui/alert'
 import { Plus, Trash2, GripVertical } from 'lucide-react'
 
 const taskSchema = z.object({
-  dayOffset: z.coerce.number().int().min(1),
+  dayOffset: z.number().int().min(1),
   title: z.string().min(2),
   description: z.string().optional(),
-  repetitions: z.coerce.number().int().positive().optional().or(z.literal('')),
+  repetitions: z.number().int().positive().optional().or(z.literal('')),
   videoUrl: z.string().url().optional().or(z.literal('')),
-  order: z.number().default(0),
+  order: z.number(),
 })
 
 const schema = z.object({

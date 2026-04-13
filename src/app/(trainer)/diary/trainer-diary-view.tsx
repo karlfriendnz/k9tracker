@@ -15,7 +15,7 @@ import { formatDate } from '@/lib/utils'
 const taskSchema = z.object({
   title: z.string().min(2, 'Task name is required'),
   description: z.string().optional(),
-  repetitions: z.coerce.number().int().positive().optional().or(z.literal('')),
+  repetitions: z.number().int().positive().optional().or(z.literal('')),
   videoUrl: z.string().url('Must be a valid URL').optional().or(z.literal('')),
 })
 

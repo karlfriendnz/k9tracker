@@ -12,8 +12,8 @@ import { Plus } from 'lucide-react'
 const planSchema = z.object({
   name: z.string().min(2),
   description: z.string().optional(),
-  priceMonthly: z.coerce.number().min(0),
-  maxClients: z.coerce.number().int().positive().optional().or(z.literal('')),
+  priceMonthly: z.number().min(0),
+  maxClients: z.number().int().positive().optional().or(z.literal('')),
   isActive: z.boolean(),
 })
 
@@ -64,7 +64,7 @@ export function ManagePlansForm({ plans: initialPlans }: { plans: Plan[] }) {
       {plans.map(plan => (
         <div key={plan.id} className="bg-slate-800 rounded-2xl border border-slate-700 p-5">
           {editingId === plan.id ? (
-            <PlanForm form={form} defaultValues={plan} onSave={d => savePlan(d, plan.id)} onCancel={() => { setEditingId(null); form.reset() }} />
+            <PlanForm form={form} defaultValues={{ ...plan, description: plan.description ?? undefined, maxClients: plan.maxClients ?? undefined }} onSave={d => savePlan(d, plan.id)} onCancel={() => { setEditingId(null); form.reset() }} />
           ) : (
             <div className="flex items-start justify-between">
               <div>
@@ -83,7 +83,7 @@ export function ManagePlansForm({ plans: initialPlans }: { plans: Plan[] }) {
                 variant="secondary"
                 size="sm"
                 className="bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600"
-                onClick={() => { setEditingId(plan.id); form.reset({ ...plan, maxClients: plan.maxClients ?? '' }) }}
+                onClick={() => { setEditingId(plan.id); form.reset({ ...plan, description: plan.description ?? undefined, maxClients: plan.maxClients ?? '' }) }}
               >
                 Edit
               </Button>

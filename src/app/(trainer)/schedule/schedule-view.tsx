@@ -16,7 +16,7 @@ import { formatDate, formatTime } from '@/lib/utils'
 const sessionSchema = z.object({
   title: z.string().min(2),
   scheduledAt: z.string(),
-  durationMins: z.coerce.number().int().positive().default(60),
+  durationMins: z.number().int().positive(),
   sessionType: z.enum(['IN_PERSON', 'VIRTUAL']),
   location: z.string().optional(),
   virtualLink: z.string().url().optional().or(z.literal('')),

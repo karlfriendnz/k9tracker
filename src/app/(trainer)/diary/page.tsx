@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: 'Training Diary' }
 export default async function TrainerDiaryPage({
   searchParams,
 }: {
-  searchParams: { clientId?: string; date?: string }
+  searchParams: Promise<{ clientId?: string; date?: string }>
 }) {
   const session = await auth()
   if (!session) redirect('/login')
@@ -29,20 +29,12 @@ export default async function TrainerDiaryPage({
     orderBy: { createdAt: 'asc' },
   })
 
-  const selectedClientId = searchParams.clientId ?? clients[0]?.id ?? null
-  const selectedDate = searchParams.date ?? new Date().toISOString().split('T')[0]
+  const sp = await searchParams
+  const selectedClientId = sp.clientId ?? clients[0]?.id ?? null
+  const selectedDate = sp.date ?? new Date().toISOString().split('T')[0]
 
-  let tasks: Awaited<ReturnType<typeof prisma.trainingTask.findMany>> = []
-  if (selectedClientId) {
-    tasks = await prisma.trainingTask.findMany({
-      where: {
-        clientId: selectedClientId,
-        date: new Date(selectedDate),
-      },
-      include: { completion: true },
-      orderBy: { createdAt: 'asc' },
-    })
-  }
+  const query = { where: { clientId: selectedClientId ?? '', date: new Date(selectedDate) }, include: { completion: true }, orderBy: { createdAt: 'asc' as const } }
+  const tasks = selectedClientId ? await prisma.trainingTask.findMany(query) : [] as Awaited<ReturnType<typeof prisma.trainingTask.findMany<typeof query>>>
 
   return (
     <TrainerDiaryView
