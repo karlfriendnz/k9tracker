@@ -11,7 +11,7 @@ import { Share2, X } from 'lucide-react'
 
 const schema = z.object({
   partnerEmail: z.string().email('Enter a valid trainer email address'),
-  shareType: z.enum(['READ_ONLY', 'TRANSFER']),
+  shareType: z.enum(['READ_ONLY', 'CO_MANAGE', 'TRANSFER']),
 })
 
 type FormData = z.infer<typeof schema>
@@ -108,6 +108,18 @@ export function ShareClientModal({
                       <div>
                         <p className="text-sm font-medium text-slate-700">Read-only access</p>
                         <p className="text-xs text-slate-400">Partner can view but not edit this client's data</p>
+                      </div>
+                    </label>
+                    <label className="flex items-start gap-3 p-3 rounded-xl border border-slate-200 cursor-pointer hover:border-blue-300">
+                      <input
+                        type="radio"
+                        value="CO_MANAGE"
+                        className="mt-0.5"
+                        {...register('shareType')}
+                      />
+                      <div>
+                        <p className="text-sm font-medium text-slate-700">Co-manage</p>
+                        <p className="text-xs text-slate-400">Both trainers can view and edit this client's data</p>
                       </div>
                     </label>
                     <label className="flex items-start gap-3 p-3 rounded-xl border border-slate-200 cursor-pointer hover:border-blue-300">

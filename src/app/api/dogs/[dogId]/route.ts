@@ -27,7 +27,9 @@ export async function PATCH(
     select: { dogId: true },
   })
 
-  if (clientProfile?.dogId !== dogId) {
+  // Allow if primary dog or additional dog owned by this client
+  const isOwner = clientProfile?.dogId === dogId || clientProfile?.id === (await prisma.dog.findUnique({ where: { id: dogId }, select: { clientProfileId: true } }))?.clientProfileId
+  if (!isOwner) {
     return NextResponse.json({ error: 'Unauthorised' }, { status: 403 })
   }
 
@@ -37,4 +39,24 @@ export async function PATCH(
   })
 
   return NextResponse.json(dog)
+}
+
+export async function DELETE(req: Request, { params }: { params: Promise<{ dogId: string }> }) {
+  const session = await auth()
+  if (!session) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+
+  const { dogId } = await params
+  const clientProfile = await prisma.clientProfile.findUnique({
+    where: { userId: session.user.id },
+    select: { id: true, dogId: true },
+  })
+
+  // Can only delete additional dogs (not the primary)
+  const dog = await prisma.dog.findUnique({ where: { id: dogId }, select: { clientProfileId: true } })
+  if (!dog || dog.clientProfileId !== clientProfile?.id) {
+    return NextResponse.json({ error: 'Unauthorised' }, { status: 403 })
+  }
+
+  await prisma.dog.delete({ where: { id: dogId } })
+  return NextResponse.json({ ok: true })
 }

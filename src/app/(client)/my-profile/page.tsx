@@ -17,16 +17,21 @@ export default async function ClientProfilePage() {
     }),
     prisma.clientProfile.findUnique({
       where: { userId: session.user.id },
-      include: { dog: true },
+      include: { dog: true, dogs: true },
     }),
   ])
 
   if (!user || !clientProfile) redirect('/login')
 
+  const allDogs = [
+    ...(clientProfile.dog ? [{ ...clientProfile.dog, isPrimary: true }] : []),
+    ...clientProfile.dogs.map(d => ({ ...d, isPrimary: false })),
+  ]
+
   return (
     <div className="p-4 md:p-8 max-w-xl mx-auto">
       <h1 className="text-2xl font-bold text-slate-900 mb-8">My Profile</h1>
-      <ClientProfileForm user={user} dog={clientProfile.dog} />
+      <ClientProfileForm clientId={clientProfile.id} user={user} dogs={allDogs} />
     </div>
   )
 }

@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: 'My Diary' }
 export default async function ClientDiaryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string }>
+  searchParams: Promise<{ date?: string; dogId?: string }>
 }) {
   const session = await auth()
   if (!session) redirect('/login')
@@ -17,7 +17,8 @@ export default async function ClientDiaryPage({
   const clientProfile = await prisma.clientProfile.findUnique({
     where: { userId: session.user.id },
     include: {
-      dog: { select: { name: true } },
+      dog: { select: { id: true, name: true } },
+      dogs: { select: { id: true, name: true } },
       trainer: { select: { businessName: true } },
     },
   })
@@ -27,10 +28,20 @@ export default async function ClientDiaryPage({
   const today = new Date().toISOString().split('T')[0]
   const selectedDate = params.date ?? today
 
+  // Build list of all dogs (primary + additional)
+  const allDogs = [
+    ...(clientProfile.dog ? [clientProfile.dog] : []),
+    ...clientProfile.dogs,
+  ]
+
+  // Only filter by dog if client has multiple dogs and a dogId param is provided
+  const selectedDogId = allDogs.length > 1 ? (params.dogId ?? null) : null
+
   const tasks = await prisma.trainingTask.findMany({
     where: {
       clientId: clientProfile.id,
       date: new Date(selectedDate),
+      ...(selectedDogId ? { dogId: selectedDogId } : {}),
     },
     include: { completion: true },
     orderBy: { createdAt: 'asc' },
@@ -49,6 +60,8 @@ export default async function ClientDiaryPage({
       tasks={tasks}
       completedToday={completedToday}
       totalToday={totalToday}
+      dogs={allDogs}
+      selectedDogId={selectedDogId}
     />
   )
 }

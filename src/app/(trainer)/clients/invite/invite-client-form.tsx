@@ -14,7 +14,7 @@ const schema = z.object({
   clientName: z.string().min(2, 'Client name is required'),
   dogName: z.string().min(1, "Dog's name is required"),
   clientEmail: z.string().email('Please enter a valid email address'),
-  emailBody: z.string().min(20, 'Email body is too short'),
+  emailBody: z.string().optional(),
 })
 
 type FormData = z.infer<typeof schema>
@@ -23,18 +23,17 @@ export function InviteClientForm({ defaultTemplate }: { defaultTemplate: string 
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
   const [sent, setSent] = useState(false)
+  const [sendInvite, setSendInvite] = useState(true)
 
   const {
     register,
     handleSubmit,
     watch,
-    setValue,
     formState: { errors, isSubmitting },
   } = useForm<FormData>({
     defaultValues: { emailBody: defaultTemplate },
   })
 
-  // Live-substitute template variables in the preview
   const clientName = watch('clientName') || '{{clientName}}'
   const dogName = watch('dogName') || '{{dogName}}'
   const emailBody = watch('emailBody')
@@ -46,12 +45,12 @@ export function InviteClientForm({ defaultTemplate }: { defaultTemplate: string 
     const res = await fetch('/api/clients/invite', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
+      body: JSON.stringify({ ...data, sendInvite }),
     })
 
     if (!res.ok) {
       const body = await res.json()
-      setError(body.error ?? 'Failed to send invitation.')
+      setError(body.error ?? 'Something went wrong.')
       return
     }
 
@@ -62,7 +61,7 @@ export function InviteClientForm({ defaultTemplate }: { defaultTemplate: string 
   if (sent) {
     return (
       <Alert variant="success" className="text-center py-6">
-        <p className="text-lg font-semibold">Invitation sent! 🎉</p>
+        <p className="text-lg font-semibold">{sendInvite ? 'Invitation sent! 🎉' : 'Client added!'}</p>
         <p className="text-sm mt-1">Redirecting to your client list…</p>
       </Alert>
     )
@@ -99,35 +98,47 @@ export function InviteClientForm({ defaultTemplate }: { defaultTemplate: string 
 
       <Card>
         <CardBody className="pt-6 flex flex-col gap-4">
-          <div className="flex items-center justify-between">
-            <h2 className="font-semibold text-slate-900">Invitation email</h2>
-            <span className="text-xs text-slate-400">
-              Use <code className="bg-slate-100 px-1 rounded">{'{{clientName}}'}</code> and{' '}
-              <code className="bg-slate-100 px-1 rounded">{'{{dogName}}'}</code>
-            </span>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-slate-700">Email body</label>
-            <textarea
-              rows={8}
-              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
-              {...register('emailBody')}
-            />
-            {errors.emailBody && (
-              <p className="text-xs text-red-500">{errors.emailBody.message}</p>
-            )}
-          </div>
+          <label className="flex items-center gap-3 cursor-pointer">
+            <div
+              onClick={() => setSendInvite(v => !v)}
+              className={`relative w-10 h-6 rounded-full transition-colors ${sendInvite ? 'bg-blue-600' : 'bg-slate-200'}`}
+            >
+              <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${sendInvite ? 'translate-x-4' : 'translate-x-0'}`} />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-slate-800">Send invitation email</p>
+              <p className="text-xs text-slate-400">{sendInvite ? 'Client will receive a login link by email' : 'Client will be added without being notified'}</p>
+            </div>
+          </label>
 
-          {/* Live preview */}
-          <div className="rounded-xl bg-slate-50 border border-slate-100 p-4">
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Preview</p>
-            <pre className="text-sm text-slate-700 whitespace-pre-wrap font-sans">{emailBody}</pre>
-          </div>
+          {sendInvite && (
+            <>
+              <div className="flex items-center justify-between">
+                <h2 className="font-semibold text-slate-900">Invitation email</h2>
+                <span className="text-xs text-slate-400">
+                  Use <code className="bg-slate-100 px-1 rounded">{'{{clientName}}'}</code> and{' '}
+                  <code className="bg-slate-100 px-1 rounded">{'{{dogName}}'}</code>
+                </span>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-slate-700">Email body</label>
+                <textarea
+                  rows={8}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
+                  {...register('emailBody')}
+                />
+              </div>
+              <div className="rounded-xl bg-slate-50 border border-slate-100 p-4">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Preview</p>
+                <pre className="text-sm text-slate-700 whitespace-pre-wrap font-sans">{emailBody}</pre>
+              </div>
+            </>
+          )}
         </CardBody>
       </Card>
 
       <Button type="submit" size="lg" className="w-full" loading={isSubmitting}>
-        Send invitation
+        {sendInvite ? 'Send invitation' : 'Add client'}
       </Button>
     </form>
   )

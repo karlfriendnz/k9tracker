@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { getClientAccess } from '@/lib/trainer-access'
 
 export async function DELETE(
   _req: Request,
@@ -13,20 +14,15 @@ export async function DELETE(
 
   const { taskId } = await params
 
-  const trainerProfile = await prisma.trainerProfile.findUnique({
-    where: { userId: session.user.id },
-    select: { id: true },
+  const task = await prisma.trainingTask.findUnique({
+    where: { id: taskId },
+    select: { clientId: true },
   })
-  if (!trainerProfile) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
-
-  const task = await prisma.trainingTask.findFirst({
-    where: {
-      id: taskId,
-      client: { trainerId: trainerProfile.id },
-    },
-  })
-
   if (!task) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  const access = await getClientAccess(task.clientId, session.user.id)
+  if (!access) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (!access.canEdit) return NextResponse.json({ error: 'Read-only access' }, { status: 403 })
 
   await prisma.trainingTask.delete({ where: { id: taskId } })
   return NextResponse.json({ ok: true })

@@ -5,7 +5,7 @@ import { z } from 'zod'
 
 const schema = z.object({
   partnerEmail: z.string().email(),
-  shareType: z.enum(['READ_ONLY', 'TRANSFER']),
+  shareType: z.enum(['READ_ONLY', 'CO_MANAGE', 'TRANSFER']),
 })
 
 export async function POST(

@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma'
-import { formatDate } from '@/lib/utils'
+import { TrainerRow } from './trainer-actions'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Trainers' }
@@ -7,9 +7,9 @@ export const metadata: Metadata = { title: 'Trainers' }
 export default async function AdminTrainersPage({
   searchParams,
 }: {
-  searchParams: { q?: string }
+  searchParams: Promise<{ q?: string }>
 }) {
-  const q = searchParams.q ?? ''
+  const { q = '' } = await searchParams
 
   const trainers = await prisma.user.findMany({
     where: {
@@ -58,26 +58,21 @@ export default async function AdminTrainersPage({
               <th className="text-left px-4 py-3">Plan</th>
               <th className="text-left px-4 py-3">Clients</th>
               <th className="text-left px-4 py-3">Joined</th>
+              <th className="px-4 py-3" />
             </tr>
           </thead>
           <tbody>
             {trainers.map(t => (
-              <tr key={t.id} className="border-b border-slate-700/50 hover:bg-slate-700/30">
-                <td className="px-4 py-3 text-white">{t.name ?? '—'}</td>
-                <td className="px-4 py-3 text-slate-300">{t.email}</td>
-                <td className="px-4 py-3 text-slate-300">{t.trainerProfile?.businessName ?? '—'}</td>
-                <td className="px-4 py-3">
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${
-                    t.trainerProfile?.subscriptionStatus === 'ACTIVE' ? 'bg-green-900 text-green-300' :
-                    t.trainerProfile?.subscriptionStatus === 'TRIALING' ? 'bg-blue-900 text-blue-300' :
-                    'bg-slate-700 text-slate-400'
-                  }`}>
-                    {t.trainerProfile?.subscriptionPlan?.name ?? 'No plan'} · {t.trainerProfile?.subscriptionStatus ?? '—'}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-slate-300">{t.trainerProfile?._count?.clients ?? 0}</td>
-                <td className="px-4 py-3 text-slate-400">{formatDate(t.createdAt)}</td>
-              </tr>
+              <TrainerRow key={t.id} trainer={{
+                id: t.id,
+                name: t.name,
+                email: t.email,
+                businessName: t.trainerProfile?.businessName ?? null,
+                subscriptionPlanName: t.trainerProfile?.subscriptionPlan?.name ?? null,
+                subscriptionStatus: t.trainerProfile?.subscriptionStatus ?? null,
+                clientCount: t.trainerProfile?._count?.clients ?? 0,
+                createdAt: t.createdAt,
+              }} />
             ))}
           </tbody>
         </table>

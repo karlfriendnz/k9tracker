@@ -36,7 +36,7 @@ interface Session {
   description: string | null
   dog: {
     name: string
-    clientProfiles: { user: { name: string | null; email: string } }[]
+    primaryFor: { user: { name: string | null; email: string } }[]
   } | null
 }
 
@@ -174,7 +174,7 @@ export function ScheduleView({
       ) : (
         <div className="flex flex-col gap-4">
           {sessions.map((s) => {
-            const client = s.dog?.clientProfiles[0]?.user
+            const client = s.dog?.primaryFor[0]?.user
             return (
               <Card key={s.id}>
                 <CardBody className="pt-4 pb-4">
@@ -221,8 +221,8 @@ export function ScheduleView({
                   )}
 
                   <div className="flex gap-2 mt-3">
-                    {s.dog?.clientProfiles[0] && (
-                      <Link href={`/clients/${s.dog.clientProfiles[0] ? '' : ''}`}>
+                    {s.dog?.primaryFor[0] && (
+                      <Link href={`/clients/${s.dog.primaryFor[0] ? '' : ''}`}>
                         <Button variant="secondary" size="sm">View dog profile</Button>
                       </Link>
                     )}

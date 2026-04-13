@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { getClientAccess } from '@/lib/trainer-access'
 import { z } from 'zod'
 
 const schema = z.object({
@@ -10,6 +11,7 @@ const schema = z.object({
   description: z.string().nullable().optional(),
   repetitions: z.number().int().positive().nullable().optional(),
   videoUrl: z.string().url().nullable().optional(),
+  dogId: z.string().nullable().optional(),
 })
 
 export async function POST(req: Request) {
@@ -24,17 +26,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
   }
 
-  const trainerProfile = await prisma.trainerProfile.findUnique({
-    where: { userId: session.user.id },
-    select: { id: true },
-  })
-  if (!trainerProfile) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
-
-  // Verify trainer owns this client
-  const client = await prisma.clientProfile.findFirst({
-    where: { id: parsed.data.clientId, trainerId: trainerProfile.id },
-  })
-  if (!client) return NextResponse.json({ error: 'Client not found' }, { status: 404 })
+  const access = await getClientAccess(parsed.data.clientId, session.user.id)
+  if (!access) return NextResponse.json({ error: 'Client not found' }, { status: 404 })
+  if (!access.canEdit) return NextResponse.json({ error: 'Read-only access' }, { status: 403 })
 
   const task = await prisma.trainingTask.create({
     data: {
@@ -44,6 +38,7 @@ export async function POST(req: Request) {
       description: parsed.data.description ?? null,
       repetitions: parsed.data.repetitions ?? null,
       videoUrl: parsed.data.videoUrl ?? null,
+      dogId: parsed.data.dogId ?? null,
     },
   })
 

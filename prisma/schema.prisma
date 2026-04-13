@@ -25,6 +25,7 @@ enum SubscriptionStatus {
 
 enum ShareType {
   READ_ONLY
+  CO_MANAGE
   TRANSFER
 }
 
@@ -36,6 +37,12 @@ enum SessionType {
 enum MessageChannel {
   TRAINER_CLIENT   // visible to client
   TRAINER_TRAINER  // private between trainers
+}
+
+enum CustomFieldType {
+  TEXT
+  NUMBER
+  DROPDOWN
 }
 
 // ─── Core User ───────────────────────────────────────────────────────────────
@@ -139,6 +146,8 @@ model TrainerProfile {
   receivedClients   ClientShare[]     @relation("SharedWithTrainer")
   trainingSessions  TrainingSession[]
   trainingTemplates TrainingTemplate[]
+  customFields      CustomField[]
+  libraryTypes      LibraryType[]
 
   @@map("trainer_profiles")
 }
@@ -150,37 +159,44 @@ model ClientProfile {
   userId    String  @unique
   trainerId String  // primary trainer
   dogId     String? // set after onboarding
+  status    String  @default("ACTIVE") // "ACTIVE" | "INACTIVE"
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   trainer TrainerProfile @relation(fields: [trainerId], references: [id])
-  dog     Dog?           @relation(fields: [dogId], references: [id])
+  dog     Dog?           @relation("PrimaryDog", fields: [dogId], references: [id])
 
-  diaryEntries TrainingTask[]
-  shares       ClientShare[]
-  messages     Message[]      @relation("ClientMessages")
+  diaryEntries      TrainingTask[]
+  shares            ClientShare[]
+  messages          Message[]          @relation("ClientMessages")
+  customFieldValues CustomFieldValue[]
+  dogs              Dog[]              @relation("AdditionalDogs")
 
   @@index([trainerId])
   @@map("client_profiles")
 }
 
 model Dog {
-  id      String  @id @default(cuid())
-  name    String
-  breed   String?
-  weight  Float?  // kg
-  dob     DateTime?
-  photoUrl String?
-  notes   String? @db.Text
+  id              String    @id @default(cuid())
+  name            String
+  breed           String?
+  weight          Float?    // kg
+  dob             DateTime?
+  photoUrl        String?
+  notes           String?   @db.Text
+  clientProfileId String?   // owner (for additional dogs in a household)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  clientProfiles ClientProfile[]
-  sessions       TrainingSession[]
+  primaryFor ClientProfile[]  @relation("PrimaryDog")
+  owner      ClientProfile?   @relation("AdditionalDogs", fields: [clientProfileId], references: [id])
+  sessions   TrainingSession[]
+  tasks      TrainingTask[]
 
+  @@index([clientProfileId])
   @@map("dogs")
 }
 
@@ -209,6 +225,7 @@ model ClientShare {
 model TrainingTask {
   id          String   @id @default(cuid())
   clientId    String
+  dogId       String?  // optional: which dog this task is for
   date        DateTime @db.Date
   title       String
   description String?  @db.Text
@@ -219,6 +236,7 @@ model TrainingTask {
   updatedAt DateTime @updatedAt
 
   client     ClientProfile  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  dog        Dog?           @relation(fields: [dogId], references: [id])
   completion TaskCompletion?
 
   @@index([clientId])
@@ -331,6 +349,45 @@ model Notification {
   @@map("notifications")
 }
 
+// ─── Custom Client Fields ─────────────────────────────────────────────────────
+
+model CustomField {
+  id        String          @id @default(cuid())
+  trainerId String
+  label     String
+  type      CustomFieldType
+  required  Boolean         @default(false)
+  options   Json?           // string[] for DROPDOWN
+  order     Int             @default(0)
+  category  String?         // optional grouping label
+  appliesTo String          @default("OWNER") // "OWNER" | "DOG"
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  trainer TrainerProfile     @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  values  CustomFieldValue[]
+
+  @@index([trainerId])
+  @@map("custom_fields")
+}
+
+model CustomFieldValue {
+  id       String  @id @default(cuid())
+  fieldId  String
+  clientId String
+  dogId    String? // set when field appliesTo = "DOG"
+  value    String  @db.Text
+
+  updatedAt DateTime @updatedAt
+
+  field  CustomField   @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  client ClientProfile @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([fieldId, clientId, dogId])
+  @@map("custom_field_values")
+}
+
 // ─── Subscription Plans ───────────────────────────────────────────────────────
 
 model SubscriptionPlan {
@@ -348,4 +405,53 @@ model SubscriptionPlan {
   trainers TrainerProfile[]
 
   @@map("subscription_plans")
+}
+
+// ─── Training Library ─────────────────────────────────────────────────────────
+
+model LibraryType {
+  id        String   @id @default(cuid())
+  trainerId String
+  name      String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  trainer TrainerProfile @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  themes  LibraryTheme[]
+
+  @@index([trainerId])
+  @@map("library_types")
+}
+
+model LibraryTheme {
+  id        String   @id @default(cuid())
+  typeId    String
+  name      String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  type  LibraryType   @relation(fields: [typeId], references: [id], onDelete: Cascade)
+  tasks LibraryTask[]
+
+  @@index([typeId])
+  @@map("library_themes")
+}
+
+model LibraryTask {
+  id          String   @id @default(cuid())
+  themeId     String
+  title       String
+  description String?  @db.Text
+  repetitions Int?
+  videoUrl    String?
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  theme LibraryTheme @relation(fields: [themeId], references: [id], onDelete: Cascade)
+
+  @@index([themeId])
+  @@map("library_tasks")
 }

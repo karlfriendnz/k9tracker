@@ -24,7 +24,8 @@ export default async function TrainerDiaryPage({
     where: { trainerId: trainerProfile.id },
     include: {
       user: { select: { name: true, email: true } },
-      dog: { select: { name: true } },
+      dog: { select: { id: true, name: true } },
+      dogs: { select: { id: true, name: true } },
     },
     orderBy: { createdAt: 'asc' },
   })

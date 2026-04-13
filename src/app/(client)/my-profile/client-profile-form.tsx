@@ -2,76 +2,109 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardBody } from '@/components/ui/card'
 import { Alert } from '@/components/ui/alert'
+import { Plus, Trash2 } from 'lucide-react'
 import { TIMEZONES } from '@/lib/timezones'
-
-const schema = z.object({
-  name: z.string().min(2),
-  timezone: z.string(),
-  notifyEmail: z.boolean(),
-  notifyPush: z.boolean(),
-  dogName: z.string().min(1).optional(),
-  dogBreed: z.string().optional(),
-  dogWeight: z.number().positive().optional().or(z.literal('')),
-})
-
-type FormData = z.infer<typeof schema>
 
 interface Dog {
   id: string
   name: string
   breed: string | null
   weight: number | null
+  isPrimary: boolean
+}
+
+interface DogForm {
+  id: string | null
+  name: string
+  breed: string
+  weight: string
+  isPrimary: boolean
+  isNew?: boolean
 }
 
 export function ClientProfileForm({
+  clientId,
   user,
-  dog,
+  dogs: initialDogs,
 }: {
+  clientId: string
   user: { name: string | null; email: string; timezone: string; notifyEmail: boolean; notifyPush: boolean }
-  dog: Dog | null
+  dogs: Dog[]
 }) {
   const router = useRouter()
   const [msg, setMsg] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
-  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormData>({
-    resolver: zodResolver(schema),
-    defaultValues: {
-      name: user.name ?? '',
-      timezone: user.timezone,
-      notifyEmail: user.notifyEmail,
-      notifyPush: user.notifyPush,
-      dogName: dog?.name ?? '',
-      dogBreed: dog?.breed ?? '',
-      dogWeight: dog?.weight ?? '',
-    },
-  })
+  const [name, setName] = useState(user.name ?? '')
+  const [timezone, setTimezone] = useState(user.timezone)
+  const [notifyEmail, setNotifyEmail] = useState(user.notifyEmail)
 
-  async function onSubmit(data: FormData) {
+  const [dogs, setDogs] = useState<DogForm[]>(
+    initialDogs.map(d => ({
+      id: d.id,
+      name: d.name,
+      breed: d.breed ?? '',
+      weight: d.weight?.toString() ?? '',
+      isPrimary: d.isPrimary,
+    }))
+  )
+
+  function updateDog(index: number, field: keyof DogForm, value: string) {
+    setDogs(prev => prev.map((d, i) => i === index ? { ...d, [field]: value } : d))
+  }
+
+  function addDog() {
+    setDogs(prev => [...prev, { id: null, name: '', breed: '', weight: '', isPrimary: false, isNew: true }])
+  }
+
+  async function removeDog(index: number) {
+    const dog = dogs[index]
+    if (dog.id && !dog.isNew) {
+      if (!confirm(`Remove ${dog.name}?`)) return
+      await fetch(`/api/dogs/${dog.id}`, { method: 'DELETE' })
+    }
+    setDogs(prev => prev.filter((_, i) => i !== index))
+  }
+
+  async function onSubmit() {
+    setSaving(true)
     setMsg(null)
-    const [r1, r2] = await Promise.all([
-      fetch('/api/user', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: data.name, timezone: data.timezone, notifyEmail: data.notifyEmail, notifyPush: data.notifyPush }),
-      }),
-      dog
-        ? fetch(`/api/dogs/${dog.id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: data.dogName, breed: data.dogBreed, weight: data.dogWeight || null }),
-          })
-        : Promise.resolve({ ok: true }),
-    ])
-    setMsg(r1.ok && r2.ok ? 'Saved!' : 'Failed to save.')
+
+    // Save user profile
+    await fetch('/api/user', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, timezone, notifyEmail, notifyPush: user.notifyPush }),
+    })
+
+    // Save each dog
+    for (const dog of dogs) {
+      if (!dog.name.trim()) continue
+      const data = { name: dog.name, breed: dog.breed || null, weight: dog.weight ? parseFloat(dog.weight) : null }
+
+      if (dog.isNew || !dog.id) {
+        await fetch('/api/my/dogs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        })
+      } else {
+        await fetch(`/api/dogs/${dog.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        })
+      }
+    }
+
+    setMsg('Saved!')
+    setSaving(false)
     router.refresh()
   }
 
@@ -85,38 +118,59 @@ export function ClientProfileForm({
     <div className="flex flex-col gap-6">
       {msg && <Alert variant={msg === 'Saved!' ? 'success' : 'error'}>{msg}</Alert>}
 
-      <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-6">
-        <Card>
-          <CardBody className="pt-5 flex flex-col gap-4">
-            <h2 className="font-semibold text-slate-900">My details</h2>
-            <Input label="Your name" error={errors.name?.message} {...register('name')} />
-            <Input label="Email" type="email" disabled defaultValue={user.email} />
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-slate-700">Timezone</label>
-              <select className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" {...register('timezone')}>
-                {TIMEZONES.map(tz => <option key={tz} value={tz}>{tz}</option>)}
-              </select>
+      <Card>
+        <CardBody className="pt-5 flex flex-col gap-4">
+          <h2 className="font-semibold text-slate-900">My details</h2>
+          <Input label="Your name" value={name} onChange={e => setName(e.target.value)} />
+          <Input label="Email" type="email" disabled defaultValue={user.email} />
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-slate-700">Timezone</label>
+            <select
+              value={timezone}
+              onChange={e => setTimezone(e.target.value)}
+              className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {TIMEZONES.map(tz => <option key={tz} value={tz}>{tz}</option>)}
+            </select>
+          </div>
+          <label className="flex items-center justify-between">
+            <span className="text-sm font-medium text-slate-700">Email reminders</span>
+            <input type="checkbox" className="h-5 w-5" checked={notifyEmail} onChange={e => setNotifyEmail(e.target.checked)} />
+          </label>
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardBody className="pt-5 flex flex-col gap-4">
+          <h2 className="font-semibold text-slate-900">My dogs</h2>
+          {dogs.map((dog, i) => (
+            <div key={i} className="border border-slate-100 rounded-xl p-4 flex flex-col gap-3 bg-slate-50">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-slate-700">{dog.name || 'New dog'}</p>
+                {!dog.isPrimary && (
+                  <button type="button" onClick={() => removeDog(i)} className="text-slate-400 hover:text-red-500">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+              <Input
+                label="Name"
+                value={dog.name}
+                onChange={e => updateDog(i, 'name', e.target.value)}
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <Input label="Breed" value={dog.breed} onChange={e => updateDog(i, 'breed', e.target.value)} />
+                <Input label="Weight (kg)" type="number" value={dog.weight} onChange={e => updateDog(i, 'weight', e.target.value)} />
+              </div>
             </div>
-            <label className="flex items-center justify-between">
-              <span className="text-sm font-medium text-slate-700">Email reminders</span>
-              <input type="checkbox" className="h-5 w-5" {...register('notifyEmail')} />
-            </label>
-          </CardBody>
-        </Card>
+          ))}
+          <button type="button" onClick={addDog} className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700">
+            <Plus className="h-4 w-4" /> Add another dog
+          </button>
+        </CardBody>
+      </Card>
 
-        {dog && (
-          <Card>
-            <CardBody className="pt-5 flex flex-col gap-4">
-              <h2 className="font-semibold text-slate-900">🐕 {dog.name}&apos;s profile</h2>
-              <Input label="Dog's name" error={errors.dogName?.message} {...register('dogName')} />
-              <Input label="Breed" error={errors.dogBreed?.message} {...register('dogBreed')} />
-              <Input label="Weight (kg)" type="number" step="0.1" error={errors.dogWeight?.message} {...register('dogWeight')} />
-            </CardBody>
-          </Card>
-        )}
-
-        <Button type="submit" size="lg" className="w-full" loading={isSubmitting}>Save changes</Button>
-      </form>
+      <Button size="lg" className="w-full" loading={saving} onClick={onSubmit}>Save changes</Button>
 
       <Card className="border-red-100">
         <CardBody className="pt-5">

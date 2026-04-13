@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: 'Schedule' }
 export default async function SchedulePage({
   searchParams,
 }: {
-  searchParams: { date?: string }
+  searchParams: Promise<{ date?: string }>
 }) {
   const session = await auth()
   if (!session) redirect('/login')
@@ -21,7 +21,8 @@ export default async function SchedulePage({
   if (!trainerProfile) redirect('/onboarding')
 
   const today = new Date().toISOString().split('T')[0]
-  const selectedDate = searchParams.date ?? today
+  const sp = await searchParams
+  const selectedDate = sp.date ?? today
 
   const dayStart = new Date(selectedDate)
   dayStart.setHours(0, 0, 0, 0)
@@ -34,7 +35,7 @@ export default async function SchedulePage({
       scheduledAt: { gte: dayStart, lte: dayEnd },
     },
     include: {
-      dog: { select: { name: true, clientProfiles: { take: 1, select: { user: { select: { name: true, email: true } } } } } },
+      dog: { select: { name: true, primaryFor: { take: 1, select: { user: { select: { name: true, email: true } } } } } },
     },
     orderBy: { scheduledAt: 'asc' },
   })

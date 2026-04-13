@@ -14,7 +14,7 @@ const TRAINER_NAV = [
   { href: '/clients', label: 'Clients', icon: Users },
   { href: '/diary', label: 'Training Diary', icon: BookOpen },
   { href: '/schedule', label: 'Schedule', icon: Calendar },
-  { href: '/templates', label: 'Templates', icon: Layers },
+  { href: '/templates', label: 'Library', icon: Layers },
   { href: '/progress', label: 'Progress', icon: BarChart2 },
   { href: '/messages', label: 'Messages', icon: MessageSquare },
   { href: '/ai-tools', label: 'AI Tools', icon: Sparkles },

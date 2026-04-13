@@ -7,12 +7,18 @@ import { Button } from '@/components/ui/button'
 import { ChevronLeft, ChevronRight, Upload } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 
+interface Dog {
+  id: string
+  name: string
+}
+
 interface Task {
   id: string
   title: string
   description: string | null
   repetitions: number | null
   videoUrl: string | null
+  dogId: string | null
   completion: {
     note: string | null
     videoUrl: string | null
@@ -29,6 +35,8 @@ export function ClientDiaryView({
   tasks,
   completedToday,
   totalToday,
+  dogs,
+  selectedDogId,
 }: {
   clientName: string
   dogName: string | null
@@ -38,6 +46,8 @@ export function ClientDiaryView({
   tasks: Task[]
   completedToday: number
   totalToday: number
+  dogs: Dog[]
+  selectedDogId: string | null
 }) {
   const router = useRouter()
   const isToday = selectedDate === today
@@ -45,7 +55,15 @@ export function ClientDiaryView({
   function changeDate(delta: number) {
     const d = new Date(selectedDate)
     d.setDate(d.getDate() + delta)
-    router.push(`/my-diary?date=${d.toISOString().split('T')[0]}`)
+    const params = new URLSearchParams({ date: d.toISOString().split('T')[0] })
+    if (selectedDogId) params.set('dogId', selectedDogId)
+    router.push(`/my-diary?${params}`)
+  }
+
+  function selectDog(dogId: string | null) {
+    const params = new URLSearchParams({ date: selectedDate })
+    if (dogId) params.set('dogId', dogId)
+    router.push(`/my-diary?${params}`)
   }
 
   return (
@@ -78,6 +96,35 @@ export function ClientDiaryView({
           <ChevronRight className="h-5 w-5" />
         </button>
       </div>
+
+      {/* Dog filter tabs — only shown when client has multiple dogs */}
+      {dogs.length > 1 && (
+        <div className="flex gap-2 mb-4 overflow-x-auto pb-1">
+          <button
+            onClick={() => selectDog(null)}
+            className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+              !selectedDogId
+                ? 'bg-blue-600 text-white'
+                : 'bg-white border border-slate-200 text-slate-600 hover:border-blue-300'
+            }`}
+          >
+            All dogs
+          </button>
+          {dogs.map(dog => (
+            <button
+              key={dog.id}
+              onClick={() => selectDog(dog.id)}
+              className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                selectedDogId === dog.id
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white border border-slate-200 text-slate-600 hover:border-blue-300'
+              }`}
+            >
+              {dog.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Progress bar */}
       {totalToday > 0 && (
