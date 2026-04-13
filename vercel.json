@@ -1,8 +1,13 @@
 {
+  "regions": ["syd1"],
   "crons": [
     {
       "path": "/api/cron/daily-reminders",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/keep-warm",
+      "schedule": "*/5 * * * *"
     }
   ]
 }
