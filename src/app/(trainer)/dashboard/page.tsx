@@ -14,18 +14,15 @@ export default async function DashboardPage() {
   const session = await auth()
   if (!session) redirect('/login')
 
-  const trainerProfile = await prisma.trainerProfile.findUnique({
-    where: { userId: session.user.id },
-    select: { id: true, businessName: true },
-  })
-  if (!trainerProfile) redirect('/onboarding')
+  const trainerId = session.user.trainerId
+  if (!trainerId) redirect('/onboarding')
 
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
   const today = new Date()
   today.setHours(23, 59, 59, 999)
 
   const clients = await prisma.clientProfile.findMany({
-    where: { trainerId: trainerProfile.id },
+    where: { trainerId },
     include: {
       user: { select: { name: true, email: true } },
       dog: { select: { name: true } },
@@ -61,7 +58,7 @@ export default async function DashboardPage() {
         <h1 className="text-2xl font-bold text-slate-900">
           Good {getGreeting()}, {session.user.name?.split(' ')[0]} 👋
         </h1>
-        <p className="text-slate-500 text-sm mt-1">{trainerProfile.businessName}</p>
+        <p className="text-slate-500 text-sm mt-1">{session.user.businessName}</p>
       </div>
 
       {/* Stats row */}

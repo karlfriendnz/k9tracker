@@ -5,10 +5,42 @@ import Resend from 'next-auth/providers/resend'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 import { z } from 'zod'
+import { authConfig } from './auth.config'
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  ...authConfig,
   adapter: PrismaAdapter(prisma),
-  session: { strategy: 'jwt' },
+  callbacks: {
+    async jwt({ token, user }) {
+      if (user) {
+        token.role = (user as { role?: string }).role
+        token.id = user.id
+        // Fetch trainer profile once on sign-in and cache in JWT
+        if ((user as { role?: string }).role === 'TRAINER') {
+          const tp = await prisma.trainerProfile.findUnique({
+            where: { userId: user.id as string },
+            select: { id: true, businessName: true, logoUrl: true },
+          })
+          if (tp) {
+            token.trainerId = tp.id
+            token.businessName = tp.businessName
+            token.logoUrl = tp.logoUrl
+          }
+        }
+      }
+      return token
+    },
+    async session({ session, token }) {
+      if (session.user) {
+        session.user.id = token.id as string
+        session.user.role = token.role as string
+        session.user.trainerId = token.trainerId as string | undefined
+        session.user.businessName = token.businessName as string | undefined
+        session.user.logoUrl = token.logoUrl as string | null | undefined
+      }
+      return session
+    },
+  },
   providers: [
     // Magic link for clients
     Resend({
@@ -63,25 +95,4 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
     }),
   ],
-  callbacks: {
-    async jwt({ token, user }) {
-      if (user) {
-        token.role = (user as { role?: string }).role
-        token.id = user.id
-      }
-      return token
-    },
-    async session({ session, token }) {
-      if (session.user) {
-        session.user.id = token.id as string
-        session.user.role = token.role as string
-      }
-      return session
-    },
-  },
-  pages: {
-    signIn: '/login',
-    verifyRequest: '/verify-email',
-    error: '/login',
-  },
 })

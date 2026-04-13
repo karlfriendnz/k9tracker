@@ -16,20 +16,17 @@ export default async function TemplateDetailPage({ params }: { params: Promise<{
 
   const { templateId } = await params
 
-  const trainerProfile = await prisma.trainerProfile.findUnique({
-    where: { userId: session.user.id },
-    select: { id: true },
-  })
-  if (!trainerProfile) redirect('/onboarding')
+  const trainerId = session.user.trainerId
+  if (!trainerId) redirect('/onboarding')
 
   const template = await prisma.trainingTemplate.findFirst({
-    where: { id: templateId, trainerId: trainerProfile.id },
+    where: { id: templateId, trainerId },
     include: { tasks: { orderBy: [{ dayOffset: 'asc' }, { order: 'asc' }] } },
   })
   if (!template) notFound()
 
   const clients = await prisma.clientProfile.findMany({
-    where: { trainerId: trainerProfile.id },
+    where: { trainerId },
     include: { user: { select: { name: true, email: true } }, dog: { select: { name: true } } },
   })
 

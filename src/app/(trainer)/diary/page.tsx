@@ -14,14 +14,11 @@ export default async function TrainerDiaryPage({
   const session = await auth()
   if (!session) redirect('/login')
 
-  const trainerProfile = await prisma.trainerProfile.findUnique({
-    where: { userId: session.user.id },
-    select: { id: true },
-  })
-  if (!trainerProfile) redirect('/onboarding')
+  const trainerId = session.user.trainerId
+  if (!trainerId) redirect('/onboarding')
 
   const clients = await prisma.clientProfile.findMany({
-    where: { trainerId: trainerProfile.id },
+    where: { trainerId },
     include: {
       user: { select: { name: true, email: true } },
       dog: { select: { id: true, name: true } },
@@ -34,8 +31,8 @@ export default async function TrainerDiaryPage({
   const selectedClientId = sp.clientId ?? clients[0]?.id ?? null
   const selectedDate = sp.date ?? new Date().toISOString().split('T')[0]
 
-  const query = { where: { clientId: selectedClientId ?? '', date: new Date(selectedDate) }, include: { completion: true }, orderBy: { createdAt: 'asc' as const } }
-  const tasks = selectedClientId ? await prisma.trainingTask.findMany(query) : [] as Awaited<ReturnType<typeof prisma.trainingTask.findMany<typeof query>>>
+  const tasksQuery = { where: { clientId: selectedClientId ?? '', date: new Date(selectedDate) }, include: { completion: true }, orderBy: { createdAt: 'asc' as const } }
+  const tasks = selectedClientId ? await prisma.trainingTask.findMany(tasksQuery) : [] as Awaited<ReturnType<typeof prisma.trainingTask.findMany<typeof tasksQuery>>>
 
   return (
     <TrainerDiaryView

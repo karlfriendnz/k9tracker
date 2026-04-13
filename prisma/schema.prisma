@@ -95,6 +95,7 @@ model Account {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
+  @@index([userId])
   @@map("accounts")
 }
 
@@ -106,6 +107,7 @@ model Session {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId])
   @@map("sessions")
 }
 
@@ -146,9 +148,10 @@ model TrainerProfile {
   receivedClients   ClientShare[]     @relation("SharedWithTrainer")
   trainingSessions  TrainingSession[]
   trainingTemplates TrainingTemplate[]
-  customFields      CustomField[]
-  libraryTypes      LibraryType[]
-  embedForms        EmbedForm[]
+  customFields       CustomField[]
+  libraryTypes       LibraryType[]
+  embedForms         EmbedForm[]
+  sentNotifications  ClientNotification[]
 
   @@map("trainer_profiles")
 }
@@ -174,6 +177,7 @@ model ClientProfile {
   messages          Message[]          @relation("ClientMessages")
   customFieldValues CustomFieldValue[]
   dogs              Dog[]              @relation("AdditionalDogs")
+  notifications     ClientNotification[]
 
   @@index([trainerId])
   @@map("client_profiles")
@@ -333,6 +337,7 @@ model Message {
   sender User          @relation(fields: [senderId], references: [id])
 
   @@index([clientId])
+  @@index([senderId])
   @@index([createdAt])
   @@map("messages")
 }
@@ -385,6 +390,7 @@ model CustomFieldValue {
   field  CustomField   @relation(fields: [fieldId], references: [id], onDelete: Cascade)
   client ClientProfile @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
+  @@index([clientId])
   @@index([fieldId, clientId, dogId])
   @@map("custom_field_values")
 }
@@ -455,6 +461,23 @@ model LibraryTask {
 
   @@index([themeId])
   @@map("library_tasks")
+}
+
+// ─── Client Notifications ─────────────────────────────────────────────────────
+
+model ClientNotification {
+  id        String   @id @default(cuid())
+  clientId  String
+  trainerId String
+  subject   String
+  notes     String?  @db.Text
+  sentAt    DateTime @default(now())
+
+  client  ClientProfile  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  trainer TrainerProfile @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@map("client_notifications")
 }
 
 // ─── Embed Forms ──────────────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Card, CardBody } from '@/components/ui/card'
 import {
   Plus, Trash2, CheckCircle, Circle, X, BookOpen, Pencil,
-  ChevronRight, Layers, Tag, Check, Loader2, Save,
+  ChevronRight, Layers, Tag, Check, Loader2, Save, Send, Bell,
 } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 
@@ -563,6 +563,113 @@ function TaskEditor({
   )
 }
 
+// ─── Notify client modal ─────────────────────────────────────────────────────
+
+function NotifyModal({
+  client,
+  onClose,
+  onSent,
+}: {
+  client: Client
+  onClose: () => void
+  onSent: () => void
+}) {
+  const clientName = client.user.name ?? client.user.email
+  const [subject, setSubject] = useState(`Your training tasks have been updated`)
+  const [notes, setNotes] = useState('')
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function send() {
+    if (!subject.trim()) return
+    setSending(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/clients/${client.id}/notify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subject: subject.trim(), notes: notes.trim() || null }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setError(data.error ?? 'Failed to send. Please try again.')
+        setSending(false)
+        return
+      }
+      onSent()
+      onClose()
+    } catch {
+      setError('Failed to send. Please try again.')
+      setSending(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40">
+      <div className="w-full sm:max-w-lg bg-white rounded-t-2xl sm:rounded-2xl shadow-xl flex flex-col max-h-[90vh]">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 flex-shrink-0">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">Notify client</h2>
+            <p className="text-xs text-slate-500 mt-0.5">Send an email to {clientName}</p>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-1">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-5 py-5 min-h-0 flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-slate-700">Subject <span className="text-red-500">*</span></label>
+            <input
+              value={subject}
+              onChange={e => setSubject(e.target.value)}
+              placeholder="Your training tasks have been updated"
+              className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-slate-700">Notes / message <span className="text-xs text-slate-400 font-normal ml-1">optional</span></label>
+            <textarea
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              rows={5}
+              placeholder={`Hi ${clientName.split(' ')[0]}, I've updated your tasks for the week. Focus on the sit-stay exercise — you're doing great!`}
+              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+            />
+            <p className="text-xs text-slate-400">This will appear in the email above the diary link. A magic link is automatically included so they can access their diary with one click.</p>
+          </div>
+
+          {error && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">{error}</p>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 py-4 border-t border-slate-100 flex-shrink-0 flex gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 h-11 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+          >
+            Cancel
+          </button>
+          <Button
+            onClick={send}
+            loading={sending}
+            disabled={!subject.trim()}
+            className="flex-[2]"
+          >
+            <Send className="h-4 w-4" />
+            Send email
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Main view ───────────────────────────────────────────────────────────────
 
 export function TrainerDiaryView({
@@ -578,9 +685,12 @@ export function TrainerDiaryView({
 }) {
   const router = useRouter()
   const [showPanel, setShowPanel] = useState(false)
+  const [showNotify, setShowNotify] = useState(false)
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null)
+  const [notifySent, setNotifySent] = useState(false)
 
   const selectedClient = clients.find(c => c.id === selectedClientId) ?? null
+  useEffect(() => { setNotifySent(false); setShowNotify(false) }, [selectedClientId])
   const clientDogs: Dog[] = selectedClient
     ? [...(selectedClient.dog ? [selectedClient.dog] : []), ...selectedClient.dogs]
     : []
@@ -638,9 +748,23 @@ export function TrainerDiaryView({
         />
 
         {selectedClientId && (
-          <Button size="sm" onClick={() => setShowPanel(true)} className="ml-auto">
-            <Plus className="h-4 w-4" /> Add tasks
-          </Button>
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={() => setShowNotify(true)}
+              title="Email client about updated tasks"
+              className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-xl text-sm font-medium transition-colors border ${
+                notifySent
+                  ? 'border-green-300 bg-green-50 text-green-700'
+                  : 'border-slate-200 bg-white text-slate-600 hover:border-blue-300 hover:text-blue-700 hover:bg-blue-50'
+              }`}
+            >
+              <Bell className="h-3.5 w-3.5" />
+              {notifySent ? 'Email sent!' : 'Notify client'}
+            </button>
+            <Button size="sm" onClick={() => setShowPanel(true)}>
+              <Plus className="h-4 w-4" /> Add tasks
+            </Button>
+          </div>
         )}
       </div>
 
@@ -732,6 +856,14 @@ export function TrainerDiaryView({
           clientDogs={clientDogs}
           onClose={() => setShowPanel(false)}
           onAdded={() => router.refresh()}
+        />
+      )}
+
+      {showNotify && selectedClient && (
+        <NotifyModal
+          client={selectedClient}
+          onClose={() => setShowNotify(false)}
+          onSent={() => setNotifySent(true)}
         />
       )}
     </div>

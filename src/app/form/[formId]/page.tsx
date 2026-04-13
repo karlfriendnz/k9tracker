@@ -11,9 +11,6 @@ export default async function PublicFormPage({
 
   const form = await prisma.embedForm.findFirst({
     where: { id: formId, isActive: true },
-    include: {
-      trainer: { select: { businessName: true, logoUrl: true } },
-    },
   })
   if (!form) notFound()
 
@@ -32,11 +29,8 @@ export default async function PublicFormPage({
   return (
     <PublicForm
       formId={form.id}
-      title={form.title}
       description={form.description}
       thankYouMessage={form.thankYouMessage}
-      businessName={form.trainer.businessName}
-      logoUrl={form.trainer.logoUrl}
       fields={fields}
       customFields={customFields.map(f => ({
         id: f.id,

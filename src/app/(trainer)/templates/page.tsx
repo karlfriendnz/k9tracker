@@ -10,14 +10,11 @@ export default async function LibraryPage() {
   const session = await auth()
   if (!session) redirect('/login')
 
-  const trainer = await prisma.trainerProfile.findUnique({
-    where: { userId: session.user.id },
-    select: { id: true },
-  })
-  if (!trainer) redirect('/onboarding')
+  const trainerId = session.user.trainerId
+  if (!trainerId) redirect('/onboarding')
 
   const types = await prisma.libraryType.findMany({
-    where: { trainerId: trainer.id },
+    where: { trainerId },
     orderBy: { order: 'asc' },
     include: {
       themes: {
@@ -28,7 +25,7 @@ export default async function LibraryPage() {
   })
 
   const clients = await prisma.clientProfile.findMany({
-    where: { trainerId: trainer.id, status: 'ACTIVE' },
+    where: { trainerId, status: 'ACTIVE' },
     include: {
       user: { select: { name: true, email: true } },
       dog: { select: { id: true, name: true } },

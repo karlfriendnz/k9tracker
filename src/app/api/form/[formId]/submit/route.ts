@@ -49,7 +49,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ formId:
     }
   }
 
-  const inviteToken = crypto.randomBytes(32).toString('hex')
+  // Generate a NextAuth-compatible magic link token.
+  // NextAuth stores SHA256(token + AUTH_SECRET) in the DB; plain token goes in the URL.
+  const plainToken = crypto.randomBytes(32).toString('hex')
+  const secret = process.env.AUTH_SECRET ?? ''
+  const hashedToken = crypto.createHash('sha256').update(`${plainToken}${secret}`).digest('hex')
   const expires = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000) // 14 days
 
   await prisma.$transaction(async tx => {
@@ -97,14 +101,23 @@ export async function POST(req: Request, { params }: { params: Promise<{ formId:
     // Store phone in a custom field if trainer has one, or just ignore for now
     // (phone is stored as a note in message if no custom field exists)
 
-    // Create invite token
+    // Delete any existing verification token for this email before creating a new one
+    await tx.verificationToken.deleteMany({ where: { identifier: email } })
+
+    // Store hashed token (NextAuth Resend provider format)
     await tx.verificationToken.create({
-      data: { identifier: email, token: inviteToken, expires },
+      data: { identifier: email, token: hashedToken, expires },
     })
   })
 
-  // Send welcome email
-  const inviteUrl = `${process.env.NEXT_PUBLIC_APP_URL}/invite?token=${inviteToken}&email=${encodeURIComponent(email)}`
+  // Build magic link — uses NextAuth Resend callback so the client is logged in immediately on click
+  const reqUrl = new URL(req.url)
+  const appUrl = `${reqUrl.protocol}//${reqUrl.host}`
+  const magicLink = `${appUrl}/api/auth/callback/resend?${new URLSearchParams({
+    callbackUrl: '/my-diary',
+    token: plainToken,
+    email,
+  })}`
   const businessName = form.trainer.businessName
 
   try {
@@ -119,11 +132,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ formId:
           <h2 style="color:#0f172a;margin-bottom:8px;">Hi ${name}!</h2>
           <p style="color:#475569;margin-bottom:24px;">
             Thanks for registering with <strong>${businessName}</strong>.
-            Click the button below to set up your account and access your training diary.
+            Click the button below to access your training diary — no password needed, the link logs you in automatically. This link expires in 14 days.
           </p>
           ${message ? `<p style="color:#475569;background:#f8fafc;border-left:3px solid #e2e8f0;padding:12px 16px;margin-bottom:24px;"><em>"${message}"</em></p>` : ''}
-          <a href="${inviteUrl}" style="display:inline-block;background:#2563eb;color:#fff;padding:14px 28px;border-radius:10px;text-decoration:none;font-weight:600;">
-            Set up your account
+          <a href="${magicLink}" style="display:inline-block;background:#2563eb;color:#fff;padding:14px 28px;border-radius:10px;text-decoration:none;font-weight:600;">
+            Access my training diary
           </a>
           <p style="color:#94a3b8;font-size:13px;margin-top:32px;">
             This link expires in 14 days. If you didn't submit this form, you can safely ignore this email.

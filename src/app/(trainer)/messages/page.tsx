@@ -12,14 +12,11 @@ export default async function MessagesPage() {
   const session = await auth()
   if (!session) redirect('/login')
 
-  const trainerProfile = await prisma.trainerProfile.findUnique({
-    where: { userId: session.user.id },
-    select: { id: true },
-  })
-  if (!trainerProfile) redirect('/onboarding')
+  const trainerId = session.user.trainerId
+  if (!trainerId) redirect('/onboarding')
 
   const clients = await prisma.clientProfile.findMany({
-    where: { trainerId: trainerProfile.id },
+    where: { trainerId },
     include: {
       user: { select: { name: true, email: true } },
       dog: { select: { name: true } },

@@ -24,11 +24,17 @@ export async function GET() {
   const trainer = await prisma.trainerProfile.findUnique({ where: { userId: session.user.id }, select: { id: true } })
   if (!trainer) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const forms = await prisma.embedForm.findMany({
-    where: { trainerId: trainer.id },
-    orderBy: { createdAt: 'desc' },
-  })
-  return NextResponse.json(forms)
+  try {
+    const forms = await prisma.embedForm.findMany({
+      where: { trainerId: trainer.id },
+      orderBy: { createdAt: 'desc' },
+    })
+    return NextResponse.json(forms)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('[embed-forms GET]', msg)
+    return NextResponse.json({ error: 'Database error', detail: msg }, { status: 500 })
+  }
 }
 
 export async function POST(req: Request) {
@@ -42,16 +48,22 @@ export async function POST(req: Request) {
   const parsed = schema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
 
-  const form = await prisma.embedForm.create({
-    data: {
-      trainerId: trainer.id,
-      title: parsed.data.title,
-      description: parsed.data.description ?? null,
-      fields: parsed.data.fields,
-      customFieldIds: parsed.data.customFieldIds,
-      thankYouMessage: parsed.data.thankYouMessage ?? null,
-      isActive: parsed.data.isActive,
-    },
-  })
-  return NextResponse.json(form, { status: 201 })
+  try {
+    const form = await prisma.embedForm.create({
+      data: {
+        trainerId: trainer.id,
+        title: parsed.data.title,
+        description: parsed.data.description ?? null,
+        fields: parsed.data.fields,
+        customFieldIds: parsed.data.customFieldIds,
+        thankYouMessage: parsed.data.thankYouMessage ?? null,
+        isActive: parsed.data.isActive,
+      },
+    })
+    return NextResponse.json(form, { status: 201 })
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('[embed-forms POST]', msg)
+    return NextResponse.json({ error: 'Database error', detail: msg }, { status: 500 })
+  }
 }

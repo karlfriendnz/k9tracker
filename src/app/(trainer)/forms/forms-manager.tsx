@@ -137,7 +137,12 @@ function FormBuilder({
           body: JSON.stringify(payload),
         })
 
-    if (!res.ok) { setError('Failed to save form.'); setSaving(false); return }
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      setError(data.detail ?? data.error ?? 'Failed to save form.')
+      setSaving(false)
+      return
+    }
     const saved = await res.json()
     onSave({ ...payload, id: saved.id, isActive: saved.isActive })
     onClose()
@@ -354,10 +359,9 @@ export function FormsManager({
   const [building, setBuilding] = useState<EmbedForm | 'new' | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://k9tracker-app.vercel.app'
-
   function formUrl(id: string) {
-    return `${appUrl}/form/${id}`
+    const origin = typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_APP_URL ?? '')
+    return `${origin}/form/${id}`
   }
 
   function embedCode(id: string) {

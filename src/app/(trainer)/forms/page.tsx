@@ -10,19 +10,16 @@ export default async function FormsPage() {
   const session = await auth()
   if (!session) redirect('/login')
 
-  const trainer = await prisma.trainerProfile.findUnique({
-    where: { userId: session.user.id },
-    select: { id: true },
-  })
-  if (!trainer) redirect('/onboarding')
+  const trainerId = session.user.trainerId
+  if (!trainerId) redirect('/onboarding')
 
   const [forms, customFields] = await Promise.all([
     prisma.embedForm.findMany({
-      where: { trainerId: trainer.id },
+      where: { trainerId },
       orderBy: { createdAt: 'desc' },
     }),
     prisma.customField.findMany({
-      where: { trainerId: trainer.id },
+      where: { trainerId },
       orderBy: { order: 'asc' },
     }),
   ])

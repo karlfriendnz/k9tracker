@@ -13,11 +13,8 @@ interface CustomField {
 
 interface Props {
   formId: string
-  title: string
   description: string | null
   thankYouMessage: string | null
-  businessName: string
-  logoUrl: string | null
   fields: { key: string; required: boolean }[]
   customFields: CustomField[]
 }
@@ -33,11 +30,8 @@ const FIELD_LABELS: Record<string, string> = {
 
 export function PublicForm({
   formId,
-  title,
   description,
   thankYouMessage,
-  businessName,
-  logoUrl,
   fields,
   customFields,
 }: Props) {
@@ -109,14 +103,14 @@ export function PublicForm({
 
   if (submitted) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 max-w-md w-full text-center">
+      <div className="min-h-screen bg-white flex items-center justify-center p-6">
+        <div className="p-8 max-w-md w-full text-center">
           <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-100 mx-auto mb-4">
             <CheckCircle className="h-8 w-8 text-green-600" />
           </div>
           <h2 className="text-xl font-bold text-slate-900 mb-2">You're registered!</h2>
           <p className="text-slate-500 text-sm">
-            {thankYouMessage || `Thanks for registering with ${businessName}. Check your email for a link to set up your account.`}
+            {thankYouMessage || `Thanks for registering. Check your email — we've sent you a link to access your training diary.`}
           </p>
         </div>
       </div>
@@ -124,21 +118,11 @@ export function PublicForm({
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-start py-10 px-4">
+    <div className="min-h-screen bg-white flex flex-col items-center justify-start py-10 px-4">
       <div className="w-full max-w-lg">
-        {/* Header */}
-        <div className="text-center mb-8">
-          {logoUrl ? (
-            <img src={logoUrl} alt={businessName} className="h-12 w-12 rounded-xl object-cover mx-auto mb-3" />
-          ) : (
-            <div className="h-12 w-12 rounded-xl bg-blue-600 flex items-center justify-center mx-auto mb-3">
-              <span className="text-white font-bold text-lg">{businessName[0]}</span>
-            </div>
-          )}
-          <p className="text-sm font-medium text-blue-600 mb-1">{businessName}</p>
-          <h1 className="text-2xl font-bold text-slate-900">{title}</h1>
-          {description && <p className="text-slate-500 text-sm mt-2">{description}</p>}
-        </div>
+        {description && (
+          <p className="text-slate-500 text-sm mb-6">{description}</p>
+        )}
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-5">
           {/* Always-shown fields */}

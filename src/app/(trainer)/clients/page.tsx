@@ -18,11 +18,8 @@ export default async function ClientsPage({
   const session = await auth()
   if (!session) redirect('/login')
 
-  const trainerProfile = await prisma.trainerProfile.findUnique({
-    where: { userId: session.user.id },
-    select: { id: true },
-  })
-  if (!trainerProfile) redirect('/onboarding')
+  const trainerId = session.user.trainerId
+  if (!trainerId) redirect('/onboarding')
 
   const sp = await searchParams
   const query = sp.q ?? ''
@@ -30,14 +27,14 @@ export default async function ClientsPage({
   const status = tab === 'active' ? 'ACTIVE' : tab === 'inactive' ? 'INACTIVE' : 'NEW'
 
   const [newCount, activeCount, inactiveCount] = await Promise.all([
-    prisma.clientProfile.count({ where: { trainerId: trainerProfile.id, status: 'NEW' } }),
-    prisma.clientProfile.count({ where: { trainerId: trainerProfile.id, status: 'ACTIVE' } }),
-    prisma.clientProfile.count({ where: { trainerId: trainerProfile.id, status: 'INACTIVE' } }),
+    prisma.clientProfile.count({ where: { trainerId, status: 'NEW' } }),
+    prisma.clientProfile.count({ where: { trainerId, status: 'ACTIVE' } }),
+    prisma.clientProfile.count({ where: { trainerId, status: 'INACTIVE' } }),
   ])
 
   const ownedClients = await prisma.clientProfile.findMany({
     where: {
-      trainerId: trainerProfile.id,
+      trainerId,
       status,
       user: query
         ? { name: { contains: query, mode: 'insensitive' } }
@@ -57,7 +54,7 @@ export default async function ClientsPage({
   // CO_MANAGE shared clients (only show in active tab)
   const sharedClients = (tab === 'active') ? await prisma.clientShare.findMany({
     where: {
-      sharedWithId: trainerProfile.id,
+      sharedWithId: trainerId,
       shareType: 'CO_MANAGE',
       client: query
         ? { user: { name: { contains: query, mode: 'insensitive' } } }

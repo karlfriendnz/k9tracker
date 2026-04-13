@@ -1,12 +1,20 @@
-import { auth } from '@/lib/auth'
+import NextAuth from 'next-auth'
+import { authConfig } from '@/lib/auth.config'
 import { NextResponse } from 'next/server'
 
-const PUBLIC_PATHS = ['/login', '/register', '/forgot-password', '/verify-email', '/invite', '/api/auth']
+const { auth } = NextAuth(authConfig)
+
+const PUBLIC_PATHS = [
+  '/login', '/register', '/forgot-password', '/verify-email', '/invite',
+  '/api/auth',
+  '/form',       // public embed forms
+  '/api/form',   // public form submission API
+]
 
 // Trainer-only route prefixes
 const TRAINER_PATHS = [
-  '/dashboard', '/clients', '/diary', '/schedule', '/templates',
-  '/progress', '/messages', '/ai-tools', '/settings', '/help',
+  '/dashboard', '/clients', '/diary', '/schedule', '/templates', '/library',
+  '/progress', '/messages', '/ai-tools', '/settings', '/help', '/forms',
 ]
 
 // Client-only route prefixes

@@ -14,14 +14,11 @@ export default async function TrainerMessageThreadPage({ params }: { params: Pro
 
   const { clientId } = await params
 
-  const trainerProfile = await prisma.trainerProfile.findUnique({
-    where: { userId: session.user.id },
-    select: { id: true },
-  })
-  if (!trainerProfile) redirect('/onboarding')
+  const trainerId = session.user.trainerId
+  if (!trainerId) redirect('/onboarding')
 
   const client = await prisma.clientProfile.findFirst({
-    where: { id: clientId, trainerId: trainerProfile.id },
+    where: { id: clientId, trainerId },
     include: {
       user: { select: { name: true, email: true } },
       dog: { select: { name: true } },
