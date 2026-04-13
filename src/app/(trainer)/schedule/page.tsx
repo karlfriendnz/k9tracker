@@ -39,7 +39,7 @@ export default async function SchedulePage({
 
   const { weekStart, weekEnd } = getWeekBounds(selectedDate)
 
-  const [sessions, availabilitySlots] = await Promise.all([
+  const [sessions, availabilitySlots, clients] = await Promise.all([
     prisma.trainingSession.findMany({
       where: {
         trainerId: trainerProfile.id,
@@ -55,12 +55,24 @@ export default async function SchedulePage({
             },
           },
         },
+        client: {
+          select: { id: true, user: { select: { name: true, email: true } } },
+        },
       },
       orderBy: { scheduledAt: 'asc' },
     }),
     prisma.availabilitySlot.findMany({
       where: { trainerId: trainerProfile.id },
       orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }],
+    }),
+    prisma.clientProfile.findMany({
+      where: { trainerId: trainerProfile.id, status: 'ACTIVE' },
+      include: {
+        user: { select: { name: true, email: true } },
+        dog: { select: { id: true, name: true } },
+        dogs: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: 'asc' },
     }),
   ])
 
@@ -69,10 +81,19 @@ export default async function SchedulePage({
       sessions={sessions.map(s => ({
         ...s,
         scheduledAt: s.scheduledAt.toISOString(),
+        clientId: s.clientId,
       }))}
       availabilitySlots={availabilitySlots.map(s => ({
         ...s,
         date: s.date ? s.date.toISOString().split('T')[0] : null,
+      }))}
+      clients={clients.map(c => ({
+        id: c.id,
+        name: c.user.name ?? c.user.email,
+        dogs: [
+          ...(c.dog ? [c.dog] : []),
+          ...c.dogs,
+        ],
       }))}
       selectedDate={selectedDate}
       today={today}

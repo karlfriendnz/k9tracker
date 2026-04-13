@@ -32,6 +32,8 @@ const sessionSchema = z.object({
   location: z.string().optional(),
   virtualLink: z.string().url().optional().or(z.literal('')),
   description: z.string().optional(),
+  clientId: z.string().optional(),
+  dogId: z.string().optional(),
 })
 
 const availSchema = z.object({
@@ -57,10 +59,17 @@ interface Session {
   location: string | null
   virtualLink: string | null
   description: string | null
+  clientId: string | null
   dog: {
     name: string
     primaryFor: { id: string; user: { name: string | null; email: string } }[]
   } | null
+}
+
+interface ClientOption {
+  id: string
+  name: string
+  dogs: { id: string; name: string }[]
 }
 
 interface AvailSlot {
@@ -74,9 +83,23 @@ interface AvailSlot {
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
+// Parse YYYY-MM-DD as LOCAL noon to avoid timezone-shift bugs
+function parseLocalDate(dateStr: string): Date {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  return new Date(y, m - 1, d, 12, 0, 0)
+}
+
+// Format Date as YYYY-MM-DD using LOCAL date components
+function toDateStr(date: Date): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
 function getMondayOf(dateStr: string): Date {
-  const d = new Date(dateStr)
-  const day = d.getDay()
+  const d = parseLocalDate(dateStr)
+  const day = d.getDay() // 0=Sun
   const diff = day === 0 ? -6 : 1 - day
   d.setDate(d.getDate() + diff)
   return d
@@ -88,10 +111,6 @@ function addDays(date: Date, n: number): Date {
   return d
 }
 
-function toDateStr(date: Date): string {
-  return date.toISOString().split('T')[0]
-}
-
 function fmtTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('en-NZ', {
     hour: 'numeric', minute: '2-digit', hour12: true,
@@ -99,7 +118,7 @@ function fmtTime(iso: string): string {
 }
 
 function fmtFullDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('en-NZ', {
+  return parseLocalDate(dateStr).toLocaleDateString('en-NZ', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   })
 }
@@ -356,7 +375,7 @@ function WeekGrid({
           {weekDays.map((d, dayIndex) => {
             const ds         = toDateStr(d)
             const isToday    = ds === today
-            const daySessions = sessions.filter(s => s.scheduledAt.startsWith(ds))
+            const daySessions = sessions.filter(s => toDateStr(new Date(s.scheduledAt)) === ds)
 
             return (
               <div
@@ -449,9 +468,9 @@ function DayList({
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-slate-900">{s.title}</p>
-                  {s.dog && (
+                  {(client || s.clientId) && (
                     <p className="text-sm text-slate-500 mt-0.5">
-                      🐕 {s.dog.name}{client ? ` · ${client.name ?? client.email}` : ''}
+                      {s.dog ? `🐕 ${s.dog.name} · ` : ''}{client?.name ?? client?.email ?? ''}
                     </p>
                   )}
                   {s.location && (
@@ -604,18 +623,23 @@ function AvailabilityManager({
 
 function AddSessionModal({
   defaultDateTime,
+  clients,
   onSave,
   onClose,
 }: {
   defaultDateTime: string
+  clients: ClientOption[]
   onSave: (data: SessionForm) => Promise<void>
   onClose: () => void
 }) {
   const [error, setError] = useState<string | null>(null)
-  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<SessionForm>({
+  const { register, handleSubmit, watch, formState: { errors, isSubmitting } } = useForm<SessionForm>({
     resolver: zodResolver(sessionSchema),
     defaultValues: { sessionType: 'IN_PERSON', durationMins: 60, scheduledAt: defaultDateTime },
   })
+
+  const selectedClientId = watch('clientId')
+  const selectedClient   = clients.find(c => c.id === selectedClientId)
 
   async function onSubmit(data: SessionForm) {
     setError(null)
@@ -625,7 +649,7 @@ function AddSessionModal({
   return (
     <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" />
-      <div className="relative z-50 bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+      <div className="relative z-50 bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between p-5 border-b border-slate-100">
           <h2 className="font-semibold text-slate-900">New session</h2>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="h-5 w-5" /></button>
@@ -633,7 +657,32 @@ function AddSessionModal({
         <div className="p-5">
           {error && <Alert variant="error" className="mb-3">{error}</Alert>}
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-3">
-            <Input label="Session title" placeholder="Buddy — Foundation training" error={errors.title?.message} {...register('title')} />
+            <Input label="Session title" placeholder="Foundation training" error={errors.title?.message} {...register('title')} />
+
+            {/* Client selector */}
+            <div>
+              <label className="text-sm font-medium text-slate-700 block mb-1.5">Client (optional)</label>
+              <select {...register('clientId')} className="h-12 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">No client</option>
+                {clients.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Dog selector — only when client selected and has dogs */}
+            {selectedClient && selectedClient.dogs.length > 0 && (
+              <div>
+                <label className="text-sm font-medium text-slate-700 block mb-1.5">Dog (optional)</label>
+                <select {...register('dogId')} className="h-12 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="">No dog selected</option>
+                  {selectedClient.dogs.map(d => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div className="flex gap-3">
               <div className="flex flex-col gap-1.5 flex-[2]">
                 <label className="text-sm font-medium text-slate-700">Date & time</label>
@@ -668,12 +717,14 @@ function AddSessionModal({
 export function ScheduleView({
   sessions: initialSessions,
   availabilitySlots: initialAvailSlots,
+  clients,
   selectedDate,
   today,
   googleCalendarConnected,
 }: {
   sessions: Session[]
   availabilitySlots: AvailSlot[]
+  clients: ClientOption[]
   selectedDate: string
   today: string
   googleCalendarConnected: boolean
@@ -706,9 +757,16 @@ export function ScheduleView({
   })()
 
   function navigate(delta: number) {
-    const d = new Date(selectedDate)
-    d.setDate(d.getDate() + (view === 'week' ? delta * 7 : delta))
-    router.push(`/schedule?date=${toDateStr(d)}`)
+    if (view === 'week') {
+      // Always anchor to Monday so week boundaries are clean
+      const monday = getMondayOf(selectedDate)
+      const newDate = addDays(monday, delta * 7)
+      router.push(`/schedule?date=${toDateStr(newDate)}`)
+    } else {
+      const d = parseLocalDate(selectedDate)
+      d.setDate(d.getDate() + delta)
+      router.push(`/schedule?date=${toDateStr(d)}`)
+    }
   }
 
   function openAddModal(dateStr: string, time: string) {
@@ -747,7 +805,7 @@ export function ScheduleView({
   }
 
   function handleSessionClick(s: Session) {
-    const clientId = s.dog?.primaryFor[0]?.id
+    const clientId = s.clientId ?? s.dog?.primaryFor[0]?.id
     if (clientId) router.push(`/clients/${clientId}`)
   }
 
@@ -760,7 +818,7 @@ export function ScheduleView({
     setAvailSlots(prev => prev.filter(s => s.id !== id))
   }
 
-  const daySessions = sessions.filter(s => s.scheduledAt.startsWith(selectedDate))
+  const daySessions = sessions.filter(s => toDateStr(new Date(s.scheduledAt)) === selectedDate)
 
   return (
     <div className="flex flex-col h-full">
@@ -869,6 +927,7 @@ export function ScheduleView({
       {addModal && (
         <AddSessionModal
           defaultDateTime={addModal}
+          clients={clients}
           onSave={handleAddSession}
           onClose={() => setAddModal(null)}
         />

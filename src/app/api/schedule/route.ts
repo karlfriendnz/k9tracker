@@ -12,6 +12,7 @@ const schema = z.object({
   virtualLink: z.string().url().optional().or(z.literal('')),
   description: z.string().optional(),
   dogId: z.string().optional(),
+  clientId: z.string().optional(),
 })
 
 export async function POST(req: Request) {
@@ -41,6 +42,7 @@ export async function POST(req: Request) {
       virtualLink: parsed.data.virtualLink || null,
       description: parsed.data.description ?? null,
       dogId: parsed.data.dogId ?? null,
+      clientId: parsed.data.clientId ?? null,
     },
   })
 
