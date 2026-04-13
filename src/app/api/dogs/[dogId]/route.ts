@@ -24,7 +24,7 @@ export async function PATCH(
   // Verify this dog belongs to the requesting client
   const clientProfile = await prisma.clientProfile.findUnique({
     where: { userId: session.user.id },
-    select: { dogId: true },
+    select: { id: true, dogId: true },
   })
 
   // Allow if primary dog or additional dog owned by this client
