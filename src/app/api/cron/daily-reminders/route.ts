@@ -2,6 +2,15 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { Resend } from 'resend'
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+}
+
 // Called by Vercel Cron at 6 PM UTC daily (configure in vercel.json)
 // Authorization via CRON_SECRET header
 export async function GET(req: Request) {
@@ -49,10 +58,10 @@ export async function GET(req: Request) {
         subject: `🐕 Don't forget — ${pendingTasks.length} training task${pendingTasks.length > 1 ? 's' : ''} to complete today`,
         html: `
           <div style="font-family:sans-serif;max-width:600px;margin:0 auto;">
-            <h2 style="color:#1e3a5f;">Hi ${client.user.name ?? 'there'} 👋</h2>
-            <p>You still have <strong>${pendingTasks.length} training task${pendingTasks.length > 1 ? 's' : ''}</strong> to complete today from ${client.trainer.businessName}:</p>
+            <h2 style="color:#1e3a5f;">Hi ${escapeHtml(client.user.name ?? 'there')} 👋</h2>
+            <p>You still have <strong>${pendingTasks.length} training task${pendingTasks.length > 1 ? 's' : ''}</strong> to complete today from ${escapeHtml(client.trainer.businessName)}:</p>
             <ul>
-              ${pendingTasks.map(t => `<li>${t.title}${t.repetitions ? ` (${t.repetitions} reps)` : ''}</li>`).join('')}
+              ${pendingTasks.map(t => `<li>${escapeHtml(t.title)}${t.repetitions ? ` (${t.repetitions} reps)` : ''}</li>`).join('')}
             </ul>
             <p style="margin-top:24px;">
               <a href="${process.env.NEXT_PUBLIC_APP_URL}/my-profile" style="background:#2563eb;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;">

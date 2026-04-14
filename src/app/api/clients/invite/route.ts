@@ -5,6 +5,15 @@ import { z } from 'zod'
 import { Resend } from 'resend'
 import crypto from 'crypto'
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+}
+
 const schema = z.object({
   clientName: z.string().min(2),
   dogNames: z.array(z.string().min(1)).min(1),
@@ -105,7 +114,7 @@ export async function POST(req: Request) {
         subject: `You've been invited to K9Tracker by ${trainerProfile.user.name ?? trainerProfile.businessName}`,
         html: `
           <div style="font-family:sans-serif;max-width:600px;margin:0 auto;">
-            <pre style="font-family:sans-serif;white-space:pre-wrap;">${personalised}</pre>
+            <pre style="font-family:sans-serif;white-space:pre-wrap;">${escapeHtml(personalised)}</pre>
             <p style="margin-top:24px;">
               <a href="${inviteUrl}" style="background:#2563eb;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;">
                 Join K9Tracker
