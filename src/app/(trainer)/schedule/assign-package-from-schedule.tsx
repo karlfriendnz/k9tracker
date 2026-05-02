@@ -125,10 +125,16 @@ export function AssignPackageFromScheduleModal({
     setEndDate(prev => (prev < startDate ? addWeeksISO(startDate, ONGOING_DEFAULT_WEEKS) : prev))
   }, [startDate])
 
-  // Compute proposed session datetimes. Session 1 is either pinned to the
-  // user-supplied time or auto-placed; sessions 2..N always availability-search
-  // forward by weeksBetween from the previous session. Ongoing packages keep
-  // walking forward until either the end date or the safety cap is hit.
+  // Compute proposed session datetimes.
+  // - If the trainer pins a "First time", every subsequent session inherits
+  //   that same time on its cadence-derived day. This keeps the package
+  //   visually aligned (e.g. "every other Tuesday at 10am") and matches the
+  //   trainer's intuition — change the time once, every connected session
+  //   shifts with it.
+  // - With no pinned time, sessions 2..N are auto-placed by availability
+  //   search forward by weeksBetween from the previous session.
+  // Ongoing packages keep walking forward until either the end date or the
+  // safety cap is hit.
   const proposals = useMemo<({ at: Date | null })[]>(() => {
     const out: ({ at: Date | null })[] = []
     const start = parseDate(startDate)
@@ -138,6 +144,9 @@ export function AssignPackageFromScheduleModal({
     // For ongoing packages, weeksBetween 0 would loop forever — clamp to 1.
     const cadenceWeeks = isOngoing ? Math.max(1, pkg.weeksBetween) : pkg.weeksBetween
     const limit = isOngoing ? ONGOING_MAX_SESSIONS : pkg.sessionCount
+    const pinnedTime = startTime
+      ? (() => { const [h, m] = startTime.split(':').map(Number); return { h, m } })()
+      : null
 
     let cursor: Date = start
 
@@ -145,10 +154,11 @@ export function AssignPackageFromScheduleModal({
       if (end && cursor > end) break
 
       let placed: Date | null
-      if (i === 0 && startTime) {
-        const [h, m] = startTime.split(':').map(Number)
-        placed = new Date(start)
-        placed.setHours(h, m, 0, 0)
+      if (pinnedTime) {
+        // Honour the trainer's chosen time on every session, not just the
+        // first one.
+        placed = new Date(cursor)
+        placed.setHours(pinnedTime.h, pinnedTime.m, 0, 0)
       } else {
         placed = findNextAvailable(availability, cursor, pkg.durationMins, SLOT_SEARCH_DAYS)
       }
@@ -292,7 +302,7 @@ export function AssignPackageFromScheduleModal({
           </div>
           <p className="text-[11px] text-slate-400 -mt-2">
             {startTime
-              ? `Session 1 pinned to ${startTime}. Later sessions auto-place in your next available slots.`
+              ? `Every session pinned to ${startTime}. Clear the time to auto-place each in your next available slot.`
               : 'Each session is auto-placed in your next available slot from this day onward.'}
           </p>
 
