@@ -179,6 +179,37 @@ export function AssignPackageFromScheduleModal({
   const allPlaced = isOngoing ? placedCount > 0 : placedCount === pkg.sessionCount
   const anyMissing = !isOngoing && placedCount < pkg.sessionCount
 
+  // Conflict detection: pull existing sessions in the proposal range and
+  // flag any proposal whose interval overlaps. Refetches when the date
+  // range covered by proposals changes.
+  const [existing, setExisting] = useState<{ id: string; title: string; scheduledAt: string; durationMins: number }[]>([])
+  const placed = proposals.map(p => p.at).filter((d): d is Date => d !== null)
+  const rangeFromIso = placed.length > 0 ? new Date(placed[0].getTime() - 60 * 60 * 1000).toISOString() : null
+  const rangeToIso = placed.length > 0
+    ? new Date(placed[placed.length - 1].getTime() + pkg.durationMins * 60 * 1000 + 60 * 60 * 1000).toISOString()
+    : null
+  useEffect(() => {
+    if (!rangeFromIso || !rangeToIso) { setExisting([]); return }
+    let cancelled = false
+    fetch(`/api/schedule/range?from=${encodeURIComponent(rangeFromIso)}&to=${encodeURIComponent(rangeToIso)}`)
+      .then(r => r.ok ? r.json() : [])
+      .then(data => { if (!cancelled) setExisting(data) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [rangeFromIso, rangeToIso])
+
+  function conflictFor(at: Date): { id: string; title: string; scheduledAt: string } | null {
+    const startA = at.getTime()
+    const endA = startA + pkg.durationMins * 60 * 1000
+    for (const s of existing) {
+      const startB = new Date(s.scheduledAt).getTime()
+      const endB = startB + s.durationMins * 60 * 1000
+      if (startA < endB && startB < endA) return { id: s.id, title: s.title, scheduledAt: s.scheduledAt }
+    }
+    return null
+  }
+  const conflictsCount = proposals.filter(p => p.at && conflictFor(p.at)).length
+
   async function handleSubmit() {
     if (placedCount === 0) {
       setError('No availability found for any session. Add availability slots first.')
@@ -327,31 +358,52 @@ export function AssignPackageFromScheduleModal({
               Proposed sessions
             </p>
             <div className="flex flex-col gap-1.5">
-              {proposals.map((p, i) => (
-                <div
-                  key={i}
-                  className={`flex items-center justify-between text-sm rounded-lg px-3 py-2 ${
-                    p.at ? 'bg-slate-50' : 'bg-amber-50 border border-amber-200'
-                  }`}
-                >
-                  <span className="text-slate-600 flex items-center gap-1.5">
-                    {!p.at && <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />}
-                    Session {i + 1}{isOngoing ? '' : `/${pkg.sessionCount}`}
-                  </span>
-                  {p.at ? (
-                    <span className="text-slate-900 font-medium">
-                      {p.at.toLocaleDateString('en-NZ', { weekday: 'short', day: 'numeric', month: 'short' })}
-                      {' · '}
-                      {p.at.toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit', hour12: true })}
-                    </span>
-                  ) : (
-                    <span className="text-amber-700 font-medium text-xs">
-                      No availability in {SLOT_SEARCH_DAYS} days
-                    </span>
-                  )}
-                </div>
-              ))}
+              {proposals.map((p, i) => {
+                const conflict = p.at ? conflictFor(p.at) : null
+                return (
+                  <div
+                    key={i}
+                    className={`flex flex-col gap-1 text-sm rounded-lg px-3 py-2 ${
+                      !p.at
+                        ? 'bg-amber-50 border border-amber-200'
+                        : conflict
+                          ? 'bg-amber-50 border border-amber-200'
+                          : 'bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-600 flex items-center gap-1.5">
+                        {(!p.at || conflict) && <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />}
+                        Session {i + 1}{isOngoing ? '' : `/${pkg.sessionCount}`}
+                      </span>
+                      {p.at ? (
+                        <span className="text-slate-900 font-medium">
+                          {p.at.toLocaleDateString('en-NZ', { weekday: 'short', day: 'numeric', month: 'short' })}
+                          {' · '}
+                          {p.at.toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                        </span>
+                      ) : (
+                        <span className="text-amber-700 font-medium text-xs">
+                          No availability in {SLOT_SEARCH_DAYS} days
+                        </span>
+                      )}
+                    </div>
+                    {conflict && (
+                      <p className="text-[11px] text-amber-700 ml-5">
+                        Already booked: {conflict.title}
+                        {' at '}
+                        {new Date(conflict.scheduledAt).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                      </p>
+                    )}
+                  </div>
+                )
+              })}
             </div>
+            {conflictsCount > 0 && (
+              <p className="text-[11px] text-amber-700 mt-2">
+                {conflictsCount} session{conflictsCount > 1 ? 's' : ''} overlap an existing booking. Pick a different time or proceed and resolve manually.
+              </p>
+            )}
             {anyMissing && (
               <p className="text-[11px] text-amber-700 mt-2">
                 {pkg.sessionCount - placedCount} of {pkg.sessionCount} sessions could not be placed.

@@ -12,7 +12,7 @@ import { Alert } from '@/components/ui/alert'
 import Link from 'next/link'
 import {
   ChevronLeft, ChevronRight, Plus, Calendar, LayoutGrid, List,
-  Clock, Trash2, X, Settings, MapPin, Video, ExternalLink, Loader2, Play, Pencil,
+  Clock, Trash2, X, Settings, MapPin, Video, ExternalLink, Loader2, Play, Pencil, AlertTriangle,
 } from 'lucide-react'
 import {
   AssignPackageFromScheduleButton,
@@ -1167,6 +1167,34 @@ function SessionModal({
     (draftIso !== null && draftIso !== new Date(session.scheduledAt).toISOString()) ||
     draftDuration !== session.durationMins
 
+  // Conflict check for the staged time/duration. Pulls existing sessions
+  // from the server because the trainer might shift this session out of
+  // the visible week. Excludes this session itself.
+  const [conflict, setConflict] = useState<{ id: string; title: string; scheduledAt: string } | null>(null)
+  useEffect(() => {
+    if (!draftIso || draftDuration <= 0) { setConflict(null); return }
+    const start = new Date(draftIso).getTime()
+    const end = start + draftDuration * 60 * 1000
+    let cancelled = false
+    fetch(`/api/schedule/range?from=${encodeURIComponent(new Date(start - 60 * 60 * 1000).toISOString())}&to=${encodeURIComponent(new Date(end + 60 * 60 * 1000).toISOString())}`)
+      .then(r => r.ok ? r.json() : [])
+      .then((rows: { id: string; title: string; scheduledAt: string; durationMins: number }[]) => {
+        if (cancelled) return
+        for (const s of rows) {
+          if (s.id === session.id) continue
+          const startB = new Date(s.scheduledAt).getTime()
+          const endB = startB + s.durationMins * 60 * 1000
+          if (start < endB && startB < end) {
+            setConflict({ id: s.id, title: s.title, scheduledAt: s.scheduledAt })
+            return
+          }
+        }
+        setConflict(null)
+      })
+      .catch(() => setConflict(null))
+    return () => { cancelled = true }
+  }, [draftIso, draftDuration, session.id])
+
   async function saveDraft(scope: 'this' | 'following') {
     setDraftError(null)
     if (!Number.isFinite(draftDuration) || draftDuration <= 0) {
@@ -1651,6 +1679,16 @@ function SessionModal({
             </div>
             {dirty && (
               <div className="flex flex-col gap-1.5 mt-1">
+                {conflict && (
+                  <div className="flex items-start gap-1.5 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+                    <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5 text-amber-500" />
+                    <span>
+                      Conflicts with <span className="font-medium">{conflict.title}</span> at{' '}
+                      {new Date(conflict.scheduledAt).toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                      .
+                    </span>
+                  </div>
+                )}
                 {draftError && <p className="text-xs text-red-600">{draftError}</p>}
                 <div className="flex flex-wrap items-center gap-2">
                   <Button size="sm" disabled={savingDraft} onClick={() => saveDraft('this')}>
