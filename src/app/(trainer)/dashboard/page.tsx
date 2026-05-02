@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { UserPlus, TrendingUp, Calendar, MapPin, Video, ChevronLeft, ChevronRight, Play, ShoppingBag } from 'lucide-react'
 import { WeeklyTasksStat, type WeeklyTask } from './weekly-tasks-stat'
 import { PendingRequestsPanel } from './pending-requests-panel'
+import { startOfDayInTz, endOfDayInTz, todayInTz } from '@/lib/timezone'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Dashboard' }
@@ -35,12 +36,22 @@ export default async function DashboardPage({
   const trainerId = session.user.trainerId
   if (!trainerId) redirect('/onboarding')
 
+  // Trainer's timezone drives all day-bounds and time formatting on this
+  // server-rendered page. Vercel runs Node in UTC so without this every
+  // time would render as UTC for everyone.
+  const trainerUser = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { timezone: true },
+  })
+  const tz = trainerUser?.timezone ?? 'Pacific/Auckland'
+
   const sp = await searchParams
-  const todayDateStr = toDateStr(new Date())
-  const focusDate = (sp.date && parseLocalDate(sp.date)) || parseLocalDate(todayDateStr)!
-  const focusStart = new Date(focusDate); focusStart.setHours(0, 0, 0, 0)
-  const focusEnd = new Date(focusDate); focusEnd.setHours(23, 59, 59, 999)
-  const isToday = toDateStr(focusDate) === todayDateStr
+  const todayDateStr = todayInTz(tz)
+  const focusDateStr = (sp.date && parseLocalDate(sp.date)) ? sp.date! : todayDateStr
+  const focusDate = parseLocalDate(focusDateStr)!
+  const focusStart = startOfDayInTz(focusDateStr, tz)
+  const focusEnd = endOfDayInTz(focusDateStr, tz)
+  const isToday = focusDateStr === todayDateStr
 
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
 
@@ -155,7 +166,9 @@ export default async function DashboardPage({
       <div className="mb-8">
         <div className="flex items-center justify-between mb-3 gap-2">
           <h2 className="font-semibold text-slate-900">
-            {isToday ? 'Coming up today' : `Sessions on ${focusDate.toLocaleDateString('en-NZ', { weekday: 'short', day: 'numeric', month: 'short' })}`}
+            {isToday
+              ? 'Coming up today'
+              : `Sessions on ${new Date(`${focusDateStr}T12:00:00Z`).toLocaleDateString('en-NZ', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })}`}
           </h2>
           <div className="flex items-center gap-1">
             <Link
@@ -206,7 +219,7 @@ export default async function DashboardPage({
                   <div className="flex items-center gap-3">
                     <div className="flex-shrink-0 text-center min-w-[56px]">
                       <p className="text-sm font-bold text-blue-600">
-                        {start.toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                        {start.toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: tz })}
                       </p>
                       <p className="text-[10px] text-slate-400">{s.durationMins}m</p>
                     </div>
