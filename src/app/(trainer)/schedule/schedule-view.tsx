@@ -132,6 +132,17 @@ function fmtTime(iso: string): string {
   })
 }
 
+// `<input type="date">` and `<input type="time">` need YYYY-MM-DD and HH:MM
+// in the user's local timezone, not UTC.
+function localDateStr(iso: string): string {
+  const d = new Date(iso)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+function localTimeStr(iso: string): string {
+  const d = new Date(iso)
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
 function fmtFullDate(dateStr: string): string {
   return parseLocalDate(dateStr).toLocaleDateString('en-NZ', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
@@ -1047,6 +1058,37 @@ function SessionModal({
     }
   }, [showAddPanel, libraryLoaded])
 
+  // Time/date/duration override. Trainer can always reschedule from the
+  // popup, even outside the visible-hours window enforced by drag-and-drop.
+  async function patchScheduling(updates: { scheduledAt?: string; durationMins?: number }) {
+    const before = { scheduledAt: session.scheduledAt, durationMins: session.durationMins }
+    setSession(prev => ({ ...prev, ...updates }))
+    onSessionsUpdate(session.id, updates)
+    const res = await fetch(`/api/schedule/${session.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    })
+    if (!res.ok) {
+      setSession(prev => ({ ...prev, ...before }))
+      onSessionsUpdate(session.id, before)
+    }
+  }
+  function handleScheduledChange(parts: { date?: string; time?: string }) {
+    const cur = new Date(session.scheduledAt)
+    const [yyyy, mm, dd] = (parts.date ?? localDateStr(session.scheduledAt)).split('-').map(Number)
+    const [hh, mi] = (parts.time ?? localTimeStr(session.scheduledAt)).split(':').map(Number)
+    if (!yyyy || !mm || !dd || isNaN(hh) || isNaN(mi)) return
+    const next = new Date(cur)
+    next.setFullYear(yyyy, mm - 1, dd)
+    next.setHours(hh, mi, 0, 0)
+    patchScheduling({ scheduledAt: next.toISOString() })
+  }
+  function handleDurationChange(mins: number) {
+    if (!Number.isFinite(mins) || mins <= 0) return
+    patchScheduling({ durationMins: mins })
+  }
+
   async function handleStatusChange(status: SessionStatus) {
     setSavingStatus(true)
     setSession(prev => ({ ...prev, status }))
@@ -1466,19 +1508,35 @@ function SessionModal({
             </div>
           )}
 
-          {/* When */}
+          {/* When — editable so trainers can override the calendar grid. */}
           <div className="flex flex-col gap-2.5 text-sm">
             <div className="flex items-center gap-3">
               <Calendar className="h-4 w-4 text-slate-400 flex-shrink-0" />
-              <span className="text-slate-700">
-                {d.toLocaleDateString('en-NZ', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-              </span>
+              <input
+                type="date"
+                value={localDateStr(session.scheduledAt)}
+                onChange={e => handleScheduledChange({ date: e.target.value })}
+                className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <Clock className="h-4 w-4 text-slate-400 flex-shrink-0" />
-              <span className="text-slate-700">
-                {d.toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit', hour12: true })} · {session.durationMins} min
-              </span>
+              <input
+                type="time"
+                value={localTimeStr(session.scheduledAt)}
+                onChange={e => handleScheduledChange({ time: e.target.value })}
+                className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <span className="text-slate-400">·</span>
+              <input
+                type="number"
+                min={5}
+                step={5}
+                value={session.durationMins}
+                onChange={e => handleDurationChange(parseInt(e.target.value, 10) || 0)}
+                className="h-8 w-16 rounded-lg border border-slate-200 bg-white px-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <span className="text-slate-500 text-xs">min</span>
             </div>
             {session.location && (
               <div className="flex items-center gap-3">
