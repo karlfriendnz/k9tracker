@@ -1062,13 +1062,21 @@ function SessionModal({
     }
   }
 
-  // Clients eligible to add as a buddy: trainer's other clients (not the
-  // primary on this session, not already a buddy on it).
-  const buddyClientOptions = clients.filter(c => {
-    if (c.id === clientId) return false
-    return true // allow same client to be added twice for different dogs
-  })
-  const buddyClientDogs = clients.find(c => c.id === buddyClientId)?.dogs ?? []
+  // Clients eligible to add as a buddy: every trainer client. We allow the
+  // primary attendee's household too — the dog list filters out the primary
+  // dog, so only their *other* dogs (additional dogs) are pickable.
+  const buddyClientOptions = clients
+  // Dogs available to attach as a buddy. Exclude this session's primary dog
+  // (when the buddy client matches the primary client) and any dog already
+  // added as a buddy under the same client.
+  const alreadyBuddyDogIds = new Set(
+    session.buddies
+      .filter(b => b.clientId === buddyClientId && b.dogId)
+      .map(b => b.dogId as string),
+  )
+  const buddyClientDogs = (clients.find(c => c.id === buddyClientId)?.dogs ?? [])
+    .filter(d => !(buddyClientId === clientId && d.id === session.dogId))
+    .filter(d => !alreadyBuddyDogIds.has(d.id))
 
   async function handleAddBuddy() {
     if (!buddyClientId) return

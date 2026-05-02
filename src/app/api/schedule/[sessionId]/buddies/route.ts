@@ -26,7 +26,7 @@ export async function POST(
   // Trainer must own the session
   const trainingSession = await prisma.trainingSession.findFirst({
     where: { id: sessionId, trainerId },
-    select: { id: true, clientId: true },
+    select: { id: true, clientId: true, dogId: true },
   })
   if (!trainingSession) return NextResponse.json({ error: 'Session not found' }, { status: 404 })
 
@@ -37,10 +37,12 @@ export async function POST(
   })
   if (!buddyClient) return NextResponse.json({ error: 'Client not found' }, { status: 404 })
 
-  // Don't add the primary client as their own buddy
-  if (trainingSession.clientId === parsed.data.clientId) {
+  // The primary attendee (same client + same dog) can't also be a buddy.
+  // Same client with a different dog is fine — that's a household with
+  // multiple dogs joining.
+  if (trainingSession.clientId === parsed.data.clientId && trainingSession.dogId === parsed.data.dogId) {
     return NextResponse.json(
-      { error: 'This client is already the primary attendee' },
+      { error: 'This dog is already the primary attendee' },
       { status: 400 }
     )
   }
