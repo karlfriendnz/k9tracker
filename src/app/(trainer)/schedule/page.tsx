@@ -40,6 +40,15 @@ export default async function SchedulePage({
   })
   if (!trainerProfile) redirect('/onboarding')
 
+  // Picker now mirrors the trainer's CustomField list. Load metadata so the
+  // schedule-settings popover can offer the same custom fields available on
+  // the /clients column selector.
+  const customFields = await prisma.customField.findMany({
+    where: { trainerId: trainerProfile.id },
+    select: { id: true, label: true, appliesTo: true },
+    orderBy: [{ category: 'asc' }, { order: 'asc' }, { label: 'asc' }],
+  })
+
   const today = new Date().toISOString().split('T')[0]
   const sp = await searchParams
   const selectedDate = sp.date ?? today
@@ -96,6 +105,77 @@ export default async function SchedulePage({
     }),
   ])
 
+  // Resolve a clientId for every session (direct link or via primary-dog
+  // owner) so we can attach client-level extras (email, dogs, compliance,
+  // custom values) used by the block renderer.
+  const sessionClientIds = new Set<string>()
+  for (const s of sessions) {
+    const cid = s.clientId ?? s.dog?.primaryFor[0]?.id ?? null
+    if (cid) sessionClientIds.add(cid)
+  }
+  const sessionClientList = Array.from(sessionClientIds)
+
+  const sessionClients = sessionClientList.length > 0
+    ? await prisma.clientProfile.findMany({
+        where: { id: { in: sessionClientList } },
+        select: {
+          id: true,
+          dogId: true,
+          user: { select: { email: true } },
+          dogs: { select: { name: true } },
+          diaryEntries: {
+            where: { date: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
+            select: { id: true, completion: { select: { id: true } } },
+          },
+        },
+      })
+    : []
+
+  // Load CustomFieldValue rows only for fields that are actually selected
+  // on the schedule block — keeps the payload tight.
+  const scheduleSelections = Array.isArray(trainerProfile.scheduleExtraFields)
+    ? trainerProfile.scheduleExtraFields as string[]
+    : []
+  const selectedCustomIds = scheduleSelections
+    .filter(c => c.startsWith('custom:'))
+    .map(c => c.slice('custom:'.length))
+    .filter(id => customFields.some(f => f.id === id))
+  const customValues = (selectedCustomIds.length > 0 && sessionClientList.length > 0)
+    ? await prisma.customFieldValue.findMany({
+        where: { fieldId: { in: selectedCustomIds }, clientId: { in: sessionClientList } },
+        select: { fieldId: true, clientId: true, dogId: true, value: true },
+      })
+    : []
+
+  const clientExtras: Record<string, {
+    email: string
+    extraDogNames: string[]
+    taskCount: number
+    completedCount: number
+    customValues: Record<string, string>
+  }> = {}
+  for (const c of sessionClients) {
+    clientExtras[c.id] = {
+      email: c.user.email,
+      extraDogNames: c.dogs.map(d => d.name),
+      taskCount: c.diaryEntries.length,
+      completedCount: c.diaryEntries.filter(t => t.completion).length,
+      customValues: {},
+    }
+  }
+  // For DOG-applied fields, prefer the value tied to the client's primary dog.
+  const primaryDogIdByClient = new Map(sessionClients.map(c => [c.id, c.dogId] as const))
+  for (const v of customValues) {
+    const meta = customFields.find(f => f.id === v.fieldId)
+    if (meta?.appliesTo === 'DOG') {
+      const primary = primaryDogIdByClient.get(v.clientId)
+      if (v.dogId && primary && v.dogId !== primary) continue
+    }
+    if (clientExtras[v.clientId]) {
+      clientExtras[v.clientId].customValues[v.fieldId] = v.value
+    }
+  }
+
   return (
     <ScheduleView
       sessions={sessions.map(s => ({
@@ -129,7 +209,9 @@ export default async function SchedulePage({
       scheduleStartHour={trainerProfile.scheduleStartHour}
       scheduleEndHour={trainerProfile.scheduleEndHour}
       scheduleDays={Array.isArray(trainerProfile.scheduleDays) ? trainerProfile.scheduleDays as number[] : [1, 2, 3, 4, 5, 6, 7]}
-      scheduleExtraFields={Array.isArray(trainerProfile.scheduleExtraFields) ? trainerProfile.scheduleExtraFields as string[] : []}
+      scheduleExtraFields={scheduleSelections}
+      customFields={customFields}
+      clientExtras={clientExtras}
     />
   )
 }

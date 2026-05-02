@@ -7,9 +7,9 @@ import { Settings2, X, Loader2 } from 'lucide-react'
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const
 
-type ExtraFieldId = 'location' | 'description' | 'sessionType' | 'duration' | 'title'
-
-const EXTRA_FIELD_OPTIONS: { id: ExtraFieldId; label: string }[] = [
+// Built-in option groups. Custom fields are appended at runtime from
+// the trainer's CustomField list (parity with the /clients picker).
+const SESSION_FIELD_OPTIONS: { id: string; label: string }[] = [
   { id: 'location',    label: 'Location / suburb' },
   { id: 'sessionType', label: 'Session type' },
   { id: 'duration',    label: 'Duration' },
@@ -17,7 +17,19 @@ const EXTRA_FIELD_OPTIONS: { id: ExtraFieldId; label: string }[] = [
   { id: 'title',       label: 'Title' },
 ]
 
+const CLIENT_FIELD_OPTIONS: { id: string; label: string }[] = [
+  { id: 'email',       label: 'Email' },
+  { id: 'extraDogs',   label: 'Additional dogs' },
+  { id: 'compliance',  label: '7-day compliance' },
+]
+
 const MAX_EXTRA_FIELDS = 2
+
+interface CustomFieldMeta {
+  id: string
+  label: string
+  appliesTo: string
+}
 
 /**
  * Trainer-side schedule view preferences: visible hour range and which
@@ -29,11 +41,13 @@ export function ScheduleSettings({
   endHour,
   days,
   extraFields,
+  customFields,
 }: {
   startHour: number
   endHour: number
   days: number[]   // 1=Mon..7=Sun
-  extraFields: ExtraFieldId[]
+  extraFields: string[]
+  customFields: CustomFieldMeta[]
 }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -41,7 +55,7 @@ export function ScheduleSettings({
   const [draftEnd, setDraftEnd] = useState(endHour)
   const [draftDays, setDraftDays] = useState<Set<number>>(new Set(days))
   // Order matters: it's the render order on the block. Keep as a list, not a set.
-  const [draftExtra, setDraftExtra] = useState<ExtraFieldId[]>(extraFields)
+  const [draftExtra, setDraftExtra] = useState<string[]>(extraFields)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -53,12 +67,36 @@ export function ScheduleSettings({
     })
   }
 
-  function toggleExtra(id: ExtraFieldId) {
+  function toggleExtra(id: string) {
     setDraftExtra(prev => {
       if (prev.includes(id)) return prev.filter(f => f !== id)
       if (prev.length >= MAX_EXTRA_FIELDS) return prev
       return [...prev, id]
     })
+  }
+
+  function renderOption(opt: { id: string; label: string; tag?: string }) {
+    const idx = draftExtra.indexOf(opt.id)
+    const active = idx !== -1
+    const disabled = !active && draftExtra.length >= MAX_EXTRA_FIELDS
+    return (
+      <button
+        key={opt.id}
+        onClick={() => toggleExtra(opt.id)}
+        disabled={disabled}
+        className={`text-xs font-medium px-3 py-1.5 rounded-full border transition-colors inline-flex items-center gap-1 ${
+          active
+            ? 'bg-blue-600 text-white border-blue-600'
+            : disabled
+              ? 'bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed'
+              : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+        }`}
+      >
+        {active && <span className="text-white/80">{idx + 1}.</span>}
+        <span className="truncate max-w-[160px]">{opt.label}</span>
+        {opt.tag && <span className={`text-[9px] uppercase tracking-wide ${active ? 'text-white/70' : 'text-slate-400'}`}>{opt.tag}</span>}
+      </button>
+    )
   }
 
   async function handleSave() {
@@ -166,30 +204,29 @@ export function ScheduleSettings({
               <div>
                 <label className="text-sm font-medium text-slate-700 block mb-1">Extra block fields</label>
                 <p className="text-[11px] text-slate-400 mb-1.5">Pick up to {MAX_EXTRA_FIELDS} to show on each session block.</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {EXTRA_FIELD_OPTIONS.map(opt => {
-                    const idx = draftExtra.indexOf(opt.id)
-                    const active = idx !== -1
-                    const disabled = !active && draftExtra.length >= MAX_EXTRA_FIELDS
-                    return (
-                      <button
-                        key={opt.id}
-                        onClick={() => toggleExtra(opt.id)}
-                        disabled={disabled}
-                        className={`text-xs font-medium px-3 py-1.5 rounded-full border transition-colors ${
-                          active
-                            ? 'bg-blue-600 text-white border-blue-600'
-                            : disabled
-                              ? 'bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed'
-                              : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
-                        }`}
-                      >
-                        {active && <span className="mr-1 text-white/80">{idx + 1}.</span>}
-                        {opt.label}
-                      </button>
-                    )
-                  })}
+
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Session</p>
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  {SESSION_FIELD_OPTIONS.map(renderOption)}
                 </div>
+
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Client</p>
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  {CLIENT_FIELD_OPTIONS.map(renderOption)}
+                </div>
+
+                {customFields.length > 0 && (
+                  <>
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Custom fields</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {customFields.map(f => renderOption({
+                        id: `custom:${f.id}`,
+                        label: f.label,
+                        tag: f.appliesTo === 'DOG' ? 'dog' : 'owner',
+                      }))}
+                    </div>
+                  </>
+                )}
               </div>
 
               <div className="flex justify-end gap-2 pt-1">

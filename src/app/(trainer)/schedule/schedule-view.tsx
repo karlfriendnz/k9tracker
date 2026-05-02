@@ -204,9 +204,38 @@ function AvailStrip({ slot, dayDate, onDelete, startHour }: {
 
 // ─── Extra-fields ─────────────────────────────────────────────────────────────
 
-type ExtraFieldId = 'location' | 'description' | 'sessionType' | 'duration' | 'title'
+// Built-in field IDs the trainer can pin to a schedule block. Mirrors the
+// /clients column selector for client-level fields, plus session-only fields
+// (location/description/sessionType/duration/title). Custom fields use the
+// "custom:<cuid>" form, same as the clients picker.
+type SessionFieldId = 'location' | 'description' | 'sessionType' | 'duration' | 'title'
+type ClientFieldId  = 'email' | 'extraDogs' | 'compliance'
 
-function extraFieldValue(field: ExtraFieldId, session: Session): string | null {
+interface ClientExtra {
+  email: string
+  extraDogNames: string[]
+  taskCount: number
+  completedCount: number
+  customValues: Record<string, string>
+}
+
+interface CustomFieldMeta {
+  id: string
+  label: string
+  appliesTo: string
+}
+
+function resolveClientId(session: Session): string | null {
+  return session.clientId ?? session.dog?.primaryFor[0]?.id ?? null
+}
+
+function extraFieldValue(
+  field: string,
+  session: Session,
+  clientExtras: Record<string, ClientExtra>,
+  customFields: CustomFieldMeta[],
+): string | null {
+  // Session-level fields
   switch (field) {
     case 'location':    return session.location?.trim() || null
     case 'description': return session.description?.trim() || null
@@ -214,6 +243,26 @@ function extraFieldValue(field: ExtraFieldId, session: Session): string | null {
     case 'duration':    return `${session.durationMins}m`
     case 'title':       return session.title?.trim() || null
   }
+  // Client-level fields — resolve via the session's client.
+  const cid = resolveClientId(session)
+  const extra = cid ? clientExtras[cid] : undefined
+  switch (field) {
+    case 'email':     return extra?.email ?? null
+    case 'extraDogs': return extra && extra.extraDogNames.length > 0 ? `+ ${extra.extraDogNames.join(', ')}` : null
+    case 'compliance': {
+      if (!extra || extra.taskCount === 0) return null
+      const rate = Math.round((extra.completedCount / extra.taskCount) * 100)
+      return `${rate}% · 7d`
+    }
+  }
+  if (field.startsWith('custom:')) {
+    const fieldId = field.slice('custom:'.length)
+    const meta = customFields.find(f => f.id === fieldId)
+    const value = extra?.customValues[fieldId]
+    if (!value) return null
+    return meta ? `${meta.label}: ${value}` : value
+  }
+  return null
 }
 
 // ─── Status helpers ───────────────────────────────────────────────────────────
@@ -236,6 +285,8 @@ function SessionBlock({
   onClick,
   startHour,
   extraFields,
+  clientExtras,
+  customFields,
 }: {
   session: Session
   isDragging: boolean
@@ -244,7 +295,9 @@ function SessionBlock({
   onPointerDown: (e: React.PointerEvent) => void
   onClick: () => void
   startHour: number
-  extraFields: ExtraFieldId[]
+  extraFields: string[]
+  clientExtras: Record<string, ClientExtra>
+  customFields: CustomFieldMeta[]
 }) {
   const top    = isDragging && dragTop !== null ? dragTop : sessionTop(session.scheduledAt, startHour)
   const height = sessionHeight(session.durationMins)
@@ -313,7 +366,7 @@ function SessionBlock({
         if (primary) lines.push({ key: 'primary', text: primary, tone: 'strong' })
         // Trainer-chosen extras.
         for (const field of extraFields) {
-          const value = extraFieldValue(field, session)
+          const value = extraFieldValue(field, session, clientExtras, customFields)
           if (value) lines.push({ key: `extra:${field}`, text: value, tone: 'soft' })
         }
         // Secondary client name (only for non-buddy sessions, lowest priority).
@@ -355,6 +408,8 @@ function WeekGrid({
   startHour,
   endHour,
   extraFields,
+  clientExtras,
+  customFields,
 }: {
   weekDays: Date[]
   sessions: Session[]
@@ -367,7 +422,9 @@ function WeekGrid({
   onDeleteAvail: (id: string) => void
   startHour: number
   endHour: number
-  extraFields: ExtraFieldId[]
+  extraFields: string[]
+  clientExtras: Record<string, ClientExtra>
+  customFields: CustomFieldMeta[]
 }) {
   const hours = Array.from({ length: endHour - startHour }, (_, i) => startHour + i)
   const gridRef = useRef<HTMLDivElement>(null)
@@ -568,6 +625,8 @@ function WeekGrid({
                         onClick={() => { /* handled in pointerUp */ }}
                         startHour={startHour}
                         extraFields={extraFields}
+                        clientExtras={clientExtras}
+                        customFields={customFields}
                       />
                     </div>
                   )
@@ -584,6 +643,8 @@ function WeekGrid({
                       onClick={() => {}}
                       startHour={startHour}
                       extraFields={extraFields}
+                      clientExtras={clientExtras}
+                      customFields={customFields}
                     />
                   </div>
                 )}
@@ -1700,6 +1761,8 @@ export function ScheduleView({
   scheduleEndHour,
   scheduleDays,
   scheduleExtraFields,
+  customFields,
+  clientExtras,
 }: {
   sessions: Session[]
   availabilitySlots: AvailSlot[]
@@ -1712,9 +1775,17 @@ export function ScheduleView({
   scheduleEndHour: number
   scheduleDays: number[]   // 1=Mon..7=Sun
   scheduleExtraFields: string[]
+  customFields: CustomFieldMeta[]
+  clientExtras: Record<string, ClientExtra>
 }) {
-  const extraFields = scheduleExtraFields.filter(
-    (f): f is ExtraFieldId => f === 'location' || f === 'description' || f === 'sessionType' || f === 'duration' || f === 'title',
+  // Validate the persisted selection: drop entries that aren't a known
+  // session field, a known client field, or a custom-field ID we still know
+  // about. Keeps stale selections from breaking the renderer.
+  const validCustomIds = new Set(customFields.map(f => f.id))
+  const extraFields = scheduleExtraFields.filter(f =>
+    f === 'location' || f === 'description' || f === 'sessionType' || f === 'duration' || f === 'title' ||
+    f === 'email' || f === 'extraDogs' || f === 'compliance' ||
+    (f.startsWith('custom:') && validCustomIds.has(f.slice('custom:'.length))),
   )
   const router = useRouter()
 
@@ -1862,6 +1933,7 @@ export function ScheduleView({
             endHour={scheduleEndHour}
             days={scheduleDays}
             extraFields={extraFields}
+            customFields={customFields}
           />
 
           {/* Day/Week toggle */}
@@ -1939,6 +2011,8 @@ export function ScheduleView({
             startHour={scheduleStartHour}
             endHour={scheduleEndHour}
             extraFields={extraFields}
+            clientExtras={clientExtras}
+            customFields={customFields}
           />
         ) : (
           <DayList
