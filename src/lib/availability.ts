@@ -51,20 +51,32 @@ function timeToMins(hhmm: string): number {
  * earliest startTime. Slots whose endTime - startTime < durationMins are
  * skipped — a 60-minute session does not fit a 30-minute slot.
  */
+// Snap a UTC date to the start of its (Mon-anchored) week. Used for cadence
+// parity so the trainer's chosen "first occurrence" doesn't have to land on
+// the same weekday as the slot — picking any date inside the starting week
+// works.
+function startOfIsoWeekUTC(date: Date): number {
+  const day = date.getUTCDay()  // 0=Sun..6=Sat
+  const diff = day === 0 ? -6 : 1 - day
+  const m = new Date(date)
+  m.setUTCDate(m.getUTCDate() + diff)
+  m.setUTCHours(0, 0, 0, 0)
+  return m.getTime()
+}
+
 export function slotAppliesOnDate(slot: AvailabilityRow, dateStr: string, isoDow: number): boolean {
   if (slot.date) return slot.date === dateStr
   if (slot.dayOfWeek !== isoDow) return false
   const cadence = slot.cadenceWeeks ?? 1
   if (cadence <= 1) return true
   if (!slot.firstDate) return true
-  // Compute whole-day delta between target and anchor; both are local dates
-  // (parsed via Date constructor on YYYY-MM-DD which interprets as UTC, but
-  // the delta is still day-accurate).
-  const target = new Date(`${dateStr}T00:00:00Z`).getTime()
-  const anchor = new Date(`${slot.firstDate}T00:00:00Z`).getTime()
-  if (target < anchor) return false
-  const days = Math.round((target - anchor) / DAY_MS)
-  return days % (cadence * 7) === 0
+  const target = new Date(`${dateStr}T00:00:00Z`)
+  const anchor = new Date(`${slot.firstDate}T00:00:00Z`)
+  const targetWeek = startOfIsoWeekUTC(target)
+  const anchorWeek = startOfIsoWeekUTC(anchor)
+  if (targetWeek < anchorWeek) return false
+  const weeks = Math.round((targetWeek - anchorWeek) / (7 * DAY_MS))
+  return weeks % cadence === 0
 }
 
 export function isBlackoutDate(blackouts: BlackoutRow[], dateStr: string): boolean {

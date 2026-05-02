@@ -222,14 +222,27 @@ function AvailStrip({ slot, dayDate, onDelete, startHour }: {
   if (slot.dayOfWeek != null) {
     applies = slot.dayOfWeek === slotDay
     // Fortnightly / further cadence: only show on weeks that match parity
-    // against the anchor (firstDate).
+    // against the anchor week (firstDate). We snap both target and anchor
+    // to the start of their Mon-anchored week so the trainer's chosen
+    // first-occurrence date can be any day of that week — only the week
+    // matters for cadence.
     if (applies && slot.cadenceWeeks > 1 && slot.firstDate) {
-      const target = new Date(`${dateStr}T00:00:00Z`).getTime()
-      const anchor = new Date(`${slot.firstDate}T00:00:00Z`).getTime()
-      if (target < anchor) applies = false
+      const target = new Date(`${dateStr}T00:00:00Z`)
+      const anchor = new Date(`${slot.firstDate}T00:00:00Z`)
+      const startOfWeek = (d: Date) => {
+        const day = d.getUTCDay()
+        const diff = day === 0 ? -6 : 1 - day
+        const m = new Date(d)
+        m.setUTCDate(m.getUTCDate() + diff)
+        m.setUTCHours(0, 0, 0, 0)
+        return m.getTime()
+      }
+      const tw = startOfWeek(target)
+      const aw = startOfWeek(anchor)
+      if (tw < aw) applies = false
       else {
-        const diffDays = Math.round((target - anchor) / 86400000)
-        applies = diffDays % (slot.cadenceWeeks * 7) === 0
+        const weeks = Math.round((tw - aw) / (7 * 86400000))
+        applies = weeks % slot.cadenceWeeks === 0
       }
     }
   } else {
@@ -240,25 +253,31 @@ function AvailStrip({ slot, dayDate, onDelete, startHour }: {
 
   const top    = timeToY(slot.startTime, startHour)
   const height = timeToY(slot.endTime, startHour) - top
+  const LABEL_HEIGHT = 14  // matches the leading-tight + py for the label row
 
   return (
-    <div
-      className="absolute left-0 right-0 bg-emerald-100 border-l-2 border-emerald-400 opacity-70 group"
-      style={{ top, height: Math.max(height, 8) }}
-      title={slot.title ?? `Available ${slot.startTime}–${slot.endTime}`}
-    >
+    <>
       {slot.title && (
-        <p className="px-1 pt-0.5 text-[9px] font-semibold text-emerald-800 leading-tight truncate">
+        <p
+          className="absolute left-0 right-0 px-1 text-[9px] font-semibold text-emerald-700 leading-tight truncate pointer-events-none"
+          style={{ top: Math.max(0, top - LABEL_HEIGHT) }}
+        >
           {slot.title}
         </p>
       )}
-      <button
-        onClick={() => onDelete(slot.id)}
-        className="absolute top-0.5 right-0.5 hidden group-hover:flex h-4 w-4 items-center justify-center rounded bg-white/80 text-emerald-700 hover:bg-red-50 hover:text-red-500"
+      <div
+        className="absolute left-0 right-0 bg-emerald-100 border-l-2 border-emerald-400 opacity-70 group"
+        style={{ top, height: Math.max(height, 8) }}
+        title={slot.title ?? `Available ${slot.startTime}–${slot.endTime}`}
       >
-        <X className="h-2.5 w-2.5" />
-      </button>
-    </div>
+        <button
+          onClick={() => onDelete(slot.id)}
+          className="absolute top-0.5 right-0.5 hidden group-hover:flex h-4 w-4 items-center justify-center rounded bg-white/80 text-emerald-700 hover:bg-red-50 hover:text-red-500"
+        >
+          <X className="h-2.5 w-2.5" />
+        </button>
+      </div>
+    </>
   )
 }
 
