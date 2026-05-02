@@ -67,36 +67,20 @@ export function ScheduleSettings({
     })
   }
 
-  function toggleExtra(id: string) {
+  function setSlot(slot: number, value: string) {
     setDraftExtra(prev => {
-      if (prev.includes(id)) return prev.filter(f => f !== id)
-      if (prev.length >= MAX_EXTRA_FIELDS) return prev
-      return [...prev, id]
+      // Strip any duplicate of this value already in the list — the same
+      // field can't fill two slots.
+      let next = value ? prev.filter(v => v !== value) : [...prev]
+      if (value === '') {
+        if (slot < next.length) next.splice(slot, 1)
+      } else if (slot < next.length) {
+        next[slot] = value
+      } else if (next.length < MAX_EXTRA_FIELDS) {
+        next.push(value)
+      }
+      return next.slice(0, MAX_EXTRA_FIELDS)
     })
-  }
-
-  function renderOption(opt: { id: string; label: string; tag?: string }) {
-    const idx = draftExtra.indexOf(opt.id)
-    const active = idx !== -1
-    const disabled = !active && draftExtra.length >= MAX_EXTRA_FIELDS
-    return (
-      <button
-        key={opt.id}
-        onClick={() => toggleExtra(opt.id)}
-        disabled={disabled}
-        className={`text-xs font-medium px-3 py-1.5 rounded-full border transition-colors inline-flex items-center gap-1 ${
-          active
-            ? 'bg-blue-600 text-white border-blue-600'
-            : disabled
-              ? 'bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed'
-              : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
-        }`}
-      >
-        {active && <span className="text-white/80">{idx + 1}.</span>}
-        <span className="truncate max-w-[160px]">{opt.label}</span>
-        {opt.tag && <span className={`text-[9px] uppercase tracking-wide ${active ? 'text-white/70' : 'text-slate-400'}`}>{opt.tag}</span>}
-      </button>
-    )
   }
 
   async function handleSave() {
@@ -203,30 +187,38 @@ export function ScheduleSettings({
 
               <div>
                 <label className="text-sm font-medium text-slate-700 block mb-1">Extra block fields</label>
-                <p className="text-[11px] text-slate-400 mb-1.5">Pick up to {MAX_EXTRA_FIELDS} to show on each session block.</p>
-
-                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Session</p>
-                <div className="flex flex-wrap gap-1.5 mb-3">
-                  {SESSION_FIELD_OPTIONS.map(renderOption)}
+                <p className="text-[11px] text-slate-400 mb-1.5">Up to {MAX_EXTRA_FIELDS} fields shown on each session block.</p>
+                <div className="flex flex-col gap-2">
+                  {Array.from({ length: MAX_EXTRA_FIELDS }, (_, slot) => (
+                    <select
+                      key={slot}
+                      value={draftExtra[slot] ?? ''}
+                      onChange={e => setSlot(slot, e.target.value)}
+                      className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">— None —</option>
+                      <optgroup label="Session">
+                        {SESSION_FIELD_OPTIONS.map(o => (
+                          <option key={o.id} value={o.id}>{o.label}</option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="Client">
+                        {CLIENT_FIELD_OPTIONS.map(o => (
+                          <option key={o.id} value={o.id}>{o.label}</option>
+                        ))}
+                      </optgroup>
+                      {customFields.length > 0 && (
+                        <optgroup label="Custom fields">
+                          {customFields.map(f => (
+                            <option key={f.id} value={`custom:${f.id}`}>
+                              {f.label} {f.appliesTo === 'DOG' ? '(dog)' : '(owner)'}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                    </select>
+                  ))}
                 </div>
-
-                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Client</p>
-                <div className="flex flex-wrap gap-1.5 mb-3">
-                  {CLIENT_FIELD_OPTIONS.map(renderOption)}
-                </div>
-
-                {customFields.length > 0 && (
-                  <>
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Custom fields</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {customFields.map(f => renderOption({
-                        id: `custom:${f.id}`,
-                        label: f.label,
-                        tag: f.appliesTo === 'DOG' ? 'dog' : 'owner',
-                      }))}
-                    </div>
-                  </>
-                )}
               </div>
 
               <div className="flex justify-end gap-2 pt-1">
