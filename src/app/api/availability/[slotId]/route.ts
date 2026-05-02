@@ -9,6 +9,8 @@ const patchSchema = z.object({
   date: z.string().optional().nullable(),
   startTime: z.string().regex(/^\d{2}:\d{2}$/).optional(),
   endTime: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  cadenceWeeks: z.number().int().min(1).max(8).optional(),
+  firstDate: z.string().optional().nullable(),
 })
 
 export async function PATCH(
@@ -40,6 +42,8 @@ export async function PATCH(
   if ('date' in parsed.data)      data.date      = parsed.data.date ? new Date(parsed.data.date) : null
   if ('startTime' in parsed.data) data.startTime = parsed.data.startTime
   if ('endTime' in parsed.data)   data.endTime   = parsed.data.endTime
+  if ('cadenceWeeks' in parsed.data) data.cadenceWeeks = parsed.data.cadenceWeeks ?? 1
+  if ('firstDate' in parsed.data) data.firstDate = parsed.data.firstDate ? new Date(parsed.data.firstDate) : null
 
   const updated = await prisma.availabilitySlot.update({
     where: { id: slotId },

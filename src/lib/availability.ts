@@ -11,6 +11,15 @@ export interface AvailabilityRow {
   // "HH:MM" 24h
   startTime: string
   endTime: string
+  // 1 = weekly (default). 2 = fortnightly, etc. Only used when dayOfWeek is set.
+  cadenceWeeks?: number
+  // YYYY-MM-DD anchor used to compute parity for cadenceWeeks > 1.
+  firstDate?: string | null
+}
+
+export interface BlackoutRow {
+  startDate: string  // YYYY-MM-DD inclusive
+  endDate: string    // YYYY-MM-DD inclusive
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -42,11 +51,32 @@ function timeToMins(hhmm: string): number {
  * earliest startTime. Slots whose endTime - startTime < durationMins are
  * skipped — a 60-minute session does not fit a 30-minute slot.
  */
+export function slotAppliesOnDate(slot: AvailabilityRow, dateStr: string, isoDow: number): boolean {
+  if (slot.date) return slot.date === dateStr
+  if (slot.dayOfWeek !== isoDow) return false
+  const cadence = slot.cadenceWeeks ?? 1
+  if (cadence <= 1) return true
+  if (!slot.firstDate) return true
+  // Compute whole-day delta between target and anchor; both are local dates
+  // (parsed via Date constructor on YYYY-MM-DD which interprets as UTC, but
+  // the delta is still day-accurate).
+  const target = new Date(`${dateStr}T00:00:00Z`).getTime()
+  const anchor = new Date(`${slot.firstDate}T00:00:00Z`).getTime()
+  if (target < anchor) return false
+  const days = Math.round((target - anchor) / DAY_MS)
+  return days % (cadence * 7) === 0
+}
+
+export function isBlackoutDate(blackouts: BlackoutRow[], dateStr: string): boolean {
+  return blackouts.some(b => b.startDate <= dateStr && dateStr <= b.endDate)
+}
+
 export function findNextAvailable(
   slots: AvailabilityRow[],
   from: Date,
   durationMins: number,
-  maxDays = 60
+  maxDays = 60,
+  blackouts: BlackoutRow[] = [],
 ): Date | null {
   // Strip the time portion of `from` — we work in whole days.
   const cursor = new Date(from)
@@ -55,10 +85,11 @@ export function findNextAvailable(
   for (let i = 0; i < maxDays; i++) {
     const day = new Date(cursor.getTime() + i * DAY_MS)
     const dateStr = toDateStr(day)
+    if (isBlackoutDate(blackouts, dateStr)) continue
     const isoDow = jsDayToIso(day)
 
     const candidates = slots
-      .filter(s => (s.date ? s.date === dateStr : s.dayOfWeek === isoDow))
+      .filter(s => slotAppliesOnDate(s, dateStr, isoDow))
       .filter(s => timeToMins(s.endTime) - timeToMins(s.startTime) >= durationMins)
       .sort((a, b) => a.startTime.localeCompare(b.startTime))
 

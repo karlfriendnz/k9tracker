@@ -212,6 +212,7 @@ export default async function SchedulePage({
       availabilitySlots={availabilitySlots.map(s => ({
         ...s,
         date: s.date ? s.date.toISOString().split('T')[0] : null,
+        firstDate: s.firstDate ? s.firstDate.toISOString().split('T')[0] : null,
       }))}
       clients={clients.map(c => ({
         id: c.id,

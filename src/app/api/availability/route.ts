@@ -9,6 +9,11 @@ const schema = z.object({
   date: z.string().optional().nullable(),       // ISO date string for one-off
   startTime: z.string().regex(/^\d{2}:\d{2}$/),
   endTime: z.string().regex(/^\d{2}:\d{2}$/),
+  // 1 = weekly (default), 2 = fortnightly, etc. Only used for repeating
+  // (dayOfWeek-based) slots.
+  cadenceWeeks: z.number().int().min(1).max(8).optional(),
+  // ISO date — anchor week for cadenceWeeks > 1.
+  firstDate: z.string().optional().nullable(),
 })
 
 export async function GET() {
@@ -49,6 +54,8 @@ export async function POST(req: Request) {
       date: parsed.data.date ? new Date(parsed.data.date) : null,
       startTime: parsed.data.startTime,
       endTime: parsed.data.endTime,
+      cadenceWeeks: parsed.data.cadenceWeeks ?? 1,
+      firstDate: parsed.data.firstDate ? new Date(parsed.data.firstDate) : null,
     },
   })
 

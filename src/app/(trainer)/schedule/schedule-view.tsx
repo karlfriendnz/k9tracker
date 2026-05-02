@@ -40,9 +40,11 @@ const SHOW_REPORT_AND_TASKS = false
 
 const availSchema = z.object({
   title: z.string().optional(),
-  type: z.enum(['repeating', 'oneoff']),
+  type: z.enum(['weekly', 'fortnightly', 'oneoff']),
   dayOfWeek: z.number().int().min(1).max(7).optional(),
   date: z.string().optional(),
+  // Fortnightly anchor — first occurrence date so we can compute parity.
+  firstDate: z.string().optional(),
   startTime: z.string().regex(/^\d{2}:\d{2}$/),
   endTime: z.string().regex(/^\d{2}:\d{2}$/),
 })
@@ -113,6 +115,15 @@ interface AvailSlot {
   date: string | null        // YYYY-MM-DD for one-off
   startTime: string
   endTime: string
+  cadenceWeeks: number       // 1 = weekly, 2 = fortnightly, etc.
+  firstDate: string | null   // YYYY-MM-DD anchor for cadenceWeeks > 1
+}
+
+interface Blackout {
+  id: string
+  reason: string | null
+  startDate: string  // YYYY-MM-DD inclusive
+  endDate: string    // YYYY-MM-DD inclusive
 }
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
@@ -207,9 +218,23 @@ function AvailStrip({ slot, dayDate, onDelete, startHour }: {
   // dayOfWeek in our schema: 1=Mon…7=Sun; JS getDay: 0=Sun,1=Mon…6=Sat
   const jsDay  = dayDate.getDay()
   const slotDay = jsDay === 0 ? 7 : jsDay // convert to 1=Mon…7=Sun
-  const applies = slot.dayOfWeek != null
-    ? slot.dayOfWeek === slotDay
-    : slot.date === dateStr
+  let applies: boolean
+  if (slot.dayOfWeek != null) {
+    applies = slot.dayOfWeek === slotDay
+    // Fortnightly / further cadence: only show on weeks that match parity
+    // against the anchor (firstDate).
+    if (applies && slot.cadenceWeeks > 1 && slot.firstDate) {
+      const target = new Date(`${dateStr}T00:00:00Z`).getTime()
+      const anchor = new Date(`${slot.firstDate}T00:00:00Z`).getTime()
+      if (target < anchor) applies = false
+      else {
+        const diffDays = Math.round((target - anchor) / 86400000)
+        applies = diffDays % (slot.cadenceWeeks * 7) === 0
+      }
+    }
+  } else {
+    applies = slot.date === dateStr
+  }
 
   if (!applies) return null
 
@@ -222,6 +247,11 @@ function AvailStrip({ slot, dayDate, onDelete, startHour }: {
       style={{ top, height: Math.max(height, 8) }}
       title={slot.title ?? `Available ${slot.startTime}–${slot.endTime}`}
     >
+      {slot.title && (
+        <p className="px-1 pt-0.5 text-[9px] font-semibold text-emerald-800 leading-tight truncate">
+          {slot.title}
+        </p>
+      )}
       <button
         onClick={() => onDelete(slot.id)}
         className="absolute top-0.5 right-0.5 hidden group-hover:flex h-4 w-4 items-center justify-center rounded bg-white/80 text-emerald-700 hover:bg-red-50 hover:text-red-500"
@@ -436,6 +466,7 @@ function WeekGrid({
   weekDays,
   sessions,
   availSlots,
+  blackouts,
   today,
   selectedDate,
   onSlotClick,
@@ -451,6 +482,7 @@ function WeekGrid({
   weekDays: Date[]
   sessions: Session[]
   availSlots: AvailSlot[]
+  blackouts: Blackout[]
   today: string
   selectedDate: string
   onSlotClick: (dateStr: string, time: string) => void
@@ -641,6 +673,24 @@ function WeekGrid({
                   />
                 ))}
 
+                {/* Blackout overlay — covers the whole column when this day
+                    falls within any blackout period for the trainer. */}
+                {(() => {
+                  const ds = toDateStr(d)
+                  const blackout = blackouts.find(b => b.startDate <= ds && ds <= b.endDate)
+                  if (!blackout) return null
+                  return (
+                    <div
+                      className="absolute inset-0 z-10 flex items-center justify-center bg-slate-100/85 border-2 border-dashed border-slate-300 pointer-events-none"
+                      title={blackout.reason ?? 'Blocked out'}
+                    >
+                      <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wide -rotate-12">
+                        {blackout.reason ?? 'Blocked'}
+                      </span>
+                    </div>
+                  )
+                })()}
+
                 {/* Availability strips */}
                 {availSlots.map((slot) => (
                   <AvailStrip key={slot.id} slot={slot} dayDate={d} onDelete={onDeleteAvail} startHour={startHour} />
@@ -768,35 +818,86 @@ const DOW_LABELS = ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 
 
 function AvailabilityManager({
   slots,
+  blackouts,
   onAdd,
   onUpdate,
   onDelete,
+  onAddBlackout,
+  onDeleteBlackout,
   onClose,
 }: {
   slots: AvailSlot[]
+  blackouts: Blackout[]
   onAdd: (slot: AvailSlot) => void
   onUpdate: (slot: AvailSlot) => void
   onDelete: (id: string) => void
+  onAddBlackout: (b: Blackout) => void
+  onDeleteBlackout: (id: string) => void
   onClose: () => void
 }) {
   const [error, setError] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const formRef = useRef<HTMLFormElement>(null)
-  const defaultValues: AvailForm = { type: 'repeating', startTime: '09:00', endTime: '17:00' }
+  const defaultValues: AvailForm = { type: 'weekly', startTime: '09:00', endTime: '17:00' }
   const { register, handleSubmit, watch, reset, formState: { errors, isSubmitting } } = useForm<AvailForm>({
     resolver: zodResolver(availSchema),
     defaultValues,
   })
   const type = watch('type')
 
+  // Blackout (holiday) form state.
+  const [blackoutStart, setBlackoutStart] = useState('')
+  const [blackoutEnd, setBlackoutEnd] = useState('')
+  const [blackoutReason, setBlackoutReason] = useState('')
+  const [savingBlackout, setSavingBlackout] = useState(false)
+  const [blackoutError, setBlackoutError] = useState<string | null>(null)
+
+  async function handleAddBlackoutSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setBlackoutError(null)
+    if (!blackoutStart || !blackoutEnd) {
+      setBlackoutError('Pick both dates')
+      return
+    }
+    if (blackoutEnd < blackoutStart) {
+      setBlackoutError('End must be on or after start')
+      return
+    }
+    setSavingBlackout(true)
+    const res = await fetch('/api/blackouts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        startDate: blackoutStart,
+        endDate: blackoutEnd,
+        reason: blackoutReason || null,
+      }),
+    })
+    setSavingBlackout(false)
+    if (!res.ok) { setBlackoutError('Failed to save'); return }
+    const created = await res.json()
+    onAddBlackout(created)
+    setBlackoutStart('')
+    setBlackoutEnd('')
+    setBlackoutReason('')
+  }
+
+  async function handleDeleteBlackoutClick(id: string) {
+    onDeleteBlackout(id)
+    await fetch(`/api/blackouts/${id}`, { method: 'DELETE' })
+  }
+
   function startEdit(slot: AvailSlot) {
     setEditingId(slot.id)
     setError(null)
     reset({
       title: slot.title ?? '',
-      type: slot.dayOfWeek != null ? 'repeating' : 'oneoff',
+      type: slot.dayOfWeek != null
+        ? (slot.cadenceWeeks > 1 ? 'fortnightly' : 'weekly')
+        : 'oneoff',
       dayOfWeek: slot.dayOfWeek ?? undefined,
       date: slot.date ?? undefined,
+      firstDate: slot.firstDate ?? undefined,
       startTime: slot.startTime,
       endTime: slot.endTime,
     })
@@ -811,12 +912,19 @@ function AvailabilityManager({
 
   async function onSubmit(data: AvailForm) {
     setError(null)
+    const isRepeating = data.type === 'weekly' || data.type === 'fortnightly'
     const payload = {
       title: data.title || null,
-      dayOfWeek: data.type === 'repeating' ? data.dayOfWeek : null,
+      dayOfWeek: isRepeating ? data.dayOfWeek : null,
       date: data.type === 'oneoff' ? data.date : null,
       startTime: data.startTime,
       endTime: data.endTime,
+      cadenceWeeks: data.type === 'fortnightly' ? 2 : 1,
+      firstDate: data.type === 'fortnightly' ? data.firstDate : null,
+    }
+    if (data.type === 'fortnightly' && !data.firstDate) {
+      setError('Pick a starting date for the fortnightly slot')
+      return
     }
 
     if (editingId) {
@@ -880,7 +988,11 @@ function AvailabilityManager({
                         </p>
                         {s.title && <p className="text-xs text-slate-500">{s.title}</p>}
                         <p className={`text-xs ${isEditing ? 'text-blue-600' : 'text-emerald-600'}`}>
-                          {isEditing ? 'Editing…' : (s.dayOfWeek != null ? 'Repeating' : 'One-off')}
+                          {isEditing
+                            ? 'Editing…'
+                            : s.dayOfWeek != null
+                              ? (s.cadenceWeeks > 1 ? `Every ${s.cadenceWeeks} weeks` : 'Weekly')
+                              : 'One-off'}
                         </p>
                       </div>
                       <div className="flex items-center gap-1">
@@ -921,32 +1033,41 @@ function AvailabilityManager({
           <form ref={formRef} onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-3">
             <Input label="Label (optional)" placeholder="e.g. Morning availability" {...register('title')} />
 
-            <div className="flex gap-2">
-              {(['repeating', 'oneoff'] as const).map(t => (
-                <label key={t} className="flex-1">
+            <div className="grid grid-cols-3 gap-2">
+              {(['weekly', 'fortnightly', 'oneoff'] as const).map(t => (
+                <label key={t}>
                   <input type="radio" value={t} className="sr-only peer" {...register('type')} />
                   <div className="text-center py-2 rounded-xl border border-slate-200 text-sm cursor-pointer peer-checked:border-blue-500 peer-checked:bg-blue-50 peer-checked:text-blue-700 transition-colors">
-                    {t === 'repeating' ? '🔁 Repeating' : '📅 One-off'}
+                    {t === 'weekly' ? '🔁 Weekly' : t === 'fortnightly' ? '🔂 Fortnightly' : '📅 One-off'}
                   </div>
                 </label>
               ))}
             </div>
 
-            {type === 'repeating' ? (
-              <div>
-                <label className="text-sm font-medium text-slate-700 block mb-1.5">Day of week</label>
-                <select {...register('dayOfWeek', { valueAsNumber: true })} className="h-12 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  {DOW_LABELS.slice(1).map((label, i) => (
-                    <option key={i + 1} value={i + 1} >{label}</option>
-                  ))}
-                </select>
-                {errors.dayOfWeek && <p className="text-xs text-red-500 mt-1">{errors.dayOfWeek.message}</p>}
-              </div>
-            ) : (
+            {type === 'oneoff' ? (
               <div>
                 <label className="text-sm font-medium text-slate-700 block mb-1.5">Date</label>
                 <input type="date" {...register('date')} className="h-12 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
+            ) : (
+              <>
+                <div>
+                  <label className="text-sm font-medium text-slate-700 block mb-1.5">Day of week</label>
+                  <select {...register('dayOfWeek', { valueAsNumber: true })} className="h-12 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    {DOW_LABELS.slice(1).map((label, i) => (
+                      <option key={i + 1} value={i + 1} >{label}</option>
+                    ))}
+                  </select>
+                  {errors.dayOfWeek && <p className="text-xs text-red-500 mt-1">{errors.dayOfWeek.message}</p>}
+                </div>
+                {type === 'fortnightly' && (
+                  <div>
+                    <label className="text-sm font-medium text-slate-700 block mb-1.5">First occurrence</label>
+                    <input type="date" {...register('firstDate')} className="h-12 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    <p className="text-[11px] text-slate-400 mt-1">Sets which fortnight is "on" — the slot then repeats every other week from this date.</p>
+                  </div>
+                )}
+              </>
             )}
 
             <div className="flex gap-3">
@@ -971,6 +1092,63 @@ function AvailabilityManager({
               </Button>
             </div>
           </form>
+
+          {/* Blackouts / holidays section */}
+          <div className="mt-6 pt-5 border-t border-slate-100">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Holidays / blackouts</p>
+            {blackouts.length > 0 && (
+              <div className="flex flex-col gap-2 mb-3">
+                {blackouts.map(b => (
+                  <div key={b.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200">
+                    <div>
+                      <p className="text-sm font-medium text-slate-800">
+                        {b.startDate}{b.startDate !== b.endDate ? ` → ${b.endDate}` : ''}
+                      </p>
+                      {b.reason && <p className="text-xs text-slate-500">{b.reason}</p>}
+                    </div>
+                    <button
+                      onClick={() => handleDeleteBlackoutClick(b.id)}
+                      className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Remove"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {blackoutError && <Alert variant="error" className="mb-3">{blackoutError}</Alert>}
+            <form onSubmit={handleAddBlackoutSubmit} className="flex flex-col gap-2">
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <label className="text-xs font-medium text-slate-600 block mb-1">Start</label>
+                  <input
+                    type="date"
+                    value={blackoutStart}
+                    onChange={e => setBlackoutStart(e.target.value)}
+                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="text-xs font-medium text-slate-600 block mb-1">End</label>
+                  <input
+                    type="date"
+                    value={blackoutEnd}
+                    onChange={e => setBlackoutEnd(e.target.value)}
+                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+              <Input
+                placeholder="Reason (optional) — e.g. On holiday"
+                value={blackoutReason}
+                onChange={e => setBlackoutReason(e.target.value)}
+              />
+              <Button type="submit" variant="secondary" loading={savingBlackout} className="self-start">
+                Add blackout
+              </Button>
+            </form>
+          </div>
         </div>
       </div>
     </div>
@@ -2113,7 +2291,16 @@ export function ScheduleView({
 
   const [sessions, setSessions]         = useState(initialSessions)
   const [availSlots, setAvailSlots]     = useState(initialAvailSlots)
+  const [blackouts, setBlackouts]       = useState<Blackout[]>([])
   const [showAvail, setShowAvail]       = useState(false)
+  // Lazy-load blackouts the first time the schedule mounts so the calendar
+  // can grey out holiday days. Cheap query (small per-trainer table).
+  useEffect(() => {
+    fetch('/api/blackouts')
+      .then(r => r.ok ? r.json() : [])
+      .then(setBlackouts)
+      .catch(() => {})
+  }, [])
   // For the package-assign modal: { date: YYYY-MM-DD, time?: HH:mm }. When
   // opened from a calendar slot, time is the exact slot time so session 1 is
   // pinned to it. When opened from the header button, time is undefined and
@@ -2450,6 +2637,7 @@ export function ScheduleView({
             weekDays={weekDays}
             sessions={sessions}
             availSlots={availSlots}
+            blackouts={blackouts}
             today={today}
             selectedDate={selectedDate}
             onSlotClick={openAssignModal}
@@ -2486,9 +2674,12 @@ export function ScheduleView({
       {showAvail && (
         <AvailabilityManager
           slots={availSlots}
+          blackouts={blackouts}
           onAdd={handleAddAvail}
           onUpdate={handleUpdateAvail}
           onDelete={handleDeleteAvail}
+          onAddBlackout={(b) => setBlackouts(prev => [...prev, b])}
+          onDeleteBlackout={(id) => setBlackouts(prev => prev.filter(b => b.id !== id))}
           onClose={() => setShowAvail(false)}
         />
       )}

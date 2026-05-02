@@ -187,6 +187,7 @@ model TrainerProfile {
   embedForms         EmbedForm[]
   sentNotifications  ClientNotification[]
   availabilitySlots  AvailabilitySlot[]
+  blackoutPeriods    BlackoutPeriod[]
   packages           Package[]
   sessionForms       SessionForm[]
   products           Product[]
@@ -737,12 +738,32 @@ model AvailabilitySlot {
   date        DateTime? @db.Date
   startTime   String    // "HH:MM" 24-hr
   endTime     String    // "HH:MM" 24-hr
+  // 1 = weekly, 2 = fortnightly, etc. Only used when dayOfWeek is set.
+  cadenceWeeks Int      @default(1)
+  // Anchor date for cadence > 1 — defines parity (e.g. which fortnight is "on").
+  firstDate    DateTime? @db.Date
   createdAt   DateTime  @default(now())
 
   trainer TrainerProfile @relation(fields: [trainerId], references: [id], onDelete: Cascade)
 
   @@index([trainerId])
   @@map("availability_slots")
+}
+
+// Trainer holiday / blackout periods. Days that fall inside one of these
+// ranges count as unavailable, regardless of weekly slots.
+model BlackoutPeriod {
+  id        String   @id @default(cuid())
+  trainerId String
+  reason    String?
+  startDate DateTime @db.Date
+  endDate   DateTime @db.Date
+  createdAt DateTime @default(now())
+
+  trainer TrainerProfile @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+
+  @@index([trainerId])
+  @@map("blackout_periods")
 }
 
 // ─── Embed Forms ──────────────────────────────────────────────────────────────
