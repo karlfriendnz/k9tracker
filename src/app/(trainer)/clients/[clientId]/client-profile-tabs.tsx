@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Card, CardBody } from '@/components/ui/card'
 import { formatDate } from '@/lib/utils'
-import { X, MapPin, Video, Clock, Calendar, Trash2, AlertTriangle, Play } from 'lucide-react'
+import { X, MapPin, Video, Clock, Calendar, Trash2, AlertTriangle, Play, ShoppingBag, Plus, Check, Loader2, Tag, Package as PackageIcon, FileDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SessionFormReport } from '@/components/session-form-report'
 import Link from 'next/link'
@@ -63,7 +63,24 @@ interface Stats {
   totalTasks: number
 }
 
+interface ShopProduct {
+  id: string
+  name: string
+  kind: 'PHYSICAL' | 'DIGITAL'
+  priceCents: number | null
+  imageUrl: string | null
+  category: string | null
+}
+
+interface PendingProductRequest {
+  id: string
+  note: string | null
+  product: { id: string; name: string; kind: 'PHYSICAL' | 'DIGITAL'; imageUrl: string | null }
+}
+
 interface Props {
+  clientId: string
+  canEdit: boolean
   stats: Stats
   dogs: Dog[]
   tasks: Task[]
@@ -71,6 +88,8 @@ interface Props {
   customFields: CustomField[]
   fieldValueMap: Record<string, string>
   dogNames: Record<string, string>  // dogId → name
+  products: ShopProduct[]
+  pendingProductRequests: PendingProductRequest[]
 }
 
 function groupByCategory<T extends { category: string | null }>(items: T[]) {
@@ -86,8 +105,64 @@ function groupByCategory<T extends { category: string | null }>(items: T[]) {
   return groups
 }
 
-export function ClientProfileTabs({ stats, dogs, tasks, sessions: initialSessions, customFields, fieldValueMap, dogNames }: Props) {
+export function ClientProfileTabs({
+  clientId,
+  canEdit,
+  stats,
+  dogs,
+  tasks,
+  sessions: initialSessions,
+  customFields,
+  fieldValueMap,
+  dogNames,
+  products,
+  pendingProductRequests: initialPendingRequests,
+}: Props) {
   const [tab, setTab] = useState<Tab>('overview')
+  const [pendingRequests, setPendingRequests] = useState(initialPendingRequests)
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [busyRequestId, setBusyRequestId] = useState<string | null>(null)
+
+  async function dismissRequest(requestId: string) {
+    if (busyRequestId) return
+    setBusyRequestId(requestId)
+    const removed = pendingRequests.find(r => r.id === requestId)
+    setPendingRequests(prev => prev.filter(r => r.id !== requestId))
+    try {
+      const res = await fetch(`/api/product-requests/${requestId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'CANCELLED' }),
+      })
+      if (!res.ok && removed) setPendingRequests(prev => [...prev, removed])
+    } catch {
+      if (removed) setPendingRequests(prev => [...prev, removed])
+    } finally {
+      setBusyRequestId(null)
+    }
+  }
+
+  async function addProductRequest(productId: string) {
+    const res = await fetch(`/api/clients/${clientId}/product-requests`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ productId }),
+    })
+    if (!res.ok) return
+    const created = await res.json()
+    const product = products.find(p => p.id === productId)
+    if (!product) return
+    // Avoid duplicate state if the API returned an existing PENDING row.
+    setPendingRequests(prev => {
+      if (prev.some(r => r.id === created.id)) return prev
+      return [...prev, {
+        id: created.id,
+        note: created.note ?? null,
+        product: { id: product.id, name: product.name, kind: product.kind, imageUrl: product.imageUrl },
+      }]
+    })
+  }
+
   const [sessions, setSessions] = useState(initialSessions)
   const [activeSession, setActiveSession] = useState<TrainingSession | null>(null)
   const [savingStatus, setSavingStatus] = useState(false)
@@ -251,6 +326,60 @@ export function ClientProfileTabs({ stats, dogs, tasks, sessions: initialSession
               <p className="text-xs text-slate-300 mt-2">in last 14 days</p>
             </Card>
           </div>
+
+          {/* Bring to next session */}
+          {canEdit && (
+            <Card>
+              <CardBody className="pt-5">
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div>
+                    <h2 className="font-semibold text-slate-900 flex items-center gap-2">
+                      <ShoppingBag className="h-4 w-4 text-amber-600" />
+                      Bring to next session
+                    </h2>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Items for this client&apos;s next upcoming session. Roll forward until fulfilled.
+                    </p>
+                  </div>
+                  {products.length > 0 && (
+                    <Button size="sm" variant="secondary" onClick={() => setPickerOpen(true)}>
+                      <Plus className="h-3.5 w-3.5 mr-1" /> Add product
+                    </Button>
+                  )}
+                </div>
+
+                {pendingRequests.length === 0 ? (
+                  <p className="text-sm text-slate-400 text-center py-4">
+                    {products.length === 0
+                      ? <>No products yet — <Link href="/products" className="text-blue-600 hover:underline">add some to your shop</Link>.</>
+                      : 'No items pending.'}
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {pendingRequests.map(r => (
+                      <span
+                        key={r.id}
+                        className="inline-flex items-center gap-1.5 text-sm font-medium text-amber-900 bg-amber-50 border border-amber-100 pl-3 pr-1.5 py-1 rounded-full"
+                        title={r.note ?? undefined}
+                      >
+                        {r.product.name}
+                        <button
+                          onClick={() => dismissRequest(r.id)}
+                          disabled={busyRequestId === r.id}
+                          aria-label={`Remove ${r.product.name}`}
+                          className="ml-1 h-5 w-5 rounded-full hover:bg-amber-100 flex items-center justify-center text-amber-700 disabled:opacity-50"
+                        >
+                          {busyRequestId === r.id
+                            ? <Loader2 className="h-3 w-3 animate-spin" />
+                            : <X className="h-3 w-3" />}
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </CardBody>
+            </Card>
+          )}
 
           {/* Recent tasks */}
           <Card>
@@ -660,6 +789,133 @@ export function ClientProfileTabs({ stats, dogs, tasks, sessions: initialSession
           )}
         </div>
       )}
+
+      {pickerOpen && (
+        <ProductPickerModal
+          products={products}
+          requestedIds={new Set(pendingRequests.map(r => r.product.id))}
+          onClose={() => setPickerOpen(false)}
+          onPick={async (id) => { await addProductRequest(id) }}
+        />
+      )}
     </>
+  )
+}
+
+function ProductPickerModal({
+  products,
+  requestedIds,
+  onClose,
+  onPick,
+}: {
+  products: ShopProduct[]
+  requestedIds: Set<string>
+  onClose: () => void
+  onPick: (productId: string) => void | Promise<void>
+}) {
+  const [search, setSearch] = useState('')
+  const [busyId, setBusyId] = useState<string | null>(null)
+
+  const filtered = products.filter(p =>
+    !search.trim() || p.name.toLowerCase().includes(search.toLowerCase())
+      || (p.category ?? '').toLowerCase().includes(search.toLowerCase())
+  )
+
+  // Group by category for the picker — same shape as /products grid
+  const groups: { category: string | null; items: ShopProduct[] }[] = []
+  const seen = new Set<string | null>()
+  for (const p of filtered) {
+    const key = p.category ?? null
+    if (!seen.has(key)) {
+      seen.add(key)
+      groups.push({ category: key, items: filtered.filter(x => (x.category ?? null) === key) })
+    }
+  }
+
+  async function pick(id: string) {
+    setBusyId(id)
+    try { await onPick(id) }
+    finally { setBusyId(null) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="w-full max-w-lg bg-white rounded-t-3xl sm:rounded-3xl max-h-[92vh] overflow-y-auto">
+        <div className="sticky top-0 z-10 bg-white border-b border-slate-100 px-5 py-4">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-semibold text-slate-900">Add to next session</h2>
+            <button onClick={onClose} className="p-2 -mr-2 text-slate-400 hover:text-slate-600">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <input
+            type="search"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search products…"
+            className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        <div className="px-5 py-4">
+          {filtered.length === 0 ? (
+            <p className="text-sm text-slate-400 text-center py-8">No products match.</p>
+          ) : (
+            <div className="flex flex-col gap-5">
+              {groups.map(g => (
+                <div key={g.category ?? '_'}>
+                  <p className="text-[11px] uppercase tracking-wide text-slate-400 font-medium mb-2 flex items-center gap-1.5">
+                    <Tag className="h-3 w-3" /> {g.category ?? 'Uncategorised'}
+                  </p>
+                  <div className="flex flex-col">
+                    {g.items.map(p => {
+                      const already = requestedIds.has(p.id)
+                      return (
+                        <button
+                          key={p.id}
+                          onClick={() => !already && pick(p.id)}
+                          disabled={already || busyId === p.id}
+                          className={`flex items-center gap-3 px-2 py-2 -mx-2 rounded-xl text-left transition-colors ${
+                            already ? 'opacity-60 cursor-default' : 'hover:bg-slate-50'
+                          }`}
+                        >
+                          <div className="h-10 w-10 rounded-xl bg-slate-100 flex items-center justify-center overflow-hidden flex-shrink-0">
+                            {p.imageUrl ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={p.imageUrl} alt="" className="h-full w-full object-cover" />
+                            ) : p.kind === 'DIGITAL' ? (
+                              <FileDown className="h-4 w-4 text-violet-500" />
+                            ) : (
+                              <PackageIcon className="h-4 w-4 text-amber-600" />
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-slate-900 truncate">{p.name}</p>
+                            <p className="text-xs text-slate-500">
+                              {p.priceCents != null ? `$${(p.priceCents / 100).toFixed(2)}` : 'Contact'}
+                              {' · '}
+                              {p.kind === 'DIGITAL' ? 'Digital' : 'Physical'}
+                            </p>
+                          </div>
+                          {already ? (
+                            <span className="text-xs font-medium text-emerald-600 flex items-center gap-1 flex-shrink-0">
+                              <Check className="h-3.5 w-3.5" /> Added
+                            </span>
+                          ) : busyId === p.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin text-slate-400 flex-shrink-0" />
+                          ) : (
+                            <Plus className="h-4 w-4 text-slate-400 flex-shrink-0" />
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   )
 }

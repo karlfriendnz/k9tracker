@@ -4,7 +4,9 @@ import { prisma } from '@/lib/prisma'
 import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { UserPlus, TrendingUp, Calendar, MapPin, Video, ChevronLeft, ChevronRight, Play } from 'lucide-react'
+import { UserPlus, TrendingUp, Calendar, MapPin, Video, ChevronLeft, ChevronRight, Play, ShoppingBag } from 'lucide-react'
+import { WeeklyTasksStat, type WeeklyTask } from './weekly-tasks-stat'
+import { PendingRequestsPanel } from './pending-requests-panel'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Dashboard' }
@@ -75,12 +77,35 @@ export default async function DashboardPage({
     orderBy: { createdAt: 'desc' },
   })
 
+  // Detailed list for the expandable "Tasks this week" panel — fetched
+  // separately so the count cards stay cheap and the panel has full task
+  // data (title, dog, etc.) when it expands.
+  const weeklyTasksRaw = await prisma.trainingTask.findMany({
+    where: {
+      client: { trainerId },
+      date: { gte: sevenDaysAgo },
+    },
+    include: {
+      client: { include: { user: { select: { name: true, email: true } } } },
+      dog: { select: { name: true } },
+      completion: { select: { id: true } },
+    },
+    orderBy: { date: 'asc' },
+  })
+
+  const weeklyTasks: WeeklyTask[] = weeklyTasksRaw.map(t => ({
+    id: t.id,
+    title: t.title,
+    date: t.date.toISOString(),
+    clientId: t.clientId,
+    clientName: t.client.user.name ?? t.client.user.email,
+    dogName: t.dog?.name ?? null,
+    completed: !!t.completion,
+  }))
+
   const totalClients = clients.length
-  const weeklyTasksAssigned = clients.reduce((sum, c) => sum + c.diaryEntries.length, 0)
-  const weeklyTasksCompleted = clients.reduce(
-    (sum, c) => sum + c.diaryEntries.filter(t => t.completion).length,
-    0
-  )
+  const weeklyTasksAssigned = weeklyTasks.length
+  const weeklyTasksCompleted = weeklyTasks.filter(t => t.completed).length
   const overallCompliance =
     weeklyTasksAssigned > 0
       ? Math.round((weeklyTasksCompleted / weeklyTasksAssigned) * 100)
@@ -92,6 +117,29 @@ export default async function DashboardPage({
     const completed = c.diaryEntries.filter(t => t.completion).length
     return completed / assigned < 0.4
   })
+
+  // Pending product requests across this trainer's clients — shown as a panel
+  // so the trainer can fulfil items at the next session and dismiss the chip.
+  const pendingProductRequests = await prisma.productRequest.findMany({
+    where: { client: { trainerId }, status: 'PENDING' },
+    orderBy: { createdAt: 'asc' },
+    select: {
+      id: true,
+      createdAt: true,
+      note: true,
+      client: { select: { id: true, user: { select: { name: true, email: true } } } },
+      product: { select: { id: true, name: true, kind: true, imageUrl: true } },
+    },
+  })
+
+  // Index requests by client so we can show them inline on each "Coming up
+  // today" session row — the trainer sees what to bring at a glance.
+  const requestsByClient = new Map<string, typeof pendingProductRequests>()
+  for (const r of pendingProductRequests) {
+    const arr = requestsByClient.get(r.client.id) ?? []
+    arr.push(r)
+    requestsByClient.set(r.client.id, arr)
+  }
 
   return (
     <div className="p-4 md:p-8 max-w-4xl mx-auto">
@@ -105,7 +153,7 @@ export default async function DashboardPage({
       {/* Stats row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         <StatCard label="Clients" value={String(totalClients)} />
-        <StatCard label="Tasks this week" value={String(weeklyTasksAssigned)} />
+        <WeeklyTasksStat tasks={weeklyTasks} />
         <StatCard label="Completed" value={String(weeklyTasksCompleted)} />
         <StatCard
           label="Compliance"
@@ -114,6 +162,25 @@ export default async function DashboardPage({
           highlightGood={overallCompliance != null && overallCompliance >= 70}
         />
       </div>
+
+      {/* Pending product requests */}
+      <PendingRequestsPanel
+        requests={pendingProductRequests.map(r => ({
+          id: r.id,
+          createdAt: r.createdAt.toISOString(),
+          note: r.note,
+          client: {
+            id: r.client.id,
+            name: r.client.user.name ?? r.client.user.email,
+          },
+          product: {
+            id: r.product.id,
+            name: r.product.name,
+            kind: r.product.kind as 'PHYSICAL' | 'DIGITAL',
+            imageUrl: r.product.imageUrl,
+          },
+        }))}
+      />
 
       {/* Low compliance alert */}
       {lowComplianceClients.length > 0 && (
@@ -201,6 +268,7 @@ export default async function DashboardPage({
               const start = new Date(s.scheduledAt)
               const isPast = start.getTime() + s.durationMins * 60_000 < new Date().getTime()
               const meta = STATUS_META[s.status]
+              const sessionRequests = s.clientId ? requestsByClient.get(s.clientId) ?? [] : []
               return (
                 <Card key={s.id} className={`p-3 transition-all ${isPast ? 'opacity-60' : ''}`}>
                   <div className="flex items-center gap-3">
@@ -235,6 +303,23 @@ export default async function DashboardPage({
                       Start
                     </Link>
                   </div>
+
+                  {sessionRequests.length > 0 && (
+                    <div className="mt-2.5 pt-2.5 border-t border-slate-100 flex items-center gap-2 flex-wrap">
+                      <span className="text-[11px] font-semibold text-amber-700 uppercase tracking-wide flex items-center gap-1">
+                        <ShoppingBag className="h-3 w-3" /> Bring
+                      </span>
+                      {sessionRequests.map(r => (
+                        <span
+                          key={r.id}
+                          className="inline-flex items-center text-[11px] font-medium text-amber-900 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-full"
+                          title={r.note ?? undefined}
+                        >
+                          {r.product.name}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </Card>
               )
             })}

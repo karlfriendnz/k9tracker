@@ -78,6 +78,29 @@ export default async function ClientDetailPage({
       })
     : []
 
+  // Products from the client's primary trainer (their effective shop) — used
+  // to populate the "Add to next session" picker on the overview tab.
+  const products = canEdit
+    ? await prisma.product.findMany({
+        where: { trainerId: clientAccess.trainerId, active: true },
+        orderBy: [{ category: 'asc' }, { order: 'asc' }, { createdAt: 'desc' }],
+        select: {
+          id: true, name: true, kind: true, priceCents: true,
+          imageUrl: true, category: true,
+        },
+      })
+    : []
+
+  const pendingProductRequests = await prisma.productRequest.findMany({
+    where: { clientId, status: 'PENDING' },
+    orderBy: { createdAt: 'asc' },
+    select: {
+      id: true,
+      note: true,
+      product: { select: { id: true, name: true, kind: true, imageUrl: true } },
+    },
+  })
+
   const fieldValueMap = Object.fromEntries(client.customFieldValues.map(v => [
     v.dogId ? `${v.fieldId}:${v.dogId}` : v.fieldId,
     v.value,
@@ -125,6 +148,7 @@ export default async function ClientDetailPage({
             <>
               <AssignPackageButton
                 clientId={client.id}
+                dogs={allDogs.map(d => ({ id: d.id, name: d.name }))}
                 packages={packages.map(p => ({
                   id: p.id,
                   name: p.name,
@@ -162,6 +186,8 @@ export default async function ClientDetailPage({
 
       {/* Tabbed content */}
       <ClientProfileTabs
+        clientId={client.id}
+        canEdit={canEdit}
         stats={{
           complianceRate,
           completedTasks,
@@ -174,6 +200,24 @@ export default async function ClientDetailPage({
           weight: d.weight,
           dob: d.dob ? d.dob.toISOString() : null,
           notes: d.notes,
+        }))}
+        products={products.map(p => ({
+          id: p.id,
+          name: p.name,
+          kind: p.kind as 'PHYSICAL' | 'DIGITAL',
+          priceCents: p.priceCents,
+          imageUrl: p.imageUrl,
+          category: p.category,
+        }))}
+        pendingProductRequests={pendingProductRequests.map(r => ({
+          id: r.id,
+          note: r.note,
+          product: {
+            id: r.product.id,
+            name: r.product.name,
+            kind: r.product.kind as 'PHYSICAL' | 'DIGITAL',
+            imageUrl: r.product.imageUrl,
+          },
         }))}
         tasks={client.diaryEntries.map(t => ({
           id: t.id,

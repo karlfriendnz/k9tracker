@@ -8,12 +8,14 @@ import { Card, CardBody } from '@/components/ui/card'
 import { Alert } from '@/components/ui/alert'
 import { Plus, Trash2 } from 'lucide-react'
 import { TIMEZONES } from '@/lib/timezones'
+import { DogPhotoUpload } from '@/components/shared/dog-photo-upload'
 
 interface Dog {
   id: string
   name: string
   breed: string | null
   weight: number | null
+  photoUrl: string | null
   isPrimary: boolean
 }
 
@@ -22,6 +24,7 @@ interface DogForm {
   name: string
   breed: string
   weight: string
+  photoUrl: string | null
   isPrimary: boolean
   isNew?: boolean
 }
@@ -51,6 +54,7 @@ export function ClientProfileForm({
       name: d.name,
       breed: d.breed ?? '',
       weight: d.weight?.toString() ?? '',
+      photoUrl: d.photoUrl,
       isPrimary: d.isPrimary,
     }))
   )
@@ -60,7 +64,7 @@ export function ClientProfileForm({
   }
 
   function addDog() {
-    setDogs(prev => [...prev, { id: null, name: '', breed: '', weight: '', isPrimary: false, isNew: true }])
+    setDogs(prev => [...prev, { id: null, name: '', breed: '', weight: '', photoUrl: null, isPrimary: false, isNew: true }])
   }
 
   async function removeDog(index: number) {
@@ -147,11 +151,9 @@ export function ClientProfileForm({
             <div key={i} className="border border-slate-100 rounded-xl p-4 flex flex-col gap-3 bg-slate-50">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium text-slate-700">{dog.name || 'New dog'}</p>
-                {!dog.isPrimary && (
-                  <button type="button" onClick={() => removeDog(i)} className="text-slate-400 hover:text-red-500">
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                )}
+                <button type="button" onClick={() => removeDog(i)} className="text-slate-400 hover:text-red-500">
+                  <Trash2 className="h-4 w-4" />
+                </button>
               </div>
               <Input
                 label="Name"
@@ -162,6 +164,12 @@ export function ClientProfileForm({
                 <Input label="Breed" value={dog.breed} onChange={e => updateDog(i, 'breed', e.target.value)} />
                 <Input label="Weight (kg)" type="number" value={dog.weight} onChange={e => updateDog(i, 'weight', e.target.value)} />
               </div>
+              <DogPhotoUpload
+                dogId={dog.id}
+                dogName={dog.name}
+                initialPhotoUrl={dog.photoUrl}
+                onChange={(url) => setDogs(prev => prev.map((d, idx) => idx === i ? { ...d, photoUrl: url } : d))}
+              />
             </div>
           ))}
           <button type="button" onClick={addDog} className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700">

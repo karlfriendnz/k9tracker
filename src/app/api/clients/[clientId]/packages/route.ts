@@ -11,6 +11,8 @@ const schema = z.object({
   // a count <= package.sessionCount because some sessions may have been skipped
   // due to no availability — the trainer can fill those in manually.
   sessionDates: z.array(z.string().min(1)).min(1).max(52),
+  // Optional dog to attach to every created session. Must belong to the client.
+  dogId: z.string().min(1).optional().nullable(),
 })
 
 export async function POST(
@@ -35,7 +37,9 @@ export async function POST(
   })
   if (!pkg) return NextResponse.json({ error: 'Package not found' }, { status: 404 })
 
-  if (parsed.data.sessionDates.length > pkg.sessionCount) {
+  // sessionCount === 0 means the package is ongoing — any number of sessions is
+  // valid (still capped at 52 by the request schema).
+  if (pkg.sessionCount > 0 && parsed.data.sessionDates.length > pkg.sessionCount) {
     return NextResponse.json(
       { error: `Too many sessions: package allows ${pkg.sessionCount}` },
       { status: 400 }
@@ -45,6 +49,24 @@ export async function POST(
   const sessionDates = parsed.data.sessionDates.map(s => new Date(s))
   if (sessionDates.some(d => Number.isNaN(d.getTime()))) {
     return NextResponse.json({ error: 'Invalid session date in list' }, { status: 400 })
+  }
+
+  // Validate the dog (if any) belongs to this client. A dog can be either the
+  // client's primary `dog` or one of the additional `dogs` they own.
+  let dogId: string | null = null
+  if (parsed.data.dogId) {
+    const dog = await prisma.dog.findFirst({
+      where: {
+        id: parsed.data.dogId,
+        OR: [
+          { primaryFor: { some: { id: clientId } } },
+          { clientProfileId: clientId },
+        ],
+      },
+      select: { id: true },
+    })
+    if (!dog) return NextResponse.json({ error: 'Dog not found for this client' }, { status: 400 })
+    dogId = dog.id
   }
 
   // The startDate field stores when the package began for this client — use the
@@ -63,8 +85,11 @@ export async function POST(
       data: sessionDates.map((d, i) => ({
         trainerId,
         clientId,
+        dogId,
         clientPackageId: assignment.id,
-        title: `${pkg.name} — session ${i + 1}/${pkg.sessionCount}`,
+        title: pkg.sessionCount > 0
+          ? `${pkg.name} — session ${i + 1}/${pkg.sessionCount}`
+          : `${pkg.name} — session ${i + 1}`,
         scheduledAt: d,
         durationMins: pkg.durationMins,
         sessionType: pkg.sessionType,

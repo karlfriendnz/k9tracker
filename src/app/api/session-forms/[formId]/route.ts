@@ -21,6 +21,8 @@ const updateSchema = z.object({
   description: z.string().nullable().optional(),
   introText: z.string().nullable().optional(),
   closingText: z.string().nullable().optional(),
+  backgroundColor: z.string().nullable().optional(),
+  backgroundUrl: z.string().url().nullable().optional().or(z.literal('')),
   questions: z.array(questionSchema).min(1).max(50).optional(),
 })
 

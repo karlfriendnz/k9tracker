@@ -20,6 +20,14 @@ export default async function ClientsPage({
   const trainerId = session.user.trainerId
   if (!trainerId) redirect('/onboarding')
 
+  const trainerProfile = await prisma.trainerProfile.findUnique({
+    where: { id: trainerId },
+    select: { clientListColumns: true },
+  })
+  const clientListColumns = Array.isArray(trainerProfile?.clientListColumns)
+    ? trainerProfile.clientListColumns as string[]
+    : ['email', 'dog', 'nextSession', 'compliance']
+
   const sp = await searchParams
   const tab = sp.tab === 'inactive' ? 'inactive' : sp.tab === 'new' ? 'new' : 'active'
   const status = tab === 'active' ? 'ACTIVE' : tab === 'inactive' ? 'INACTIVE' : 'NEW'
@@ -180,7 +188,7 @@ export default async function ClientsPage({
         </Link>
       </div>
 
-      <ClientsList clients={flatClients} tab={tab} />
+      <ClientsList clients={flatClients} tab={tab} columns={clientListColumns} />
     </div>
   )
 }

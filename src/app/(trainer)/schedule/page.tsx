@@ -29,7 +29,14 @@ export default async function SchedulePage({
 
   const trainerProfile = await prisma.trainerProfile.findUnique({
     where: { userId: session.user.id },
-    select: { id: true, googleCalendarConnected: true },
+    select: {
+      id: true,
+      googleCalendarConnected: true,
+      scheduleStartHour: true,
+      scheduleEndHour: true,
+      scheduleDays: true,
+      scheduleExtraFields: true,
+    },
   })
   if (!trainerProfile) redirect('/onboarding')
 
@@ -57,6 +64,15 @@ export default async function SchedulePage({
         },
         client: {
           select: { id: true, user: { select: { name: true, email: true } } },
+        },
+        buddies: {
+          select: {
+            id: true,
+            clientId: true,
+            dogId: true,
+            client: { select: { id: true, user: { select: { name: true, email: true } } } },
+            dog: { select: { id: true, name: true } },
+          },
         },
       },
       orderBy: { scheduledAt: 'asc' },
@@ -110,6 +126,10 @@ export default async function SchedulePage({
       selectedDate={selectedDate}
       today={today}
       googleCalendarConnected={trainerProfile.googleCalendarConnected}
+      scheduleStartHour={trainerProfile.scheduleStartHour}
+      scheduleEndHour={trainerProfile.scheduleEndHour}
+      scheduleDays={Array.isArray(trainerProfile.scheduleDays) ? trainerProfile.scheduleDays as number[] : [1, 2, 3, 4, 5, 6, 7]}
+      scheduleExtraFields={Array.isArray(trainerProfile.scheduleExtraFields) ? trainerProfile.scheduleExtraFields as string[] : []}
     />
   )
 }

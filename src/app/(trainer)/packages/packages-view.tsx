@@ -29,7 +29,8 @@ interface PkgRow {
 const formSchema = z.object({
   name: z.string().min(1, 'Name required'),
   description: z.string().optional(),
-  sessionCount: z.number().int().min(1).max(52),
+  // 0 = ongoing — the trainer picks an end date when assigning the package.
+  sessionCount: z.number().int().min(0).max(52),
   weeksBetween: z.number().int().min(0).max(52),
   durationMins: z.number().int().min(15).max(480),
   sessionType: z.enum(['IN_PERSON', 'VIRTUAL']),
@@ -162,7 +163,7 @@ export function PackagesView({ initialPackages }: { initialPackages: PkgRow[] })
                       </div>
                       {p.description && <p className="text-sm text-slate-500 mt-0.5">{p.description}</p>}
                       <div className="flex items-center gap-3 text-xs text-slate-400 mt-1.5 flex-wrap">
-                        <span>{p.sessionCount} sessions</span>
+                        <span>{p.sessionCount === 0 ? 'Ongoing' : `${p.sessionCount} sessions`}</span>
                         <span>·</span>
                         <span>{p.weeksBetween === 0 ? 'No spacing' : `every ${p.weeksBetween} week${p.weeksBetween > 1 ? 's' : ''}`}</span>
                         <span>·</span>
@@ -299,12 +300,15 @@ function PackageModal({
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <Input
-              label="Number of sessions"
-              type="number"
-              error={errors.sessionCount?.message}
-              {...register('sessionCount', { valueAsNumber: true })}
-            />
+            <div>
+              <Input
+                label="Number of sessions"
+                type="number"
+                error={errors.sessionCount?.message}
+                {...register('sessionCount', { valueAsNumber: true })}
+              />
+              <p className="text-[11px] text-slate-400 mt-1">0 = ongoing (you set an end date when assigning)</p>
+            </div>
             <Input
               label="Weeks between"
               type="number"

@@ -12,21 +12,29 @@ import { Alert } from '@/components/ui/alert'
 import Link from 'next/link'
 import {
   ChevronLeft, ChevronRight, Plus, Calendar, LayoutGrid, List,
-  Clock, Trash2, X, Settings, MapPin, Video, ExternalLink, Loader2, Play,
+  Clock, Trash2, X, Settings, MapPin, Video, ExternalLink, Loader2, Play, Pencil,
 } from 'lucide-react'
 import {
   AssignPackageFromScheduleButton,
   AssignPackageFromScheduleModal,
 } from './assign-package-from-schedule'
+import { ScheduleSettings } from './schedule-settings'
 import { SessionFormReport } from '@/components/session-form-report'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const START_HOUR    = 7    // 7am
-const END_HOUR      = 21   // 9pm
+// Default visible hour range — overridden per-trainer by props on ScheduleView,
+// flowed down through WeekGrid. Keep these as defaults so the helper functions
+// below can stay pure and reusable from other call sites.
+const DEFAULT_START_HOUR = 7    // 7am
+const DEFAULT_END_HOUR   = 21   // 9pm
 const PX_PER_HOUR   = 72   // pixels per hour
 const SNAP_MINS     = 15   // drag snaps to 15-min intervals
 const DRAG_THRESHOLD = 6   // px moved before considered a drag
+
+// Hide the Session Report and Tasks sections in the schedule popup for now —
+// flip to true to bring them back. Both still render on the full session page.
+const SHOW_REPORT_AND_TASKS = false
 
 // ─── Zod schemas ──────────────────────────────────────────────────────────────
 
@@ -45,6 +53,14 @@ type AvailForm      = z.infer<typeof availSchema>
 
 type SessionStatus = 'UPCOMING' | 'COMPLETED' | 'COMMENTED' | 'INVOICED'
 
+interface Buddy {
+  id: string
+  clientId: string
+  dogId: string | null
+  client: { id: string; user: { name: string | null; email: string } }
+  dog: { id: string; name: string } | null
+}
+
 interface Session {
   id: string
   title: string
@@ -56,11 +72,13 @@ interface Session {
   virtualLink: string | null
   description: string | null
   clientId: string | null
+  dogId: string | null
   client: { id: string; user: { name: string | null; email: string } } | null
   dog: {
     name: string
     primaryFor: { id: string; user: { name: string | null; email: string } }[]
   } | null
+  buddies: Buddy[]
 }
 
 interface ClientOption {
@@ -121,25 +139,25 @@ function fmtFullDate(dateStr: string): string {
 }
 
 // Convert time offset in grid to HH:MM
-function yToTime(y: number): string {
-  const totalMins = START_HOUR * 60 + (y / PX_PER_HOUR) * 60
+function yToTime(y: number, startHour = DEFAULT_START_HOUR, endHour = DEFAULT_END_HOUR): string {
+  const totalMins = startHour * 60 + (y / PX_PER_HOUR) * 60
   const snapped   = Math.round(totalMins / SNAP_MINS) * SNAP_MINS
-  const clamped   = Math.max(START_HOUR * 60, Math.min(END_HOUR * 60 - 30, snapped))
+  const clamped   = Math.max(startHour * 60, Math.min(endHour * 60 - 30, snapped))
   const h = Math.floor(clamped / 60)
   const m = clamped % 60
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
 }
 
 // Top offset + height (in px) for a time range
-function timeToY(timeStr: string): number {
+function timeToY(timeStr: string, startHour = DEFAULT_START_HOUR): number {
   const [h, m] = timeStr.split(':').map(Number)
-  return ((h * 60 + m - START_HOUR * 60) / 60) * PX_PER_HOUR
+  return ((h * 60 + m - startHour * 60) / 60) * PX_PER_HOUR
 }
 
-function sessionTop(iso: string): number {
+function sessionTop(iso: string, startHour = DEFAULT_START_HOUR): number {
   const d = new Date(iso)
   const mins = d.getHours() * 60 + d.getMinutes()
-  return Math.max(0, ((mins - START_HOUR * 60) / 60) * PX_PER_HOUR)
+  return Math.max(0, ((mins - startHour * 60) / 60) * PX_PER_HOUR)
 }
 
 function sessionHeight(durationMins: number): number {
@@ -148,10 +166,11 @@ function sessionHeight(durationMins: number): number {
 
 // ─── Availability strip ───────────────────────────────────────────────────────
 
-function AvailStrip({ slot, dayDate, onDelete }: {
+function AvailStrip({ slot, dayDate, onDelete, startHour }: {
   slot: AvailSlot
   dayDate: Date
   onDelete: (id: string) => void
+  startHour: number
 }) {
   // Check if this slot applies to this day
   const dateStr = toDateStr(dayDate)
@@ -164,8 +183,8 @@ function AvailStrip({ slot, dayDate, onDelete }: {
 
   if (!applies) return null
 
-  const top    = timeToY(slot.startTime)
-  const height = timeToY(slot.endTime) - top
+  const top    = timeToY(slot.startTime, startHour)
+  const height = timeToY(slot.endTime, startHour) - top
 
   return (
     <div
@@ -181,6 +200,20 @@ function AvailStrip({ slot, dayDate, onDelete }: {
       </button>
     </div>
   )
+}
+
+// ─── Extra-fields ─────────────────────────────────────────────────────────────
+
+type ExtraFieldId = 'location' | 'description' | 'sessionType' | 'duration' | 'title'
+
+function extraFieldValue(field: ExtraFieldId, session: Session): string | null {
+  switch (field) {
+    case 'location':    return session.location?.trim() || null
+    case 'description': return session.description?.trim() || null
+    case 'sessionType': return session.sessionType === 'VIRTUAL' ? '💻 Virtual' : '📍 In person'
+    case 'duration':    return `${session.durationMins}m`
+    case 'title':       return session.title?.trim() || null
+  }
 }
 
 // ─── Status helpers ───────────────────────────────────────────────────────────
@@ -201,6 +234,8 @@ function SessionBlock({
   faded,
   onPointerDown,
   onClick,
+  startHour,
+  extraFields,
 }: {
   session: Session
   isDragging: boolean
@@ -208,24 +243,47 @@ function SessionBlock({
   faded?: boolean
   onPointerDown: (e: React.PointerEvent) => void
   onClick: () => void
+  startHour: number
+  extraFields: ExtraFieldId[]
 }) {
-  const top    = isDragging && dragTop !== null ? dragTop : sessionTop(session.scheduledAt)
+  const top    = isDragging && dragTop !== null ? dragTop : sessionTop(session.scheduledAt, startHour)
   const height = sessionHeight(session.durationMins)
   // Prefer direct client link, fall back to client via dog's primaryFor
   const clientUser = session.client?.user ?? session.dog?.primaryFor[0]?.user
   const clientName = clientUser ? (clientUser.name ?? clientUser.email) : null
   const meta = STATUS_META[session.status] ?? STATUS_META.UPCOMING
+  const isBuddyWalk = session.buddies.length > 0
+  // Tooltip lists every dog attending so the trainer can hover the block to
+  // see all participants without opening the modal.
+  const allDogNames = [
+    ...(session.dog?.name ? [session.dog.name] : []),
+    ...session.buddies.filter(b => b.dog).map(b => b.dog!.name),
+  ]
+  const tooltip = isBuddyWalk
+    ? `Buddy walk · ${session.title}${allDogNames.length ? ` · 🐕 ${allDogNames.join(', ')}` : ''}`
+    : allDogNames.length > 1
+    ? `${session.title} · 🐕 ${allDogNames.join(', ')}`
+    : undefined
+
+  // Buddy walks get an orange background instead of the status colour, so
+  // they're visually distinct from regular 1:1 sessions at a glance.
+  const buddyBg      = 'bg-orange-500'
+  const buddyHover   = 'hover:bg-orange-600'
+  const buddyFaded   = 'bg-orange-300'
 
   return (
     <div
       className={`absolute left-0.5 right-0.5 rounded-lg px-2 overflow-hidden select-none touch-none z-10 transition-shadow ${
         isDragging
-          ? `${meta.bg} shadow-2xl opacity-90 cursor-grabbing z-20`
+          ? `${isBuddyWalk ? buddyBg : meta.bg} shadow-2xl opacity-90 cursor-grabbing z-20`
           : faded
-          ? `${meta.fadedBg} opacity-40 cursor-grabbing z-10`
+          ? `${isBuddyWalk ? buddyFaded : meta.fadedBg} opacity-40 cursor-grabbing z-10`
+          : isBuddyWalk
+          ? `${buddyBg} ${buddyHover} cursor-grab shadow-sm hover:shadow-md`
           : `${meta.bg} ${meta.hover} cursor-grab shadow-sm hover:shadow-md`
       }`}
       style={{ top, height }}
+      title={tooltip}
       onPointerDown={onPointerDown}
       onClick={onClick}
     >
@@ -233,18 +291,44 @@ function SessionBlock({
         <p className="text-[10px] font-semibold text-white leading-tight truncate flex-1">
           {fmtTime(session.scheduledAt)}
         </p>
+        {isBuddyWalk && (
+          <span
+            className="text-[9px] font-bold text-white bg-white/25 rounded px-1 leading-tight flex-shrink-0"
+            title={`Buddy walk · ${allDogNames.length} dog${allDogNames.length === 1 ? '' : 's'}`}
+          >
+            🐕 {allDogNames.length}
+          </span>
+        )}
         <span className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${meta.dot}`} title={meta.label} />
       </div>
       {height > 34 && (
         <p className="text-[10px] text-white/90 leading-tight truncate">
-          {clientName ?? session.title}
+          {isBuddyWalk
+            ? (allDogNames.length > 0 ? `🐕 ${allDogNames.join(', ')}` : 'Buddy walk')
+            : session.dog?.name ? `🐕 ${session.dog.name}` : (clientName ?? session.title)}
         </p>
       )}
-      {height > 50 && clientName && (
+      {/* Third line shows the client name (or fallback title) for regular
+          sessions, but buddy walks intentionally hide the client to keep the
+          focus on dogs only. */}
+      {!isBuddyWalk && height > 50 && (clientName || (session.dog?.name && clientName !== session.title)) && (
         <p className="text-[10px] text-white/70 leading-tight truncate">
-          {session.title}
+          {session.dog?.name && clientName ? clientName : session.title}
         </p>
       )}
+      {/* Trainer-configurable extra fields. Each rendered line needs ~12px;
+          gate on remaining height so we don't overflow short blocks. */}
+      {extraFields.map((field, idx) => {
+        const value = extraFieldValue(field, session)
+        if (!value) return null
+        const minHeight = 50 + (idx + 1) * 12
+        if (height <= minHeight) return null
+        return (
+          <p key={field} className="text-[10px] text-white/70 leading-tight truncate">
+            {value}
+          </p>
+        )
+      })}
     </div>
   )
 }
@@ -261,6 +345,9 @@ function WeekGrid({
   onSessionClick,
   onSessionDrop,
   onDeleteAvail,
+  startHour,
+  endHour,
+  extraFields,
 }: {
   weekDays: Date[]
   sessions: Session[]
@@ -271,8 +358,11 @@ function WeekGrid({
   onSessionClick: (s: Session) => void
   onSessionDrop: (sessionId: string, newIso: string) => void
   onDeleteAvail: (id: string) => void
+  startHour: number
+  endHour: number
+  extraFields: ExtraFieldId[]
 }) {
-  const hours = Array.from({ length: END_HOUR - START_HOUR }, (_, i) => START_HOUR + i)
+  const hours = Array.from({ length: endHour - startHour }, (_, i) => startHour + i)
   const gridRef = useRef<HTMLDivElement>(null)
 
   // ── Drag state ──────────────────────────────────────────────────────────────
@@ -299,7 +389,7 @@ function WeekGrid({
       originalDayIndex: dayIndex,
       dayIndex,
       offsetY: e.clientY - rect.top,
-      currentTop: sessionTop(session.scheduledAt),
+      currentTop: sessionTop(session.scheduledAt, startHour),
       moved: false,
     })
   }, [])
@@ -324,7 +414,7 @@ function WeekGrid({
     const colRect = col.getBoundingClientRect()
     const rawY    = e.clientY - colRect.top - dragging.offsetY
     const snapped = Math.round(rawY / (PX_PER_HOUR / (60 / SNAP_MINS))) * (PX_PER_HOUR / (60 / SNAP_MINS))
-    const clamped = Math.max(0, Math.min(snapped, (END_HOUR - START_HOUR - dragging.session.durationMins / 60) * PX_PER_HOUR))
+    const clamped = Math.max(0, Math.min(snapped, (endHour - startHour - dragging.session.durationMins / 60) * PX_PER_HOUR))
 
     setDragging(prev => prev ? { ...prev, dayIndex: targetColIndex, currentTop: clamped, moved: true } : null)
   }, [dragging])
@@ -334,7 +424,7 @@ function WeekGrid({
     if (dragging.moved) {
       // Build new ISO string from target column + snapped top
       const day = weekDays[dragging.dayIndex]
-      const timeStr = yToTime(dragging.currentTop)
+      const timeStr = yToTime(dragging.currentTop, startHour, endHour)
       const [h, m]  = timeStr.split(':').map(Number)
       const newDate  = new Date(day)
       newDate.setHours(h, m, 0, 0)
@@ -368,16 +458,16 @@ function WeekGrid({
     if (!col) return
     const rect = col.getBoundingClientRect()
     const y    = e.clientY - rect.top
-    const time = yToTime(y)
+    const time = yToTime(y, startHour, endHour)
     onSlotClick(toDateStr(dayDate), time)
   }
 
-  const totalHeight = (END_HOUR - START_HOUR) * PX_PER_HOUR
+  const totalHeight = (endHour - startHour) * PX_PER_HOUR
 
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
       {/* Day headers */}
-      <div className="grid border-b border-slate-100" style={{ gridTemplateColumns: '48px repeat(7, 1fr)' }}>
+      <div className="grid border-b border-slate-100" style={{ gridTemplateColumns: `48px repeat(${weekDays.length}, 1fr)` }}>
         <div className="border-r border-slate-100" />
         {weekDays.map((d) => {
           const ds = toDateStr(d)
@@ -403,7 +493,7 @@ function WeekGrid({
         <div
           ref={gridRef}
           className="relative grid"
-          style={{ gridTemplateColumns: '48px repeat(7, 1fr)', height: totalHeight }}
+          style={{ gridTemplateColumns: `48px repeat(${weekDays.length}, 1fr)`, height: totalHeight }}
           onPointerMove={dragging ? handlePointerMove : undefined}
           onPointerUp={dragging ? handlePointerUp : undefined}
         >
@@ -413,7 +503,7 @@ function WeekGrid({
               <div
                 key={h}
                 className="absolute right-2 text-[10px] text-slate-400 leading-none"
-                style={{ top: (h - START_HOUR) * PX_PER_HOUR - 6 }}
+                style={{ top: (h - startHour) * PX_PER_HOUR - 6 }}
               >
                 {h === 12 ? '12pm' : h < 12 ? `${h}am` : `${h - 12}pm`}
               </div>
@@ -438,7 +528,7 @@ function WeekGrid({
                   <div
                     key={h}
                     className="absolute left-0 right-0 border-t border-slate-100 pointer-events-none"
-                    style={{ top: (h - START_HOUR) * PX_PER_HOUR }}
+                    style={{ top: (h - startHour) * PX_PER_HOUR }}
                   />
                 ))}
                 {/* Half-hour lines */}
@@ -446,13 +536,13 @@ function WeekGrid({
                   <div
                     key={`${h}half`}
                     className="absolute left-0 right-0 border-t border-slate-50 pointer-events-none"
-                    style={{ top: (h - START_HOUR) * PX_PER_HOUR + PX_PER_HOUR / 2 }}
+                    style={{ top: (h - startHour) * PX_PER_HOUR + PX_PER_HOUR / 2 }}
                   />
                 ))}
 
                 {/* Availability strips */}
                 {availSlots.map((slot) => (
-                  <AvailStrip key={slot.id} slot={slot} dayDate={d} onDelete={onDeleteAvail} />
+                  <AvailStrip key={slot.id} slot={slot} dayDate={d} onDelete={onDeleteAvail} startHour={startHour} />
                 ))}
 
                 {/* Sessions that belong to this day */}
@@ -469,6 +559,8 @@ function WeekGrid({
                         faded={isBeingDragged && !targetHere}
                         onPointerDown={(e) => handlePointerDown(e, s, dayIndex)}
                         onClick={() => { /* handled in pointerUp */ }}
+                        startHour={startHour}
+                        extraFields={extraFields}
                       />
                     </div>
                   )
@@ -483,6 +575,8 @@ function WeekGrid({
                       dragTop={dragging.currentTop}
                       onPointerDown={() => {}}
                       onClick={() => {}}
+                      startHour={startHour}
+                      extraFields={extraFields}
                     />
                   </div>
                 )}
@@ -570,38 +664,83 @@ const DOW_LABELS = ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 
 function AvailabilityManager({
   slots,
   onAdd,
+  onUpdate,
   onDelete,
   onClose,
 }: {
   slots: AvailSlot[]
   onAdd: (slot: AvailSlot) => void
+  onUpdate: (slot: AvailSlot) => void
   onDelete: (id: string) => void
   onClose: () => void
 }) {
   const [error, setError] = useState<string | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const formRef = useRef<HTMLFormElement>(null)
+  const defaultValues: AvailForm = { type: 'repeating', startTime: '09:00', endTime: '17:00' }
   const { register, handleSubmit, watch, reset, formState: { errors, isSubmitting } } = useForm<AvailForm>({
     resolver: zodResolver(availSchema),
-    defaultValues: { type: 'repeating', startTime: '09:00', endTime: '17:00' },
+    defaultValues,
   })
   const type = watch('type')
 
+  function startEdit(slot: AvailSlot) {
+    setEditingId(slot.id)
+    setError(null)
+    reset({
+      title: slot.title ?? '',
+      type: slot.dayOfWeek != null ? 'repeating' : 'oneoff',
+      dayOfWeek: slot.dayOfWeek ?? undefined,
+      date: slot.date ?? undefined,
+      startTime: slot.startTime,
+      endTime: slot.endTime,
+    })
+    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }
+
+  function cancelEdit() {
+    setEditingId(null)
+    setError(null)
+    reset(defaultValues)
+  }
+
   async function onSubmit(data: AvailForm) {
     setError(null)
-    const res = await fetch('/api/availability', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        title: data.title || undefined,
-        dayOfWeek: data.type === 'repeating' ? data.dayOfWeek : undefined,
-        date: data.type === 'oneoff' ? data.date : undefined,
-        startTime: data.startTime,
-        endTime: data.endTime,
-      }),
-    })
-    if (!res.ok) { setError('Failed to save.'); return }
-    const slot = await res.json()
-    onAdd(slot)
-    reset({ type: 'repeating', startTime: '09:00', endTime: '17:00' })
+    const payload = {
+      title: data.title || null,
+      dayOfWeek: data.type === 'repeating' ? data.dayOfWeek : null,
+      date: data.type === 'oneoff' ? data.date : null,
+      startTime: data.startTime,
+      endTime: data.endTime,
+    }
+
+    if (editingId) {
+      const res = await fetch(`/api/availability/${editingId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) { setError('Failed to save.'); return }
+      const slot = await res.json()
+      onUpdate({
+        ...slot,
+        date: slot.date ? new Date(slot.date).toISOString().split('T')[0] : null,
+      })
+      cancelEdit()
+    } else {
+      const res = await fetch('/api/availability', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) { setError('Failed to save.'); return }
+      const slot = await res.json()
+      onAdd({
+        ...slot,
+        date: slot.date ? new Date(slot.date).toISOString().split('T')[0] : null,
+      })
+      reset(defaultValues)
+    }
   }
 
   return (
@@ -619,28 +758,62 @@ function AvailabilityManager({
             <div className="mb-5">
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Your slots</p>
               <div className="flex flex-col gap-2">
-                {slots.map(s => (
-                  <div key={s.id} className="flex items-center justify-between p-3 bg-emerald-50 rounded-xl border border-emerald-100">
-                    <div>
-                      <p className="text-sm font-medium text-slate-800">
-                        {s.dayOfWeek != null ? DOW_LABELS[s.dayOfWeek] : s.date} · {s.startTime}–{s.endTime}
-                      </p>
-                      {s.title && <p className="text-xs text-slate-500">{s.title}</p>}
-                      <p className="text-xs text-emerald-600">{s.dayOfWeek != null ? 'Repeating' : 'One-off'}</p>
+                {slots.map(s => {
+                  const isEditing = editingId === s.id
+                  return (
+                    <div
+                      key={s.id}
+                      className={`flex items-center justify-between p-3 rounded-xl border transition-colors ${
+                        isEditing
+                          ? 'bg-blue-50 border-blue-200 ring-2 ring-blue-200'
+                          : 'bg-emerald-50 border-emerald-100'
+                      }`}
+                    >
+                      <div>
+                        <p className="text-sm font-medium text-slate-800">
+                          {s.dayOfWeek != null ? DOW_LABELS[s.dayOfWeek] : s.date} · {s.startTime}–{s.endTime}
+                        </p>
+                        {s.title && <p className="text-xs text-slate-500">{s.title}</p>}
+                        <p className={`text-xs ${isEditing ? 'text-blue-600' : 'text-emerald-600'}`}>
+                          {isEditing ? 'Editing…' : (s.dayOfWeek != null ? 'Repeating' : 'One-off')}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => isEditing ? cancelEdit() : startEdit(s)}
+                          className={`p-1.5 rounded-lg transition-colors ${
+                            isEditing
+                              ? 'text-blue-600 bg-blue-100 hover:bg-blue-200'
+                              : 'text-slate-400 hover:text-blue-500 hover:bg-blue-50'
+                          }`}
+                          title={isEditing ? 'Cancel edit' : 'Edit slot'}
+                        >
+                          {isEditing ? <X className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (editingId === s.id) cancelEdit()
+                            onDelete(s.id)
+                          }}
+                          className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Delete slot"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
                     </div>
-                    <button onClick={() => onDelete(s.id)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           )}
 
-          {/* Add slot form */}
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Add slot</p>
+          {/* Add / Edit slot form */}
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">
+            {editingId ? 'Edit slot' : 'Add slot'}
+          </p>
           {error && <Alert variant="error" className="mb-3">{error}</Alert>}
-          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-3">
+          <form ref={formRef} onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-3">
             <Input label="Label (optional)" placeholder="e.g. Morning availability" {...register('title')} />
 
             <div className="flex gap-2">
@@ -682,7 +855,16 @@ function AvailabilityManager({
               </div>
             </div>
 
-            <Button type="submit" loading={isSubmitting}>Add slot</Button>
+            <div className="flex gap-2">
+              {editingId && (
+                <Button type="button" variant="secondary" onClick={cancelEdit} className="flex-1">
+                  Cancel
+                </Button>
+              )}
+              <Button type="submit" loading={isSubmitting} className="flex-1">
+                {editingId ? 'Save changes' : 'Add slot'}
+              </Button>
+            </div>
           </form>
         </div>
       </div>
@@ -734,17 +916,20 @@ function SessionModal({
   onClose,
   onStatusChange,
   onSessionsUpdate,
+  onDelete,
 }: {
   session: Session
   clients: ClientOption[]
   onClose: () => void
   onStatusChange: (id: string, status: SessionStatus) => void
   onSessionsUpdate: (id: string, updates: Partial<Session>) => void
+  onDelete: (id: string) => Promise<void> | void
 }) {
   const router = useRouter()
   const [session, setSession] = useState(initialSession)
   const [tasks, setTasks] = useState<SessionTask[]>([])
   const [savingStatus, setSavingStatus] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [addingTask, setAddingTask] = useState<string | null>(null) // taskId or 'custom' being added
   const [taskError, setTaskError] = useState<string | null>(null)
 
@@ -760,6 +945,13 @@ function SessionModal({
   const [newTaskDesc, setNewTaskDesc] = useState('')
   const [newTaskReps, setNewTaskReps] = useState('')
   const [selectedDogId, setSelectedDogId] = useState<string | null>(null)
+
+  // Buddy session UI state
+  const [showBuddyPicker, setShowBuddyPicker] = useState(false)
+  const [buddyClientId, setBuddyClientId] = useState<string>('')
+  const [buddyDogId, setBuddyDogId] = useState<string | null>(null)
+  const [savingBuddy, setSavingBuddy] = useState(false)
+  const [buddyError, setBuddyError] = useState<string | null>(null)
 
   const d = new Date(session.scheduledAt)
   const clientUser = session.client?.user ?? session.dog?.primaryFor[0]?.user
@@ -801,6 +993,102 @@ function SessionModal({
       setSavingStatus(false)
     }
   }
+
+  // Clients eligible to add as a buddy: trainer's other clients (not the
+  // primary on this session, not already a buddy on it).
+  const buddyClientOptions = clients.filter(c => {
+    if (c.id === clientId) return false
+    return true // allow same client to be added twice for different dogs
+  })
+  const buddyClientDogs = clients.find(c => c.id === buddyClientId)?.dogs ?? []
+
+  async function handleAddBuddy() {
+    if (!buddyClientId) return
+    setBuddyError(null)
+    setSavingBuddy(true)
+    try {
+      const res = await fetch(`/api/schedule/${session.id}/buddies`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId: buddyClientId, dogId: buddyDogId }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        setBuddyError(body?.error?.toString() ?? 'Failed to add buddy')
+        return
+      }
+      const buddy: Buddy = await res.json()
+      const nextBuddies = [...session.buddies, buddy]
+      setSession(prev => ({ ...prev, buddies: nextBuddies }))
+      onSessionsUpdate(session.id, { buddies: nextBuddies })
+      setShowBuddyPicker(false)
+      setBuddyClientId('')
+      setBuddyDogId(null)
+    } finally {
+      setSavingBuddy(false)
+    }
+  }
+
+  async function handleRemoveBuddy(buddyId: string) {
+    const nextBuddies = session.buddies.filter(b => b.id !== buddyId)
+    setSession(prev => ({ ...prev, buddies: nextBuddies }))
+    onSessionsUpdate(session.id, { buddies: nextBuddies })
+    const res = await fetch(`/api/schedule/${session.id}/buddies/${buddyId}`, { method: 'DELETE' })
+    if (!res.ok) {
+      // Roll back on failure
+      setSession(prev => ({ ...prev, buddies: session.buddies }))
+      onSessionsUpdate(session.id, { buddies: session.buddies })
+    }
+  }
+
+  async function handleDogChange(nextDogId: string | null) {
+    const dog = nextDogId ? clientDogs.find(d => d.id === nextDogId) : null
+    // Optimistically update local + parent state so the calendar block reflects
+    // the change immediately without a refetch.
+    const nextDog = dog ? { name: dog.name, primaryFor: session.dog?.primaryFor ?? [] } : null
+    setSession(prev => ({ ...prev, dogId: nextDogId, dog: nextDog }))
+    onSessionsUpdate(session.id, { dogId: nextDogId, dog: nextDog })
+    const res = await fetch(`/api/schedule/${session.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dogId: nextDogId }),
+    })
+    if (!res.ok) {
+      // Roll back on failure
+      setSession(prev => ({ ...prev, dogId: session.dogId, dog: session.dog }))
+      onSessionsUpdate(session.id, { dogId: session.dogId, dog: session.dog })
+    }
+  }
+
+  // Roll call of every dog attending this session — primary plus buddies.
+  // Shown as a compact pill row near the top of the modal so trainers can
+  // see all dogs at a glance when a session has 4+ attendees.
+  const allDogsAttending: { name: string; isPrimary: boolean }[] = [
+    ...(session.dog?.name ? [{ name: session.dog.name, isPrimary: true }] : []),
+    ...session.buddies.filter(b => b.dog).map(b => ({ name: b.dog!.name, isPrimary: false })),
+  ]
+  // A "buddy walk" is any session with at least one buddy. The popup uses a
+  // distinctive amber treatment + unified Attendees list when this is true.
+  const isBuddyWalk = session.buddies.length > 0
+  // Unified attendee list (primary + buddies) for the buddy-walk view.
+  const attendees = [
+    ...(clientId ? [{
+      key: `primary:${clientId}`,
+      isPrimary: true,
+      buddyId: null as string | null,
+      clientId,
+      clientName: clientName ?? '—',
+      dogName: session.dog?.name ?? null,
+    }] : []),
+    ...session.buddies.map(b => ({
+      key: `buddy:${b.id}`,
+      isPrimary: false,
+      buddyId: b.id,
+      clientId: b.clientId,
+      clientName: b.client.user.name ?? b.client.user.email,
+      dogName: b.dog?.name ?? null,
+    })),
+  ]
 
   async function saveTask(key: string, data: { title: string; description?: string | null; repetitions?: number | null; videoUrl?: string | null }) {
     if (!clientId) return
@@ -865,15 +1153,43 @@ function SessionModal({
         className="relative z-50 bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className={`px-6 py-5 flex-shrink-0 ${session.sessionType === 'VIRTUAL' ? 'bg-purple-50 border-b border-purple-100' : 'bg-blue-50 border-b border-blue-100'}`}>
+        {/* Header — amber treatment for buddy walks (any session with ≥1
+            buddy) so they're visually distinct from regular 1:1 sessions. */}
+        <div className={`px-6 py-5 flex-shrink-0 border-b ${
+          isBuddyWalk
+            ? 'bg-amber-50 border-amber-200'
+            : session.sessionType === 'VIRTUAL'
+            ? 'bg-purple-50 border-purple-100'
+            : 'bg-blue-50 border-blue-100'
+        }`}>
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <span className={`text-xs font-semibold uppercase tracking-wide ${session.sessionType === 'VIRTUAL' ? 'text-purple-500' : 'text-blue-500'}`}>
-                {session.sessionType === 'VIRTUAL' ? '💻 Virtual' : '📍 In person'}
-              </span>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className={`text-xs font-semibold uppercase tracking-wide ${
+                  session.sessionType === 'VIRTUAL' ? 'text-purple-500' : 'text-blue-500'
+                }`}>
+                  {session.sessionType === 'VIRTUAL' ? '💻 Virtual' : '📍 In person'}
+                </span>
+                {isBuddyWalk && (
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-200/70 px-2 py-0.5 rounded-full">
+                    🐕 Buddy walk · {allDogsAttending.length} dog{allDogsAttending.length === 1 ? '' : 's'}
+                  </span>
+                )}
+              </div>
               <h2 className="text-lg font-bold text-slate-900 mt-0.5 truncate">{session.title}</h2>
-              {clientName && <p className="text-sm text-slate-500 mt-0.5">{clientName}</p>}
+              {!isBuddyWalk && clientName && <p className="text-sm text-slate-500 mt-0.5">{clientName}</p>}
+              {!isBuddyWalk && allDogsAttending.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1.5">
+                  {allDogsAttending.map((d, i) => (
+                    <span
+                      key={`${d.name}-${i}`}
+                      className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-white text-slate-700 border border-slate-200"
+                    >
+                      🐕 {d.name}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
             <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 flex-shrink-0 mt-0.5">
               <X className="h-5 w-5" />
@@ -904,6 +1220,175 @@ function SessionModal({
               ))}
             </div>
           </div>
+
+          {/* Dog — only when client has at least one dog. Click a chip to attach
+              that dog (or "No dog" to clear). Hidden in buddy-walk mode in
+              favour of the unified Attendees list below. */}
+          {!isBuddyWalk && clientId && clientDogs.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Dog</p>
+              <div className="flex gap-2 flex-wrap">
+                <button
+                  onClick={() => handleDogChange(null)}
+                  className={`text-xs font-medium px-3 py-1.5 rounded-full border transition-colors ${
+                    session.dogId == null
+                      ? 'bg-slate-800 text-white border-slate-800'
+                      : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'
+                  }`}
+                >
+                  No dog
+                </button>
+                {clientDogs.map(dog => (
+                  <button
+                    key={dog.id}
+                    onClick={() => handleDogChange(dog.id)}
+                    className={`text-xs font-medium px-3 py-1.5 rounded-full border transition-colors ${
+                      session.dogId === dog.id
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300'
+                    }`}
+                  >
+                    🐕 {dog.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Attendees — buddy-walk mode shows every client/dog attending in
+              one unified list (primary + buddies as equal-looking rows; the
+              primary just can't be removed). Reframes the mental model from
+              "owner + extras" to "group session". */}
+          {isBuddyWalk && clientId && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
+                  Attendees <span className="ml-1.5 text-slate-300">({attendees.length})</span>
+                </p>
+                {!showBuddyPicker && (
+                  <button
+                    onClick={() => { setShowBuddyPicker(true); setBuddyError(null) }}
+                    className="flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-lg bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors"
+                  >
+                    <Plus className="h-3 w-3" /> Add attendee
+                  </button>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-1 mb-2 rounded-lg bg-amber-50/60 border border-amber-100 divide-y divide-amber-100">
+                {attendees.map(a => (
+                  <div key={a.key} className="flex items-center gap-2 px-3 py-2">
+                    <span className="text-base flex-shrink-0">🐕</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-slate-900 truncate">
+                        {a.dogName ? <span className="font-medium">{a.dogName}</span> : <span className="text-slate-400 italic font-normal">No dog</span>}
+                      </p>
+                      <p className="text-xs text-slate-500 truncate">{a.clientName}</p>
+                    </div>
+                    {a.buddyId && (
+                      <button
+                        onClick={() => handleRemoveBuddy(a.buddyId!)}
+                        className="p-1 text-slate-300 hover:text-red-500 transition-colors flex-shrink-0"
+                        title="Remove from session"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Buddies — entry point for regular (non-buddy-walk) sessions.
+              Once a buddy is added the session becomes a buddy walk and the
+              Attendees view above takes over. */}
+          {!isBuddyWalk && clientId && !showBuddyPicker && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Buddies</p>
+                <button
+                  onClick={() => { setShowBuddyPicker(true); setBuddyError(null) }}
+                  className="flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
+                >
+                  <Plus className="h-3 w-3" /> Add buddy
+                </button>
+              </div>
+              <p className="text-xs text-slate-400">No buddies. Add another client + dog to turn this into a buddy walk.</p>
+            </div>
+          )}
+
+          {/* Shared add-buddy / add-attendee picker — works for both modes. */}
+          {clientId && showBuddyPicker && (
+            <div>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
+                {isBuddyWalk ? 'Add attendee' : 'Add buddy'}
+              </p>
+              <div className="border border-slate-200 rounded-xl p-3 flex flex-col gap-2.5">
+                {buddyError && <p className="text-xs text-red-500">{buddyError}</p>}
+                <div>
+                  <label className="text-[11px] font-medium text-slate-500 block mb-1">Client</label>
+                  <select
+                    value={buddyClientId}
+                    onChange={e => { setBuddyClientId(e.target.value); setBuddyDogId(null) }}
+                    className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Select client…</option>
+                    {buddyClientOptions.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                {buddyClientId && buddyClientDogs.length > 0 && (
+                  <div>
+                    <label className="text-[11px] font-medium text-slate-500 block mb-1">Dog (optional)</label>
+                    <div className="flex gap-1.5 flex-wrap">
+                      <button
+                        onClick={() => setBuddyDogId(null)}
+                        className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                          buddyDogId === null
+                            ? 'bg-slate-800 text-white border-slate-800'
+                            : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'
+                        }`}
+                      >
+                        No dog
+                      </button>
+                      {buddyClientDogs.map(dog => (
+                        <button
+                          key={dog.id}
+                          onClick={() => setBuddyDogId(dog.id)}
+                          className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                            buddyDogId === dog.id
+                              ? 'bg-blue-600 text-white border-blue-600'
+                              : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300'
+                          }`}
+                        >
+                          🐕 {dog.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className="flex gap-2 pt-1">
+                  <Button
+                    size="sm"
+                    onClick={handleAddBuddy}
+                    loading={savingBuddy}
+                    disabled={!buddyClientId}
+                  >
+                    Add
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => { setShowBuddyPicker(false); setBuddyClientId(''); setBuddyDogId(null); setBuddyError(null) }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* When */}
           <div className="flex flex-col gap-2.5 text-sm">
@@ -944,12 +1429,16 @@ function SessionModal({
             </div>
           )}
 
-          {/* Session report (forms) */}
-          <div className="border-t border-slate-100 pt-4">
-            <SessionFormReport sessionId={session.id} />
-          </div>
-
-          {/* Tasks */}
+          {/* Session report and Tasks are hidden in the schedule popup for
+              now — gated behind SHOW_REPORT_AND_TASKS so the wiring stays
+              intact. Both are still available on the full session page. */}
+          {SHOW_REPORT_AND_TASKS && (
+            <div className="border-t border-slate-100 pt-4">
+              <SessionFormReport sessionId={session.id} />
+            </div>
+          )}
+          {SHOW_REPORT_AND_TASKS && (
+          /* Tasks */
           <div className="border-t border-slate-100 pt-4">
             <div className="flex items-center justify-between mb-3">
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Tasks for this session</p>
@@ -1145,19 +1634,36 @@ function SessionModal({
               )
             })()}
           </div>
+          )}
         </div>
 
         {/* Footer */}
-        {clientId && (
-          <div className="flex-shrink-0 px-6 py-4 border-t border-slate-100 bg-slate-50">
+        <div className="flex-shrink-0 flex items-center justify-between gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50">
+          {clientId ? (
             <button
               onClick={() => router.push(`/clients/${clientId}`)}
               className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-700"
             >
               <ExternalLink className="h-4 w-4" /> View client profile
             </button>
-          </div>
-        )}
+          ) : <span />}
+          <button
+            disabled={deleting}
+            onClick={async () => {
+              if (!confirm('Delete this session? This cannot be undone.')) return
+              setDeleting(true)
+              try {
+                await onDelete(session.id)
+                onClose()
+              } finally {
+                setDeleting(false)
+              }
+            }}
+            className="flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-lg text-red-600 hover:text-red-700 hover:bg-red-50 disabled:opacity-50 transition-colors"
+          >
+            <Trash2 className="h-4 w-4" /> {deleting ? 'Deleting…' : 'Delete session'}
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -1183,6 +1689,10 @@ export function ScheduleView({
   selectedDate,
   today,
   googleCalendarConnected,
+  scheduleStartHour,
+  scheduleEndHour,
+  scheduleDays,
+  scheduleExtraFields,
 }: {
   sessions: Session[]
   availabilitySlots: AvailSlot[]
@@ -1191,7 +1701,14 @@ export function ScheduleView({
   selectedDate: string
   today: string
   googleCalendarConnected: boolean
+  scheduleStartHour: number
+  scheduleEndHour: number
+  scheduleDays: number[]   // 1=Mon..7=Sun
+  scheduleExtraFields: string[]
 }) {
+  const extraFields = scheduleExtraFields.filter(
+    (f): f is ExtraFieldId => f === 'location' || f === 'description' || f === 'sessionType' || f === 'duration' || f === 'title',
+  )
   const router = useRouter()
 
   // Default: week on desktop, day on mobile
@@ -1233,7 +1750,15 @@ export function ScheduleView({
   }, [initialSessions])
 
   const weekStart = getMondayOf(selectedDate)
-  const weekDays  = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
+  // Filter visible weekdays per trainer preference. JS getDay: 0=Sun..6=Sat;
+  // schema convention: 1=Mon..7=Sun. Convert and intersect.
+  const visibleDaySet = new Set(scheduleDays)
+  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
+    .filter(d => {
+      const js = d.getDay()
+      const iso = js === 0 ? 7 : js
+      return visibleDaySet.has(iso)
+    })
 
   const weekLabel = (() => {
     const end = addDays(weekStart, 6)
@@ -1291,6 +1816,10 @@ export function ScheduleView({
     setAvailSlots(prev => [...prev, slot])
   }
 
+  async function handleUpdateAvail(slot: AvailSlot) {
+    setAvailSlots(prev => prev.map(s => s.id === slot.id ? slot : s))
+  }
+
   async function handleDeleteAvail(id: string) {
     await fetch(`/api/availability/${id}`, { method: 'DELETE' })
     setAvailSlots(prev => prev.filter(s => s.id !== id))
@@ -1321,6 +1850,13 @@ export function ScheduleView({
             <Settings className="h-4 w-4" /> Availability
           </Button>
 
+          <ScheduleSettings
+            startHour={scheduleStartHour}
+            endHour={scheduleEndHour}
+            days={scheduleDays}
+            extraFields={extraFields}
+          />
+
           {/* Day/Week toggle */}
           <div className="flex p-0.5 bg-slate-100 rounded-xl gap-0.5">
             <button
@@ -1338,7 +1874,7 @@ export function ScheduleView({
           </div>
 
           <AssignPackageFromScheduleButton
-            clients={clients.map(c => ({ id: c.id, name: c.name }))}
+            clients={clients.map(c => ({ id: c.id, name: c.name, dogs: c.dogs }))}
             packages={packages}
             availability={availSlots}
           />
@@ -1393,6 +1929,9 @@ export function ScheduleView({
             onSessionClick={handleSessionClick}
             onSessionDrop={handleSessionDrop}
             onDeleteAvail={handleDeleteAvail}
+            startHour={scheduleStartHour}
+            endHour={scheduleEndHour}
+            extraFields={extraFields}
           />
         ) : (
           <DayList
@@ -1406,7 +1945,7 @@ export function ScheduleView({
       {/* ── Modals ───────────────────────────────────────────────────────────── */}
       {assignAt && (
         <AssignPackageFromScheduleModal
-          clients={clients.map(c => ({ id: c.id, name: c.name }))}
+          clients={clients.map(c => ({ id: c.id, name: c.name, dogs: c.dogs }))}
           packages={packages}
           availability={availSlots}
           defaultStartDate={assignAt.date}
@@ -1419,6 +1958,7 @@ export function ScheduleView({
         <AvailabilityManager
           slots={availSlots}
           onAdd={handleAddAvail}
+          onUpdate={handleUpdateAvail}
           onDelete={handleDeleteAvail}
           onClose={() => setShowAvail(false)}
         />
@@ -1433,6 +1973,7 @@ export function ScheduleView({
           onSessionsUpdate={(id, updates) =>
             setSessions(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s))
           }
+          onDelete={handleDeleteSession}
         />
       )}
     </div>

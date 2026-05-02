@@ -54,3 +54,31 @@ export async function POST(
 
   return NextResponse.json(completion)
 }
+
+export async function DELETE(
+  _req: Request,
+  { params }: { params: Promise<{ taskId: string }> }
+) {
+  const session = await auth()
+  if (!session || session.user.role !== 'CLIENT') {
+    return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+  }
+
+  const { taskId } = await params
+
+  const clientProfile = await prisma.clientProfile.findUnique({
+    where: { userId: session.user.id },
+    select: { id: true },
+  })
+  if (!clientProfile) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+
+  const task = await prisma.trainingTask.findFirst({
+    where: { id: taskId, clientId: clientProfile.id },
+    select: { id: true },
+  })
+  if (!task) return NextResponse.json({ error: 'Task not found' }, { status: 404 })
+
+  await prisma.taskCompletion.deleteMany({ where: { taskId } })
+
+  return NextResponse.json({ ok: true })
+}

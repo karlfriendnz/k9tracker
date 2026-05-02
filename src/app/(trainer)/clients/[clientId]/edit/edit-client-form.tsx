@@ -6,6 +6,7 @@ import { Card, CardBody } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
+import { DogPhotoUpload } from '@/components/shared/dog-photo-upload'
 
 type Tab = 'dogs' | 'details'
 
@@ -26,6 +27,7 @@ type Dog = {
   weight: string
   dob: string
   notes: string
+  photoUrl: string | null
   isPrimary: boolean
   isNew?: boolean
 }
@@ -110,7 +112,7 @@ export function EditClientForm({ clientId, initialName, initialDogs, customField
   }
 
   function addDog() {
-    const newDog: Dog = { id: null, name: '', breed: '', weight: '', dob: '', notes: '', isPrimary: false, isNew: true }
+    const newDog: Dog = { id: null, name: '', breed: '', weight: '', dob: '', notes: '', photoUrl: null, isPrimary: false, isNew: true }
     setDogs(prev => [...prev, newDog])
     setExpandedDog(dogs.length)
   }
@@ -286,6 +288,13 @@ export function EditClientForm({ clientId, initialName, initialDogs, customField
                       className="w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                     />
                   </div>
+
+                  <DogPhotoUpload
+                    dogId={dog.id}
+                    dogName={dog.name}
+                    initialPhotoUrl={dog.photoUrl}
+                    onChange={(url) => setDogs(prev => prev.map((d, idx) => idx === i ? { ...d, photoUrl: url } : d))}
+                  />
 
                   {/* Dog-specific custom fields */}
                   {dog.id && dogFields.length > 0 && (

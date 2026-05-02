@@ -43,7 +43,7 @@ export default async function EditClientPage({
     prisma.customFieldValue.findMany({ where: { clientId } }),
   ])
 
-  function dogToForm(d: { id: string; name: string; breed: string | null; weight: number | null; dob: Date | null; notes: string | null }, isPrimary: boolean) {
+  function dogToForm(d: { id: string; name: string; breed: string | null; weight: number | null; dob: Date | null; notes: string | null; photoUrl: string | null }, isPrimary: boolean) {
     return {
       id: d.id,
       name: d.name,
@@ -51,6 +51,7 @@ export default async function EditClientPage({
       weight: d.weight?.toString() ?? '',
       dob: d.dob ? d.dob.toISOString().split('T')[0] : '',
       notes: d.notes ?? '',
+      photoUrl: d.photoUrl,
       isPrimary,
     }
   }

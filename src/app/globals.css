@@ -26,3 +26,7 @@ button, a, [role="button"] {
   min-height: 44px;
   min-width: 44px;
 }
+
+/* Hide scrollbars on horizontal carousels while keeping the scroll behaviour */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }

@@ -6,7 +6,8 @@ import { z } from 'zod'
 const schema = z.object({
   name: z.string().min(1),
   description: z.string().optional().nullable(),
-  sessionCount: z.number().int().min(1).max(52),
+  // 0 = ongoing (no fixed end). The trainer picks an end date when assigning.
+  sessionCount: z.number().int().min(0).max(52),
   weeksBetween: z.number().int().min(0).max(52),
   durationMins: z.number().int().min(15).max(480),
   sessionType: z.enum(['IN_PERSON', 'VIRTUAL']).optional(),

@@ -7,6 +7,9 @@ const patchSchema = z.object({
   scheduledAt: z.string().optional(),
   durationMins: z.number().int().positive().optional(),
   status: z.enum(['UPCOMING', 'COMPLETED', 'COMMENTED', 'INVOICED']).optional(),
+  // null clears the dog. Empty string treated the same. Validated against the
+  // session's client below (must be a dog owned by that client).
+  dogId: z.string().nullable().optional(),
 })
 
 export async function GET(
@@ -69,12 +72,39 @@ export async function PATCH(
   })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
+  // If dogId is being set (not null/empty), confirm it belongs to the session's
+  // client. Without a client there's no household to attach a dog to.
+  let nextDogId: string | null | undefined = undefined
+  if ('dogId' in parsed.data) {
+    const raw = parsed.data.dogId
+    if (raw === null || raw === '') {
+      nextDogId = null
+    } else {
+      if (!existing.clientId) {
+        return NextResponse.json({ error: 'Session has no client to attach a dog to' }, { status: 400 })
+      }
+      const dog = await prisma.dog.findFirst({
+        where: {
+          id: raw,
+          OR: [
+            { primaryFor: { some: { id: existing.clientId } } },
+            { clientProfileId: existing.clientId },
+          ],
+        },
+        select: { id: true },
+      })
+      if (!dog) return NextResponse.json({ error: 'Dog not found for this client' }, { status: 400 })
+      nextDogId = dog.id
+    }
+  }
+
   const updated = await prisma.trainingSession.update({
     where: { id: sessionId },
     data: {
       ...(parsed.data.scheduledAt !== undefined && { scheduledAt: new Date(parsed.data.scheduledAt) }),
       ...(parsed.data.durationMins !== undefined && { durationMins: parsed.data.durationMins }),
       ...(parsed.data.status !== undefined && { status: parsed.data.status }),
+      ...(nextDogId !== undefined && { dogId: nextDogId }),
     },
   })
 

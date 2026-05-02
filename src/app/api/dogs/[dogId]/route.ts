@@ -50,13 +50,20 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ dogId
     where: { userId: session.user.id },
     select: { id: true, dogId: true },
   })
+  if (!clientProfile) return NextResponse.json({ error: 'Unauthorised' }, { status: 403 })
 
-  // Can only delete additional dogs (not the primary)
   const dog = await prisma.dog.findUnique({ where: { id: dogId }, select: { clientProfileId: true } })
-  if (!dog || dog.clientProfileId !== clientProfile?.id) {
+  if (!dog) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  const isPrimary = clientProfile.dogId === dogId
+  const isAdditional = dog.clientProfileId === clientProfile.id
+  if (!isPrimary && !isAdditional) {
     return NextResponse.json({ error: 'Unauthorised' }, { status: 403 })
   }
 
+  if (isPrimary) {
+    await prisma.clientProfile.update({ where: { id: clientProfile.id }, data: { dogId: null } })
+  }
   await prisma.dog.delete({ where: { id: dogId } })
   return NextResponse.json({ ok: true })
 }

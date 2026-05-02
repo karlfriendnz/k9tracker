@@ -23,6 +23,8 @@ const formSchema = z.object({
   description: z.string().nullable().optional(),
   introText: z.string().nullable().optional(),
   closingText: z.string().nullable().optional(),
+  backgroundColor: z.string().nullable().optional(),
+  backgroundUrl: z.string().url().nullable().optional().or(z.literal('')),
   questions: z.array(questionSchema).min(1).max(50),
 })
 
@@ -91,6 +93,8 @@ export async function POST(req: Request) {
       description: parsed.data.description ?? null,
       introText: parsed.data.introText ?? null,
       closingText: parsed.data.closingText ?? null,
+      backgroundColor: parsed.data.backgroundColor ?? null,
+      backgroundUrl: parsed.data.backgroundUrl || null,
       questions: parsed.data.questions,
       order: nextOrder,
     },

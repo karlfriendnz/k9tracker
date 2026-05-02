@@ -1,15 +1,16 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Alert } from '@/components/ui/alert'
-import { Package as PackageIcon, X, AlertTriangle } from 'lucide-react'
+import { Package as PackageIcon, X, AlertTriangle, ChevronDown, Check, Search } from 'lucide-react'
 import { findNextAvailable, type AvailabilityRow } from '@/lib/availability'
 
 interface ClientOption {
   id: string
   name: string
+  dogs?: { id: string; name: string }[]
 }
 
 interface PkgOption {
@@ -23,6 +24,12 @@ interface PkgOption {
 }
 
 const SLOT_SEARCH_DAYS = 60
+// Hard ceiling on sessions created in one assignment — matches the API's
+// `sessionDates` schema (max 52). Protects against runaway loops if an ongoing
+// package somehow ends up with a 0-week cadence.
+const ONGOING_MAX_SESSIONS = 52
+// Default end date offered for ongoing packages (12 weeks from start).
+const ONGOING_DEFAULT_WEEKS = 12
 
 export function AssignPackageFromScheduleButton({
   clients,
@@ -90,25 +97,53 @@ export function AssignPackageFromScheduleModal({
   const router = useRouter()
   const [clientId, setClientId] = useState(clients[0].id)
   const [packageId, setPackageId] = useState(packages[0].id)
+  // Dog defaults to the client's only dog when there's exactly one (the common
+  // case); null when the client has no dogs or multiple and no choice is made.
+  const clientDogs = clients.find(c => c.id === clientId)?.dogs ?? []
+  const [dogId, setDogId] = useState<string | null>(clientDogs.length === 1 ? clientDogs[0].id : null)
+  // Reset the dog whenever the chosen client changes.
+  useEffect(() => {
+    const dogs = clients.find(c => c.id === clientId)?.dogs ?? []
+    setDogId(dogs.length === 1 ? dogs[0].id : null)
+  }, [clientId, clients])
   const [startDate, setStartDate] = useState(() => defaultStartDate ?? defaultTomorrow())
   // Empty string = "auto-find via availability"; HH:MM = "pin session 1 here"
   const [startTime, setStartTime] = useState(() => defaultStartTime ?? '')
+  // Only used when the chosen package has sessionCount = 0 (ongoing). Defaults
+  // to ONGOING_DEFAULT_WEEKS after the start date and recomputes whenever the
+  // start date changes — see effect below.
+  const [endDate, setEndDate] = useState(() => addWeeksISO(defaultStartDate ?? defaultTomorrow(), ONGOING_DEFAULT_WEEKS))
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const pkg = packages.find(p => p.id === packageId)!
+  const isOngoing = pkg.sessionCount === 0
+
+  // Keep the end date a sensible distance ahead of the start date when the
+  // start moves past it. Leaves the user's chosen end date alone otherwise.
+  useEffect(() => {
+    setEndDate(prev => (prev < startDate ? addWeeksISO(startDate, ONGOING_DEFAULT_WEEKS) : prev))
+  }, [startDate])
 
   // Compute proposed session datetimes. Session 1 is either pinned to the
   // user-supplied time or auto-placed; sessions 2..N always availability-search
-  // forward by weeksBetween from the previous session.
+  // forward by weeksBetween from the previous session. Ongoing packages keep
+  // walking forward until either the end date or the safety cap is hit.
   const proposals = useMemo<({ at: Date | null })[]>(() => {
     const out: ({ at: Date | null })[] = []
     const start = parseDate(startDate)
-    if (!start) return Array.from({ length: pkg.sessionCount }, () => ({ at: null }))
+    if (!start) return isOngoing ? [] : Array.from({ length: pkg.sessionCount }, () => ({ at: null }))
+
+    const end = isOngoing ? parseDate(endDate) : null
+    // For ongoing packages, weeksBetween 0 would loop forever — clamp to 1.
+    const cadenceWeeks = isOngoing ? Math.max(1, pkg.weeksBetween) : pkg.weeksBetween
+    const limit = isOngoing ? ONGOING_MAX_SESSIONS : pkg.sessionCount
 
     let cursor: Date = start
 
-    for (let i = 0; i < pkg.sessionCount; i++) {
+    for (let i = 0; i < limit; i++) {
+      if (end && cursor > end) break
+
       let placed: Date | null
       if (i === 0 && startTime) {
         const [h, m] = startTime.split(':').map(Number)
@@ -117,19 +152,22 @@ export function AssignPackageFromScheduleModal({
       } else {
         placed = findNextAvailable(availability, cursor, pkg.durationMins, SLOT_SEARCH_DAYS)
       }
+      // Stop once we've walked past the end date — don't add a placeholder past it.
+      if (end && placed && placed > end) break
+      if (isOngoing && !placed) break
       out.push({ at: placed })
 
       const base = placed ?? cursor
       const next = new Date(base)
-      next.setDate(next.getDate() + pkg.weeksBetween * 7)
+      next.setDate(next.getDate() + cadenceWeeks * 7)
       cursor = next
     }
     return out
-  }, [availability, pkg, startDate, startTime])
+  }, [availability, pkg, startDate, startTime, endDate, isOngoing])
 
   const placedCount = proposals.filter(p => p.at !== null).length
-  const allPlaced = placedCount === pkg.sessionCount
-  const anyMissing = placedCount < pkg.sessionCount
+  const allPlaced = isOngoing ? placedCount > 0 : placedCount === pkg.sessionCount
+  const anyMissing = !isOngoing && placedCount < pkg.sessionCount
 
   async function handleSubmit() {
     if (placedCount === 0) {
@@ -146,7 +184,7 @@ export function AssignPackageFromScheduleModal({
     const res = await fetch(`/api/clients/${clientId}/packages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ packageId, sessionDates }),
+      body: JSON.stringify({ packageId, sessionDates, dogId }),
     })
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
@@ -174,15 +212,7 @@ export function AssignPackageFromScheduleModal({
 
           <div>
             <label className="text-sm font-medium text-slate-700 block mb-1.5">Client</label>
-            <select
-              value={clientId}
-              onChange={e => setClientId(e.target.value)}
-              className="h-12 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {clients.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
+            <ClientPicker clients={clients} value={clientId} onChange={setClientId} />
           </div>
 
           <div>
@@ -194,7 +224,7 @@ export function AssignPackageFromScheduleModal({
             >
               {packages.map(p => (
                 <option key={p.id} value={p.id}>
-                  {p.name} ({p.sessionCount} sessions, every {p.weeksBetween} wk)
+                  {p.name} ({p.sessionCount === 0 ? 'ongoing' : `${p.sessionCount} sessions`}, every {p.weeksBetween} wk)
                 </option>
               ))}
             </select>
@@ -202,6 +232,41 @@ export function AssignPackageFromScheduleModal({
               <p className="text-xs text-slate-500 mt-1.5">{pkg.description}</p>
             )}
           </div>
+
+          {clientDogs.length > 0 && (
+            <div>
+              <label className="text-sm font-medium text-slate-700 block mb-1.5">
+                Dog {clientDogs.length === 1 && <span className="text-slate-400 font-normal">(only dog auto-selected)</span>}
+              </label>
+              <div className="flex gap-1.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setDogId(null)}
+                  className={`text-sm px-3 py-1.5 rounded-full border transition-colors ${
+                    dogId === null
+                      ? 'bg-slate-800 text-white border-slate-800'
+                      : 'bg-white text-slate-600 border-slate-200 hover:border-slate-400'
+                  }`}
+                >
+                  No dog
+                </button>
+                {clientDogs.map(d => (
+                  <button
+                    key={d.id}
+                    type="button"
+                    onClick={() => setDogId(d.id)}
+                    className={`text-sm px-3 py-1.5 rounded-full border transition-colors ${
+                      dogId === d.id
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300'
+                    }`}
+                  >
+                    🐕 {d.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="flex gap-3">
             <div className="flex-1">
@@ -231,6 +296,22 @@ export function AssignPackageFromScheduleModal({
               : 'Each session is auto-placed in your next available slot from this day onward.'}
           </p>
 
+          {isOngoing && (
+            <div>
+              <label className="text-sm font-medium text-slate-700 block mb-1.5">End date</label>
+              <input
+                type="date"
+                value={endDate}
+                min={startDate}
+                onChange={e => setEndDate(e.target.value)}
+                className="h-12 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <p className="text-[11px] text-slate-400 mt-1">
+                Ongoing package — sessions repeat every {Math.max(1, pkg.weeksBetween)} week{Math.max(1, pkg.weeksBetween) > 1 ? 's' : ''} until this date.
+              </p>
+            </div>
+          )}
+
           <div>
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
               Proposed sessions
@@ -245,7 +326,7 @@ export function AssignPackageFromScheduleModal({
                 >
                   <span className="text-slate-600 flex items-center gap-1.5">
                     {!p.at && <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />}
-                    Session {i + 1}/{pkg.sessionCount}
+                    Session {i + 1}{isOngoing ? '' : `/${pkg.sessionCount}`}
                   </span>
                   {p.at ? (
                     <span className="text-slate-900 font-medium">
@@ -265,6 +346,16 @@ export function AssignPackageFromScheduleModal({
               <p className="text-[11px] text-amber-700 mt-2">
                 {pkg.sessionCount - placedCount} of {pkg.sessionCount} sessions could not be placed.
                 {' '}They will be skipped — add availability slots in the schedule first to include them.
+              </p>
+            )}
+            {isOngoing && proposals.length === 0 && (
+              <p className="text-[11px] text-amber-700 mt-2">
+                No availability between the start and end dates — add availability slots first.
+              </p>
+            )}
+            {isOngoing && proposals.length === ONGOING_MAX_SESSIONS && (
+              <p className="text-[11px] text-slate-400 mt-2">
+                Capped at {ONGOING_MAX_SESSIONS} sessions per assignment — assign again to extend further.
               </p>
             )}
             <p className="text-[11px] text-slate-400 mt-1">
@@ -299,10 +390,143 @@ function defaultTomorrow(): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
+function addWeeksISO(dateStr: string, weeks: number): string {
+  const d = parseDate(dateStr) ?? new Date()
+  d.setDate(d.getDate() + weeks * 7)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
 function parseDate(s: string): Date | null {
   if (!s) return null
   const [y, m, d] = s.split('-').map(Number)
   if (!y || !m || !d) return null
   // Build at noon to avoid timezone-shift bugs spilling into the previous day
   return new Date(y, m - 1, d, 12, 0, 0)
+}
+
+// Custom client picker — replaces the native <select> so each option can show
+// the client's dogs as inline pills. Includes a search box that filters by
+// client name or dog name. No keyboard nav (Tab/Enter only); plenty for a
+// trainer's roster of 50–100 clients.
+function ClientPicker({
+  clients,
+  value,
+  onChange,
+}: {
+  clients: ClientOption[]
+  value: string
+  onChange: (id: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const selected = clients.find(c => c.id === value)
+
+  // Close on outside click. Mousedown rather than click so we beat the next
+  // focus shift.
+  useEffect(() => {
+    if (!open) return
+    function handle(e: MouseEvent) {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handle)
+    return () => document.removeEventListener('mousedown', handle)
+  }, [open])
+
+  // Reset the query whenever the panel closes so the next open starts fresh.
+  useEffect(() => {
+    if (!open) setQuery('')
+  }, [open])
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return clients
+    return clients.filter(c => {
+      if (c.name.toLowerCase().includes(q)) return true
+      return (c.dogs ?? []).some(d => d.name.toLowerCase().includes(q))
+    })
+  }, [clients, query])
+
+  return (
+    <div className="relative" ref={wrapRef}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="min-h-12 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center gap-2"
+      >
+        <div className="flex-1 min-w-0">
+          {selected ? (
+            (() => {
+              const dogs = selected.dogs ?? []
+              if (dogs.length === 0) {
+                return <span className="font-medium text-slate-900 truncate block">{selected.name}</span>
+              }
+              return (
+                <div>
+                  <p className="font-semibold text-slate-900 truncate leading-tight">
+                    🐕 {dogs.map(d => d.name).join(', ')}
+                  </p>
+                  <p className="text-xs text-slate-500 truncate leading-tight mt-0.5">{selected.name}</p>
+                </div>
+              )
+            })()
+          ) : (
+            <span className="text-slate-400">Select client…</span>
+          )}
+        </div>
+        <ChevronDown className={`h-4 w-4 text-slate-400 flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden flex flex-col max-h-72">
+          <div className="p-2 border-b border-slate-100 flex items-center gap-2">
+            <Search className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+            <input
+              autoFocus
+              type="text"
+              placeholder="Search clients or dogs…"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              className="flex-1 text-sm bg-transparent outline-none placeholder:text-slate-400"
+            />
+          </div>
+          <div className="overflow-y-auto">
+            {filtered.length === 0 ? (
+              <p className="text-xs text-slate-400 px-3 py-3">No matches.</p>
+            ) : filtered.map(c => {
+              const isSelected = c.id === value
+              const dogs = c.dogs ?? []
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => { onChange(c.id); setOpen(false) }}
+                  className={`w-full text-left px-3 py-2 hover:bg-slate-50 transition-colors flex items-start gap-2 ${
+                    isSelected ? 'bg-blue-50/50' : ''
+                  }`}
+                >
+                  <div className="flex-1 min-w-0">
+                    {dogs.length > 0 ? (
+                      <>
+                        <p className={`text-sm truncate leading-tight ${isSelected ? 'font-semibold text-blue-900' : 'font-semibold text-slate-900'}`}>
+                          🐕 {dogs.map(d => d.name).join(', ')}
+                        </p>
+                        <p className="text-xs text-slate-500 truncate leading-tight mt-0.5">{c.name}</p>
+                      </>
+                    ) : (
+                      <p className={`text-sm truncate ${isSelected ? 'font-semibold text-blue-900' : 'font-medium text-slate-800'}`}>
+                        {c.name}
+                      </p>
+                    )}
+                  </div>
+                  {isSelected && <Check className="h-4 w-4 text-blue-600 flex-shrink-0 mt-0.5" />}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }

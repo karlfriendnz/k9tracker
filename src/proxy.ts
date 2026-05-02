@@ -15,10 +15,11 @@ const PUBLIC_PATHS = [
 const TRAINER_PATHS = [
   '/dashboard', '/clients', '/schedule', '/templates', '/library',
   '/progress', '/messages', '/ai-tools', '/settings', '/help', '/forms',
+  '/packages', '/products',
 ]
 
 // Client-only route prefixes
-const CLIENT_PATHS = ['/my-profile', '/my-messages', '/my-help', '/notifications']
+const CLIENT_PATHS = ['/home', '/my-profile', '/my-messages', '/my-help', '/my-sessions', '/my-shop', '/notifications']
 
 export default auth((req) => {
   const { pathname } = req.nextUrl
@@ -36,7 +37,7 @@ export default auth((req) => {
     // Root redirect by role
     if (pathname === '/') {
       if (role === 'ADMIN') return NextResponse.redirect(new URL('/admin', req.url))
-      if (role === 'CLIENT') return NextResponse.redirect(new URL('/my-profile', req.url))
+      if (role === 'CLIENT') return NextResponse.redirect(new URL('/home', req.url))
       return NextResponse.redirect(new URL('/dashboard', req.url))
     }
 
@@ -47,13 +48,13 @@ export default auth((req) => {
 
     // Non-admin trying to access /admin
     if (pathname.startsWith('/admin') && role !== 'ADMIN') {
-      if (role === 'CLIENT') return NextResponse.redirect(new URL('/my-profile', req.url))
+      if (role === 'CLIENT') return NextResponse.redirect(new URL('/home', req.url))
       return NextResponse.redirect(new URL('/dashboard', req.url))
     }
 
     // Client trying to access trainer paths
     if (role === 'CLIENT' && TRAINER_PATHS.some(p => pathname.startsWith(p))) {
-      return NextResponse.redirect(new URL('/my-profile', req.url))
+      return NextResponse.redirect(new URL('/home', req.url))
     }
 
     // Trainer trying to access client paths

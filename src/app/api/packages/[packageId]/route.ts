@@ -6,7 +6,7 @@ import { z } from 'zod'
 const updateSchema = z.object({
   name: z.string().min(1).optional(),
   description: z.string().nullable().optional(),
-  sessionCount: z.number().int().min(1).max(52).optional(),
+  sessionCount: z.number().int().min(0).max(52).optional(),
   weeksBetween: z.number().int().min(0).max(52).optional(),
   durationMins: z.number().int().min(15).max(480).optional(),
   sessionType: z.enum(['IN_PERSON', 'VIRTUAL']).optional(),

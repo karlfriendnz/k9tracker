@@ -52,6 +52,17 @@ enum CustomFieldType {
   DROPDOWN
 }
 
+enum ProductKind {
+  PHYSICAL
+  DIGITAL
+}
+
+enum ProductRequestStatus {
+  PENDING    // client wants this, hasn't been delivered yet
+  FULFILLED  // trainer marked it delivered (linked to a session)
+  CANCELLED  // client withdrew the request, or trainer dismissed it
+}
+
 // ─── Core User ───────────────────────────────────────────────────────────────
 
 model User {
@@ -135,11 +146,24 @@ model TrainerProfile {
   businessName    String
   phone           String?
   logoUrl         String?
+  dashboardBgUrl  String? // background image shown on the client home dashboard
   inviteTemplate  String? @db.Text // customisable invite email template
 
   // Google Calendar integration
   googleCalendarRefreshToken String? @db.Text
   googleCalendarConnected    Boolean @default(false)
+
+  // Schedule view preferences — controls the visible hour range and which
+  // weekdays render in the week grid. Days are 1=Mon..7=Sun.
+  scheduleStartHour Int  @default(7)   // inclusive
+  scheduleEndHour   Int  @default(21)  // exclusive (last hour shown is end-1)
+  scheduleDays      Json @default("[1,2,3,4,5,6,7]")
+  // Up to 2 extra fields rendered on schedule blocks. Allowed ids:
+  // "location" | "description" | "sessionType" | "duration" | "title"
+  scheduleExtraFields Json @default("[]")
+  // Trainer-chosen visible columns on /clients. Allowed ids:
+  // "email" | "dog" | "extraDogs" | "nextSession" | "compliance" | "shared"
+  clientListColumns Json @default("[\"email\",\"dog\",\"nextSession\",\"compliance\"]")
 
   // Subscription
   subscriptionPlanId String?
@@ -162,6 +186,7 @@ model TrainerProfile {
   availabilitySlots  AvailabilitySlot[]
   packages           Package[]
   sessionForms       SessionForm[]
+  products           Product[]
 
   @@map("trainer_profiles")
 }
@@ -190,6 +215,8 @@ model ClientProfile {
   dogs              Dog[]              @relation("AdditionalDogs")
   notifications     ClientNotification[]
   clientPackages    ClientPackage[]
+  productRequests   ProductRequest[]
+  buddySessions     SessionBuddy[]
 
   @@index([trainerId])
   @@map("client_profiles")
@@ -212,6 +239,7 @@ model Dog {
   owner      ClientProfile?   @relation("AdditionalDogs", fields: [clientProfileId], references: [id])
   sessions   TrainingSession[]
   tasks      TrainingTask[]
+  buddySessions SessionBuddy[]
 
   @@index([clientProfileId])
   @@map("dogs")
@@ -308,12 +336,94 @@ model TrainingSession {
   clientPackage ClientPackage? @relation(fields: [clientPackageId], references: [id], onDelete: SetNull)
   tasks   TrainingTask[]
   formResponses SessionFormResponse[]
+  fulfilledProductRequests ProductRequest[]
+  buddies SessionBuddy[]
 
   @@index([trainerId])
   @@index([clientId])
   @@index([scheduledAt])
   @@index([clientPackageId])
   @@map("training_sessions")
+}
+
+// "Buddy session" — additional client/dog pairs attending a TrainingSession
+// alongside the primary client/dog. Trainer-only visibility (the buddy client's
+// portal does not surface these). Same client may appear twice with two
+// different dogs, so the unique key includes dogId.
+model SessionBuddy {
+  id        String   @id @default(cuid())
+  sessionId String
+  clientId  String
+  dogId     String?
+  createdAt DateTime @default(now())
+
+  session TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  client  ClientProfile   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  dog     Dog?            @relation(fields: [dogId], references: [id], onDelete: SetNull)
+
+  @@unique([sessionId, clientId, dogId])
+  @@index([sessionId])
+  @@index([clientId])
+  @@map("session_buddies")
+}
+
+// ─── Products (trainer shop) ─────────────────────────────────────────────────
+
+model Product {
+  id          String      @id @default(cuid())
+  trainerId   String
+  name        String
+  description String?     @db.Text
+  kind        ProductKind @default(PHYSICAL)
+  // Price in cents to avoid float issues. Null = unpriced / "Contact trainer".
+  priceCents  Int?
+  imageUrl    String?
+  // Required for DIGITAL products — the file the customer downloads. Public URL
+  // (e.g. Vercel Blob) or signed URL handed out at access time.
+  downloadUrl String?
+  category    String?     // free-form trainer-defined grouping ("Treats", "Guides")
+  featured    Boolean     @default(false) // surfaces on the client home dashboard
+  active      Boolean     @default(true)  // hide from clients without deleting
+  order       Int         @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  trainer  TrainerProfile   @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  requests ProductRequest[]
+
+  @@index([trainerId])
+  @@index([category])
+  @@map("products")
+}
+
+// A client's standing request for a product. Stays PENDING and rolls forward
+// onto each successive upcoming session until the trainer marks it FULFILLED
+// (typically because they handed the item over at a session) or CANCELLED.
+model ProductRequest {
+  id        String                @id @default(cuid())
+  clientId  String
+  productId String
+  status    ProductRequestStatus  @default(PENDING)
+
+  // Optional notes from the client when they request (e.g. "for Bella, size L")
+  note String? @db.Text
+
+  // Set when trainer fulfils the request — links it to the session where it
+  // was delivered, for the trainer's own records.
+  fulfilledSessionId String?
+  fulfilledAt        DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  client            ClientProfile   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  product           Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  fulfilledSession  TrainingSession? @relation(fields: [fulfilledSessionId], references: [id], onDelete: SetNull)
+
+  @@index([clientId, status])
+  @@index([productId])
+  @@map("product_requests")
 }
 
 // ─── Packages ─────────────────────────────────────────────────────────────────
@@ -372,6 +482,10 @@ model SessionForm {
   description String?  @db.Text
   introText   String?  @db.Text   // shown above the questions during fill + on the report
   closingText String?  @db.Text   // shown below the questions during fill + on the report
+  // Visual treatment for the client-facing report. backgroundUrl wins over
+  // backgroundColor when both are set.
+  backgroundColor String? // hex/CSS colour, e.g. "#fef3c7"
+  backgroundUrl   String? // public image URL, applied as a tiled cover
   questions   Json     @default("[]")
   order       Int      @default(0)
 

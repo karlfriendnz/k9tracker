@@ -7,7 +7,14 @@ const patchSchema = z.object({
   businessName: z.string().min(2).optional(),
   phone: z.string().optional(),
   logoUrl: z.string().url().optional().or(z.literal('')),
+  dashboardBgUrl: z.string().url().optional().or(z.literal('')),
   inviteTemplate: z.string().optional(),
+  // Schedule view prefs. Hours 0–23, days 1=Mon..7=Sun, end > start.
+  scheduleStartHour: z.number().int().min(0).max(23).optional(),
+  scheduleEndHour: z.number().int().min(1).max(24).optional(),
+  scheduleDays: z.array(z.number().int().min(1).max(7)).min(1).max(7).optional(),
+  scheduleExtraFields: z.array(z.enum(['location', 'description', 'sessionType', 'duration', 'title'])).max(2).optional(),
+  clientListColumns: z.array(z.enum(['email', 'dog', 'extraDogs', 'nextSession', 'compliance', 'shared'])).optional(),
 })
 
 export async function GET() {

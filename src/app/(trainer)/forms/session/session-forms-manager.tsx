@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardBody } from '@/components/ui/card'
 import { Alert } from '@/components/ui/alert'
 import { Plus, Pencil, Trash2, X, FileText, GripVertical, ChevronUp, ChevronDown, Link2 } from 'lucide-react'
+import { ImageUploadButton } from '@/components/image-uploader'
 
 export type QuestionType = 'SHORT_TEXT' | 'LONG_TEXT' | 'NUMBER' | 'RATING_1_5' | 'CUSTOM_FIELD'
 
@@ -26,6 +27,8 @@ interface FormRow {
   description: string | null
   introText: string | null
   closingText: string | null
+  backgroundColor: string | null
+  backgroundUrl: string | null
   questions: Question[]
   responses: number
 }
@@ -148,6 +151,8 @@ function FormEditorModal({
   const [description, setDescription] = useState(existing?.description ?? '')
   const [introText, setIntroText] = useState(existing?.introText ?? '')
   const [closingText, setClosingText] = useState(existing?.closingText ?? '')
+  const [backgroundColor, setBackgroundColor] = useState(existing?.backgroundColor ?? '')
+  const [backgroundUrl, setBackgroundUrl] = useState(existing?.backgroundUrl ?? '')
   const [questions, setQuestions] = useState<Question[]>(
     existing?.questions ?? [{ id: cryptoId(), type: 'LONG_TEXT', label: '', required: false }]
   )
@@ -214,6 +219,8 @@ function FormEditorModal({
         description: description.trim() || null,
         introText: introText.trim() || null,
         closingText: closingText.trim() || null,
+        backgroundColor: backgroundColor.trim() || null,
+        backgroundUrl: backgroundUrl.trim() || null,
         questions: questions.map(q =>
           q.type === 'CUSTOM_FIELD'
             ? { id: q.id, type: q.type, customFieldId: q.customFieldId, required: q.required }
@@ -233,6 +240,8 @@ function FormEditorModal({
       description: saved.description,
       introText: saved.introText ?? null,
       closingText: saved.closingText ?? null,
+      backgroundColor: saved.backgroundColor ?? null,
+      backgroundUrl: saved.backgroundUrl ?? null,
       questions: saved.questions,
       responses: existing?.responses ?? 0,
     }, !existing)
@@ -296,6 +305,58 @@ function FormEditorModal({
               placeholder="e.g. See you next time! Reach out anytime if questions come up."
               className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+          </div>
+
+          {/* Report background — colour wins when both blank, image takes
+              priority on the report when set. Trainer can either upload an
+              image (uses the same /api/upload/image route as session photos)
+              or paste a URL of their own. */}
+          <div>
+            <label className="text-sm font-medium text-slate-700 block mb-1.5">Report background (optional)</label>
+            <p className="text-[11px] text-slate-400 mb-1.5">Shown across the client-facing report. Image overrides colour when both are set.</p>
+            <div className="flex gap-2 items-center">
+              <input
+                type="color"
+                value={backgroundColor || '#ffffff'}
+                onChange={e => setBackgroundColor(e.target.value)}
+                aria-label="Background colour"
+                className="h-10 w-12 rounded-lg border border-slate-200 cursor-pointer"
+              />
+              <input
+                type="text"
+                value={backgroundColor}
+                onChange={e => setBackgroundColor(e.target.value)}
+                placeholder="#fef3c7 or blank"
+                className="h-10 w-28 rounded-xl border border-slate-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <input
+                type="url"
+                value={backgroundUrl}
+                onChange={e => setBackgroundUrl(e.target.value)}
+                placeholder="https://… or upload"
+                className="h-10 flex-1 rounded-xl border border-slate-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <ImageUploadButton
+                onUploaded={(urls) => urls[0] && setBackgroundUrl(urls[0])}
+              />
+            </div>
+            {backgroundUrl && (
+              <div className="mt-2 flex items-center gap-2">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={backgroundUrl}
+                  alt=""
+                  className="h-16 w-24 rounded-lg object-cover border border-slate-200"
+                />
+                <button
+                  type="button"
+                  onClick={() => setBackgroundUrl('')}
+                  className="text-xs font-medium text-slate-500 hover:text-red-500"
+                >
+                  Remove image
+                </button>
+              </div>
+            )}
           </div>
 
           <div>

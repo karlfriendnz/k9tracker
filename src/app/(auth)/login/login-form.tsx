@@ -49,7 +49,7 @@ export function LoginForm({ error, callbackUrl }: { error?: string; callbackUrl?
     await signIn('resend', {
       email: data.email,
       redirect: false,
-      callbackUrl: callbackUrl ?? '/my-profile',
+      callbackUrl: callbackUrl ?? '/home',
     })
     setMagicLinkSent(true)
   }

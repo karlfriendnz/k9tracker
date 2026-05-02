@@ -27,7 +27,7 @@ export function AcceptInviteButton({ token, email }: { token: string; email: str
     }
 
     // Token verified — send a magic link so the client can sign in
-    await signIn('resend', { email, callbackUrl: '/my-profile', redirect: false })
+    await signIn('resend', { email, callbackUrl: '/home', redirect: false })
 
     // Redirect to verify-email page
     window.location.href = '/verify-email'

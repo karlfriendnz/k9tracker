@@ -43,6 +43,8 @@ export default async function SessionFormsPage() {
           description: f.description,
           introText: f.introText,
           closingText: f.closingText,
+          backgroundColor: f.backgroundColor,
+          backgroundUrl: f.backgroundUrl,
           questions: Array.isArray(f.questions) ? f.questions as unknown as Question[] : [],
           responses: f._count.responses,
         }))}
