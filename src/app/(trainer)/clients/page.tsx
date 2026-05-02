@@ -22,11 +22,12 @@ export default async function ClientsPage({
 
   const trainerProfile = await prisma.trainerProfile.findUnique({
     where: { id: trainerId },
-    select: { clientListColumns: true },
+    select: { clientListColumns: true, clientListGroupBy: true },
   })
   const clientListColumns = Array.isArray(trainerProfile?.clientListColumns)
     ? trainerProfile.clientListColumns as string[]
     : ['email', 'dog', 'nextSession', 'compliance']
+  const clientListGroupBy = trainerProfile?.clientListGroupBy ?? null
 
   const sp = await searchParams
   const tab = sp.tab === 'inactive' ? 'inactive' : sp.tab === 'new' ? 'new' : 'active'
@@ -139,10 +140,17 @@ export default async function ClientsPage({
     select: { id: true, label: true, appliesTo: true },
     orderBy: [{ category: 'asc' }, { order: 'asc' }, { label: 'asc' }],
   })
-  const selectedCustomIds = clientListColumns
-    .filter(c => c.startsWith('custom:'))
-    .map(c => c.slice('custom:'.length))
-    .filter(id => customFields.some(f => f.id === id))
+  // Fields whose values we need: any selected as a column AND the field
+  // currently used for grouping (if any). Deduplicate.
+  const selectedCustomIdsSet = new Set<string>(
+    clientListColumns
+      .filter(c => c.startsWith('custom:'))
+      .map(c => c.slice('custom:'.length)),
+  )
+  if (clientListGroupBy?.startsWith('custom:')) {
+    selectedCustomIdsSet.add(clientListGroupBy.slice('custom:'.length))
+  }
+  const selectedCustomIds = Array.from(selectedCustomIdsSet).filter(id => customFields.some(f => f.id === id))
   const customValues = (selectedCustomIds.length > 0 && allClientIds.length > 0)
     ? await prisma.customFieldValue.findMany({
         where: { fieldId: { in: selectedCustomIds }, clientId: { in: allClientIds } },
@@ -230,6 +238,7 @@ export default async function ClientsPage({
         columns={clientListColumns}
         customFields={customFields}
         customValues={customValueMap}
+        groupBy={clientListGroupBy}
       />
     </div>
   )

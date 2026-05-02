@@ -8,11 +8,12 @@ import { Card } from '@/components/ui/card'
 import { UserPlus, Search, Dog, Calendar, Columns3, X, Check } from 'lucide-react'
 import { getInitials } from '@/lib/utils'
 
-type BuiltinColumnId = 'email' | 'dog' | 'extraDogs' | 'nextSession' | 'compliance' | 'shared'
+type BuiltinColumnId = 'email' | 'dog' | 'breed' | 'extraDogs' | 'nextSession' | 'compliance' | 'shared'
 
 const BUILTIN_OPTIONS: { id: BuiltinColumnId; label: string }[] = [
   { id: 'email',       label: 'Email' },
   { id: 'dog',         label: 'Primary dog' },
+  { id: 'breed',       label: 'Breed' },
   { id: 'extraDogs',   label: 'Additional dogs' },
   { id: 'nextSession', label: 'Next session' },
   { id: 'compliance',  label: '7-day compliance' },
@@ -24,6 +25,8 @@ const BUILTIN_IDS = BUILTIN_OPTIONS.map(o => o.id) as BuiltinColumnId[]
 function isBuiltinId(value: string): value is BuiltinColumnId {
   return (BUILTIN_IDS as string[]).includes(value)
 }
+
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
 interface CustomFieldMeta {
   id: string
@@ -50,13 +53,15 @@ interface Props {
   columns: string[]
   customFields: CustomFieldMeta[]
   customValues: Record<string, string>  // key: `${clientId}:${fieldId}`
+  groupBy: string | null
 }
 
-export function ClientsList({ clients, tab, columns, customFields, customValues }: Props) {
+export function ClientsList({ clients, tab, columns, customFields, customValues, groupBy }: Props) {
   const validCustomIds = new Set(customFields.map(f => f.id))
   const initial = columns.filter(c => isBuiltinId(c) || (c.startsWith('custom:') && validCustomIds.has(c.slice(7))))
   const [visible, setVisible] = useState<Set<string>>(new Set(initial))
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [groupKey, setGroupKey] = useState<string>(groupBy ?? '')
   const router = useRouter()
   const [savingCols, setSavingCols] = useState(false)
 
@@ -86,6 +91,18 @@ export function ClientsList({ clients, tab, columns, customFields, customValues 
     })
   }
 
+  function changeGroupBy(value: string) {
+    setGroupKey(value)
+    setSavingCols(true)
+    fetch('/api/trainer/profile', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clientListGroupBy: value === '' ? null : value }),
+    })
+      .then(() => router.refresh())
+      .finally(() => setSavingCols(false))
+  }
+
   // Live (uncontrolled-feel) wildcard filter — every keystroke filters in JS,
   // no network round-trip. Splits on whitespace so "fido smith" matches a row
   // where one token is in the dog name and the other in the owner name.
@@ -108,7 +125,7 @@ export function ClientsList({ clients, tab, columns, customFields, customValues 
 
   return (
     <>
-      {/* Live search + column picker */}
+      {/* Live search + group + column picker */}
       <div className="flex items-center gap-2 mb-6">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -120,6 +137,23 @@ export function ClientsList({ clients, tab, columns, customFields, customValues 
             className="w-full h-11 pl-10 pr-4 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
+        <select
+          value={groupKey}
+          onChange={e => changeGroupBy(e.target.value)}
+          disabled={savingCols}
+          className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          aria-label="Group clients"
+        >
+          <option value="">No grouping</option>
+          <option value="nextDay">Day of next booking</option>
+          {customFields.length > 0 && (
+            <optgroup label="Custom fields">
+              {customFields.map(f => (
+                <option key={f.id} value={`custom:${f.id}`}>{f.label}</option>
+              ))}
+            </optgroup>
+          )}
+        </select>
         <div className="relative">
           <button
             type="button"
@@ -198,6 +232,7 @@ export function ClientsList({ clients, tab, columns, customFields, customValues 
           visible={visible}
           customFields={customFields}
           customValues={customValues}
+          groupBy={groupKey || null}
         />
       )}
     </>
@@ -234,12 +269,20 @@ function buildDataColumns(
     cols.push({
       key: 'dog',
       label: 'Primary dog',
-      width: 'minmax(120px, 1.2fr)',
+      width: 'minmax(100px, 1fr)',
       render: c => (
         <span className="truncate text-slate-700">
-          {c.dogName ? <>🐕 {c.dogName}{c.dogBreed ? <span className="text-slate-400"> · {c.dogBreed}</span> : null}</> : <span className="text-slate-400 italic">No dog</span>}
+          {c.dogName ? <>🐕 {c.dogName}</> : <span className="text-slate-400 italic">No dog</span>}
         </span>
       ),
+    })
+  }
+  if (visible.has('breed')) {
+    cols.push({
+      key: 'breed',
+      label: 'Breed',
+      width: 'minmax(100px, 1fr)',
+      render: c => c.dogBreed ? <span className="truncate text-slate-600">{c.dogBreed}</span> : <span className="text-slate-300">—</span>,
     })
   }
   if (visible.has('extraDogs')) {
@@ -301,16 +344,50 @@ function buildDataColumns(
   return cols
 }
 
-function ClientTable({ clients, tab, visible, customFields, customValues }: {
+function groupKeyFor(client: ClientRow, groupBy: string | null, customValues: Record<string, string>): { key: string; label: string; sort: number } {
+  if (!groupBy) return { key: '', label: '', sort: 0 }
+  if (groupBy === 'nextDay') {
+    if (!client.nextSessionAt) return { key: 'none', label: 'No upcoming booking', sort: 8 }
+    const day = new Date(client.nextSessionAt).getDay()  // 0=Sun..6=Sat
+    // Sort Mon..Sun (Mon first); push Sun to the end of the week.
+    const weekIdx = day === 0 ? 6 : day - 1
+    return { key: `day:${day}`, label: DAY_NAMES[day], sort: weekIdx }
+  }
+  if (groupBy.startsWith('custom:')) {
+    const fid = groupBy.slice('custom:'.length)
+    const value = customValues[`${client.id}:${fid}`] ?? ''
+    if (!value) return { key: 'none', label: 'Not set', sort: 9999 }
+    return { key: `v:${value}`, label: value, sort: 0 }
+  }
+  return { key: '', label: '', sort: 0 }
+}
+
+function ClientTable({ clients, tab, visible, customFields, customValues, groupBy }: {
   clients: ClientRow[]
   tab: Props['tab']
   visible: Set<string>
   customFields: CustomFieldMeta[]
   customValues: Record<string, string>
+  groupBy: string | null
 }) {
   const dataColumns = buildDataColumns(visible, customFields, customValues)
   // Identity column (avatar+name) is always present and gets generous space.
   const gridTemplate = `minmax(220px, 1.6fr) ${dataColumns.map(c => c.width).join(' ')}`.trim()
+
+  const groups = (() => {
+    if (!groupBy) return [{ key: '', label: '', sort: 0, rows: clients }]
+    const map = new Map<string, { key: string; label: string; sort: number; rows: ClientRow[] }>()
+    for (const c of clients) {
+      const g = groupKeyFor(c, groupBy, customValues)
+      const bucket = map.get(g.key)
+      if (bucket) {
+        bucket.rows.push(c)
+      } else {
+        map.set(g.key, { key: g.key, label: g.label, sort: g.sort, rows: [c] })
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.sort - b.sort || a.label.localeCompare(b.label))
+  })()
 
   return (
     <>
@@ -328,15 +405,25 @@ function ClientTable({ clients, tab, visible, customFields, customValues }: {
       )}
 
       <div className="flex flex-col gap-2">
-        {clients.map(c => (
-          <ClientRowCard
-            key={c.id}
-            client={c}
-            tab={tab}
-            visible={visible}
-            dataColumns={dataColumns}
-            gridTemplate={gridTemplate}
-          />
+        {groups.map(group => (
+          <div key={group.key || 'all'} className="flex flex-col gap-2">
+            {groupBy && (
+              <div className="flex items-baseline gap-2 mt-2 first:mt-0">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">{group.label}</h3>
+                <span className="text-[11px] text-slate-400">{group.rows.length}</span>
+              </div>
+            )}
+            {group.rows.map(c => (
+              <ClientRowCard
+                key={c.id}
+                client={c}
+                tab={tab}
+                visible={visible}
+                dataColumns={dataColumns}
+                gridTemplate={gridTemplate}
+              />
+            ))}
+          </div>
         ))}
       </div>
     </>

@@ -162,8 +162,11 @@ model TrainerProfile {
   // "location" | "description" | "sessionType" | "duration" | "title"
   scheduleExtraFields Json @default("[]")
   // Trainer-chosen visible columns on /clients. Allowed ids:
-  // "email" | "dog" | "extraDogs" | "nextSession" | "compliance" | "shared"
+  // "email" | "dog" | "breed" | "extraDogs" | "nextSession" | "compliance" | "shared" | "custom:<id>"
   clientListColumns Json @default("[\"email\",\"dog\",\"nextSession\",\"compliance\"]")
+  // Grouping for /clients. null = flat list. "nextDay" = group by day of
+  // next booking. "custom:<id>" = group by custom-field value.
+  clientListGroupBy String?
 
   // Subscription
   subscriptionPlanId String?

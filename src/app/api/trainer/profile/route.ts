@@ -17,7 +17,10 @@ const patchSchema = z.object({
   // /clients column selector so trainers can pick the same fields here.
   scheduleExtraFields: z.array(z.string().regex(/^(location|description|sessionType|duration|title|email|extraDogs|compliance|custom:[a-z0-9]+)$/)).max(2).optional(),
   // Built-in column ids OR "custom:<cuid>" for trainer-defined custom fields.
-  clientListColumns: z.array(z.string().regex(/^(email|dog|extraDogs|nextSession|compliance|shared|custom:[a-z0-9]+)$/)).optional(),
+  clientListColumns: z.array(z.string().regex(/^(email|dog|breed|extraDogs|nextSession|compliance|shared|custom:[a-z0-9]+)$/)).optional(),
+  // null = flat list. "nextDay" = group by day of next booking.
+  // "custom:<cuid>" = group by custom-field value.
+  clientListGroupBy: z.string().regex(/^(nextDay|custom:[a-z0-9]+)$/).nullable().optional(),
 })
 
 export async function GET() {
