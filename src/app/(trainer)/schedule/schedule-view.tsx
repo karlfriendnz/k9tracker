@@ -1994,7 +1994,7 @@ export function ScheduleView({
   availabilitySlots: initialAvailSlots,
   clients,
   packages,
-  selectedDate,
+  selectedDate: initialSelectedDate,
   today,
   googleCalendarConnected,
   scheduleStartHour,
@@ -2002,7 +2002,7 @@ export function ScheduleView({
   scheduleDays,
   scheduleExtraFields,
   customFields,
-  clientExtras,
+  clientExtras: initialClientExtras,
 }: {
   sessions: Session[]
   availabilitySlots: AvailSlot[]
@@ -2018,6 +2018,15 @@ export function ScheduleView({
   customFields: CustomFieldMeta[]
   clientExtras: Record<string, ClientExtra>
 }) {
+  // Mirror the initially-rendered week into local state. Week navigation
+  // mutates these without a server round-trip.
+  const [selectedDate, setSelectedDate] = useState(initialSelectedDate)
+  const [clientExtras, setClientExtras] = useState(initialClientExtras)
+  const [navigatingWeek, setNavigatingWeek] = useState(false)
+  // If the parent re-renders with a new initialSelectedDate (e.g. via a
+  // router.push from outside), keep local state in sync.
+  useEffect(() => { setSelectedDate(initialSelectedDate) }, [initialSelectedDate])
+  useEffect(() => { setClientExtras(initialClientExtras) }, [initialClientExtras])
   // Validate the persisted selection: drop entries that aren't a known
   // session field, a known client field, or a custom-field ID we still know
   // about. Keeps stale selections from breaking the renderer.
@@ -2089,16 +2098,46 @@ export function ScheduleView({
       : `${weekStart.toLocaleDateString('en-NZ', { month: 'short' })} – ${end.toLocaleDateString('en-NZ', { month: 'short', year: 'numeric' })}`
   })()
 
-  function navigate(delta: number) {
+  // Client-side week/day navigation. We avoid `router.push` here because that
+  // re-runs the whole server component on every click (3+ seconds in dev
+  // because of Turbopack and ~5 sequential DB queries). Instead we hit a
+  // small API that returns just the per-week data, swap it into local state,
+  // and update the URL via history.replaceState so deep-links still work.
+  // Spam-clicks: each call increments navSeq and only the latest response
+  // wins, so an in-flight slow fetch can't clobber a newer click.
+  const navSeq = useRef(0)
+  async function navigate(delta: number) {
+    let nextDateStr: string
     if (view === 'week') {
-      // Always anchor to Monday so week boundaries are clean
       const monday = getMondayOf(selectedDate)
-      const newDate = addDays(monday, delta * 7)
-      router.push(`/schedule?date=${toDateStr(newDate)}`)
+      nextDateStr = toDateStr(addDays(monday, delta * 7))
     } else {
       const d = parseLocalDate(selectedDate)
       d.setDate(d.getDate() + delta)
-      router.push(`/schedule?date=${toDateStr(d)}`)
+      nextDateStr = toDateStr(d)
+    }
+    const seq = ++navSeq.current
+
+    setNavigatingWeek(true)
+    setSelectedDate(nextDateStr)
+    if (typeof window !== 'undefined') {
+      window.history.replaceState(null, '', `/schedule?date=${nextDateStr}`)
+    }
+    try {
+      const res = await fetch(`/api/schedule/week?date=${nextDateStr}`)
+      if (seq !== navSeq.current) return  // a newer click took over
+      if (!res.ok) {
+        router.push(`/schedule?date=${nextDateStr}`)
+        return
+      }
+      const body = await res.json()
+      if (seq !== navSeq.current) return
+      setSessions(body.sessions ?? [])
+      setClientExtras(body.clientExtras ?? {})
+    } catch {
+      if (seq === navSeq.current) router.push(`/schedule?date=${nextDateStr}`)
+    } finally {
+      if (seq === navSeq.current) setNavigatingWeek(false)
     }
   }
 
@@ -2282,7 +2321,7 @@ export function ScheduleView({
 
       {/* ── Navigation bar ───────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between px-4 md:px-6 py-3 bg-white border-b border-slate-100">
-        <button onClick={() => navigate(-1)} className="p-2 rounded-xl hover:bg-slate-100 text-slate-500">
+        <button onClick={() => navigate(-1)} disabled={navigatingWeek} className="p-2 rounded-xl hover:bg-slate-100 text-slate-500 disabled:opacity-40">
           <ChevronLeft className="h-5 w-5" />
         </button>
         <div className="text-center">
@@ -2300,7 +2339,7 @@ export function ScheduleView({
             </>
           )}
         </div>
-        <button onClick={() => navigate(1)} className="p-2 rounded-xl hover:bg-slate-100 text-slate-500">
+        <button onClick={() => navigate(1)} disabled={navigatingWeek} className="p-2 rounded-xl hover:bg-slate-100 text-slate-500 disabled:opacity-40">
           <ChevronRight className="h-5 w-5" />
         </button>
       </div>
