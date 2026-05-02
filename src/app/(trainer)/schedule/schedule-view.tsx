@@ -2044,6 +2044,10 @@ export function ScheduleView({
   // session 1 uses availability search like the others.
   const [assignAt, setAssignAt]         = useState<{ date: string; time?: string } | null>(null)
   const [activeSession, setActiveSession] = useState<Session | null>(null)
+  // Surfaced after a drag-drop when the new time(s) overlap an existing
+  // session. The drop is allowed (the trainer might be intentionally double-
+  // booking) but we flag it so they can reconcile.
+  const [dropWarning, setDropWarning] = useState<{ count: number; sample: { title: string; scheduledAt: string }[] } | null>(null)
 
   // Keep sessions in sync with server data on refresh
   useEffect(() => { setSessions(initialSessions) }, [initialSessions])
@@ -2116,15 +2120,83 @@ export function ScheduleView({
   }
 
   async function handleSessionDrop(sessionId: string, newIso: string) {
-    // Optimistic update
-    setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, scheduledAt: newIso } : s))
-    const res = await fetch(`/api/schedule/${sessionId}`, {
+    const dragged = sessions.find(s => s.id === sessionId)
+    if (!dragged) return
+
+    const deltaMs = new Date(newIso).getTime() - new Date(dragged.scheduledAt).getTime()
+    const propagate = !!dragged.clientPackageId
+    // Sessions in the same package, scheduled after the dragged one. Only the
+    // ones in the visible week are in memory; the server shifts the rest via
+    // ?scope=following. We track the visible movers so we can warn on
+    // conflicts and update them optimistically.
+    const movers = propagate
+      ? sessions.filter(s =>
+          s.id !== sessionId &&
+          s.clientPackageId === dragged.clientPackageId &&
+          new Date(s.scheduledAt).getTime() > new Date(dragged.scheduledAt).getTime(),
+        )
+      : []
+    const movedNewIsos: { id: string; scheduledAt: string; durationMins: number; title: string }[] = [
+      { id: dragged.id, scheduledAt: newIso, durationMins: dragged.durationMins, title: dragged.title },
+      ...movers.map(s => ({
+        id: s.id,
+        scheduledAt: new Date(new Date(s.scheduledAt).getTime() + deltaMs).toISOString(),
+        durationMins: s.durationMins,
+        title: s.title,
+      })),
+    ]
+    const movedIds = new Set(movedNewIsos.map(m => m.id))
+
+    // Optimistic update for every visible session that's moving.
+    setSessions(prev => prev.map(s => {
+      const update = movedNewIsos.find(m => m.id === s.id)
+      return update ? { ...s, scheduledAt: update.scheduledAt } : s
+    }))
+
+    const url = propagate ? `/api/schedule/${sessionId}?scope=following` : `/api/schedule/${sessionId}`
+    const res = await fetch(url, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ scheduledAt: newIso }),
     })
     if (!res.ok) {
-      // Roll back on failure
+      router.refresh()
+      return
+    }
+
+    // Conflict detection: fetch existing sessions covering all the moved
+    // intervals and look for overlaps with sessions we didn't ourselves move.
+    const minStart = Math.min(...movedNewIsos.map(m => new Date(m.scheduledAt).getTime()))
+    const maxEnd = Math.max(...movedNewIsos.map(m => new Date(m.scheduledAt).getTime() + m.durationMins * 60 * 1000))
+    const fromIso = new Date(minStart - 60 * 60 * 1000).toISOString()
+    const toIso = new Date(maxEnd + 60 * 60 * 1000).toISOString()
+    try {
+      const r = await fetch(`/api/schedule/range?from=${encodeURIComponent(fromIso)}&to=${encodeURIComponent(toIso)}`)
+      if (!r.ok) return
+      const rows: { id: string; title: string; scheduledAt: string; durationMins: number }[] = await r.json()
+      const clashes: { title: string; scheduledAt: string }[] = []
+      for (const m of movedNewIsos) {
+        const startA = new Date(m.scheduledAt).getTime()
+        const endA = startA + m.durationMins * 60 * 1000
+        for (const s of rows) {
+          if (movedIds.has(s.id)) continue
+          const startB = new Date(s.scheduledAt).getTime()
+          const endB = startB + s.durationMins * 60 * 1000
+          if (startA < endB && startB < endA) {
+            clashes.push({ title: s.title, scheduledAt: s.scheduledAt })
+          }
+        }
+      }
+      if (clashes.length > 0) {
+        setDropWarning({ count: clashes.length, sample: clashes.slice(0, 3) })
+      }
+    } catch {
+      // Non-critical — silently skip conflict warning if the range query fails.
+    }
+    if (propagate) {
+      // Followers outside the visible week were also shifted server-side;
+      // refresh so the calendar reflects everything next time the trainer
+      // navigates.
       router.refresh()
     }
   }
@@ -2240,6 +2312,28 @@ export function ScheduleView({
           <span>· Drag sessions to reschedule</span>
           <span>· Click session to open client</span>
           <span className="flex items-center gap-1 ml-auto"><span className="w-3 h-3 rounded-sm bg-emerald-200 inline-block" /> Availability</span>
+        </div>
+      )}
+
+      {dropWarning && (
+        <div className="flex items-start gap-2 px-4 md:px-6 py-2 bg-amber-50 border-b border-amber-200 text-xs text-amber-800">
+          <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5 text-amber-500" />
+          <div className="flex-1">
+            <p className="font-medium">
+              {dropWarning.count} conflict{dropWarning.count > 1 ? 's' : ''} after drop
+            </p>
+            <p className="mt-0.5">
+              Overlaps {dropWarning.sample.map(s => `${s.title} (${new Date(s.scheduledAt).toLocaleString('en-NZ', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })})`).join(', ')}
+              {dropWarning.count > dropWarning.sample.length ? ', and more' : ''}.
+            </p>
+          </div>
+          <button
+            onClick={() => setDropWarning(null)}
+            className="p-0.5 text-amber-600 hover:text-amber-800"
+            aria-label="Dismiss"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
         </div>
       )}
 
