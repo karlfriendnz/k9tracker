@@ -10,6 +10,9 @@ const patchSchema = z.object({
   // null clears the dog. Empty string treated the same. Validated against the
   // session's client below (must be a dog owned by that client).
   dogId: z.string().nullable().optional(),
+  // null detaches from any package. A non-null value reassigns the session
+  // to another ClientPackage owned by this trainer (validated below).
+  clientPackageId: z.string().nullable().optional(),
 })
 
 export async function GET(
@@ -98,6 +101,28 @@ export async function PATCH(
     }
   }
 
+  // Validate the new package assignment (if changing). It must belong to
+  // a client owned by this trainer.
+  let nextClientPackageId: string | null | undefined = undefined
+  if ('clientPackageId' in parsed.data) {
+    const raw = parsed.data.clientPackageId
+    if (raw === null || raw === '') {
+      nextClientPackageId = null
+    } else {
+      const cp = await prisma.clientPackage.findFirst({
+        where: { id: raw, package: { trainerId } },
+        select: { id: true, clientId: true, package: { select: { color: true } } },
+      })
+      if (!cp) return NextResponse.json({ error: 'Package assignment not found' }, { status: 400 })
+      // The assignment must belong to this session's client (or the session
+      // has no client yet, in which case the assignment defines the client).
+      if (existing.clientId && cp.clientId !== existing.clientId) {
+        return NextResponse.json({ error: 'Assignment is for a different client' }, { status: 400 })
+      }
+      nextClientPackageId = cp.id
+    }
+  }
+
   // ?scope=following propagates the patch to this session and every later
   // session in the same package assignment. For scheduledAt we apply a
   // delta (so each subsequent session keeps its own day, just shifted by
@@ -113,6 +138,7 @@ export async function PATCH(
       ...(parsed.data.durationMins !== undefined && { durationMins: parsed.data.durationMins }),
       ...(parsed.data.status !== undefined && { status: parsed.data.status }),
       ...(nextDogId !== undefined && { dogId: nextDogId }),
+      ...(nextClientPackageId !== undefined && { clientPackageId: nextClientPackageId }),
     },
   })
 

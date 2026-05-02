@@ -1100,6 +1100,10 @@ function SessionModal({
   const [newTaskReps, setNewTaskReps] = useState('')
   const [selectedDogId, setSelectedDogId] = useState<string | null>(null)
 
+  // Client's package assignments for the package picker.
+  const [assignments, setAssignments] = useState<{ id: string; package: { id: string; name: string; color: PackageColor | null } }[]>([])
+  const [savingPackage, setSavingPackage] = useState(false)
+
   // Buddy session UI state
   const [showBuddyPicker, setShowBuddyPicker] = useState(false)
   const [buddyClientId, setBuddyClientId] = useState<string>('')
@@ -1122,6 +1126,40 @@ function SessionModal({
       .then(data => { if (data?.tasks) setTasks(data.tasks) })
       .catch(() => {})
   }, [session.id])
+
+  // Load this client's package assignments so the trainer can change which
+  // package this session belongs to.
+  useEffect(() => {
+    if (!clientId) { setAssignments([]); return }
+    let cancelled = false
+    fetch(`/api/clients/${clientId}/packages`)
+      .then(r => r.ok ? r.json() : [])
+      .then((rows: { id: string; package: { id: string; name: string; color: PackageColor | null } }[]) => {
+        if (!cancelled) setAssignments(rows)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [clientId])
+
+  async function handlePackageChange(nextAssignmentId: string | null) {
+    setSavingPackage(true)
+    const before = { clientPackageId: session.clientPackageId, packageColor: session.packageColor }
+    const newColor = nextAssignmentId
+      ? assignments.find(a => a.id === nextAssignmentId)?.package.color ?? null
+      : null
+    setSession(prev => ({ ...prev, clientPackageId: nextAssignmentId, packageColor: newColor }))
+    onSessionsUpdate(session.id, { clientPackageId: nextAssignmentId, packageColor: newColor })
+    const res = await fetch(`/api/schedule/${session.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clientPackageId: nextAssignmentId }),
+    })
+    setSavingPackage(false)
+    if (!res.ok) {
+      setSession(prev => ({ ...prev, ...before }))
+      onSessionsUpdate(session.id, before)
+    }
+  }
 
   useEffect(() => {
     if (showAddPanel && !libraryLoaded) {
@@ -1727,6 +1765,35 @@ function SessionModal({
               </div>
             )}
           </div>
+
+          {/* Package — pick a different assignment for this session, or
+              detach. Hidden when there's no client to attach packages to. */}
+          {clientId && (
+            <div className="border-t border-slate-100 pt-4">
+              <div className="flex items-center justify-between gap-3 mb-1.5">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Package</p>
+                {session.packageColor && (
+                  <span className={`h-3 w-3 rounded-full ${PACKAGE_COLOR_CLASSES[session.packageColor].bg}`} aria-label="Package colour" />
+                )}
+              </div>
+              <select
+                value={session.clientPackageId ?? ''}
+                onChange={e => handlePackageChange(e.target.value || null)}
+                disabled={savingPackage}
+                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+              >
+                <option value="">No package (standalone)</option>
+                {assignments.map(a => (
+                  <option key={a.id} value={a.id}>{a.package.name}</option>
+                ))}
+              </select>
+              {assignments.length === 0 && (
+                <p className="text-[11px] text-slate-400 mt-1">
+                  This client has no package assignments yet. Use Assign Package on the calendar header to add one.
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Notes */}
           {session.description && (

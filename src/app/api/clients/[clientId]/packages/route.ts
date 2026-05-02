@@ -4,6 +4,34 @@ import { prisma } from '@/lib/prisma'
 import { getClientAccess } from '@/lib/trainer-access'
 import { z } from 'zod'
 
+// Returns the client's active package assignments. Used by the session
+// popup so the trainer can reassign a session to a different package.
+export async function GET(
+  _req: Request,
+  { params }: { params: Promise<{ clientId: string }> }
+) {
+  const session = await auth()
+  if (!session) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+  const { clientId } = await params
+  const access = await getClientAccess(clientId, session.user.id)
+  if (!access) return NextResponse.json({ error: 'Not allowed' }, { status: 403 })
+
+  const assignments = await prisma.clientPackage.findMany({
+    where: { clientId },
+    select: {
+      id: true,
+      startDate: true,
+      extendIndefinitely: true,
+      package: { select: { id: true, name: true, color: true, sessionCount: true, weeksBetween: true } },
+    },
+    orderBy: { assignedAt: 'desc' },
+  })
+  return NextResponse.json(assignments.map(a => ({
+    ...a,
+    startDate: a.startDate.toISOString(),
+  })))
+}
+
 const schema = z.object({
   packageId: z.string().min(1),
   // Pre-resolved ISO datetimes (one per session). Computed client-side from
