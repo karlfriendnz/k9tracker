@@ -13,6 +13,9 @@ const schema = z.object({
   sessionDates: z.array(z.string().min(1)).min(1).max(52),
   // Optional dog to attach to every created session. Must belong to the client.
   dogId: z.string().min(1).optional().nullable(),
+  // True = "no end date". The schedule keeps topping the assignment up
+  // with ~6 weeks of upcoming sessions on each load.
+  extendIndefinitely: z.boolean().optional(),
 })
 
 export async function POST(
@@ -79,6 +82,7 @@ export async function POST(
         packageId: pkg.id,
         clientId,
         startDate,
+        extendIndefinitely: parsed.data.extendIndefinitely === true && pkg.sessionCount === 0,
       },
     })
     await tx.trainingSession.createMany({

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { extendOngoingPackages } from '@/lib/extend-ongoing-packages'
 
 // Returns the trainer's sessions and the client extras needed by the
 // schedule blocks for a single week. Used by the schedule page to
@@ -32,6 +33,9 @@ export async function GET(req: Request) {
   const date = url.searchParams.get('date')
   if (!date) return NextResponse.json({ error: 'Missing date' }, { status: 400 })
   const { weekStart, weekEnd } = getWeekBounds(date)
+
+  // Best-effort top up: keep the calendar full ahead of the visible week.
+  await extendOngoingPackages(trainerId).catch(() => {})
 
   const trainerProfile = await prisma.trainerProfile.findUnique({
     where: { id: trainerId },

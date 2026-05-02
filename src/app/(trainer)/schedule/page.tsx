@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ScheduleView } from './schedule-view'
+import { extendOngoingPackages } from '@/lib/extend-ongoing-packages'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Schedule' }
@@ -39,6 +40,10 @@ export default async function SchedulePage({
     },
   })
   if (!trainerProfile) redirect('/onboarding')
+
+  // Top up forever-ongoing assignments before fetching sessions, so the
+  // current view always includes any newly-generated bookings.
+  await extendOngoingPackages(trainerProfile.id).catch(() => {})
 
   const today = new Date().toISOString().split('T')[0]
   const sp = await searchParams

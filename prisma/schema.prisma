@@ -465,6 +465,9 @@ model ClientPackage {
   clientId   String
   startDate  DateTime
   assignedAt DateTime @default(now())
+  // When true, the schedule auto-creates more sessions on the package's
+  // cadence so the calendar always has ~6 weeks of sessions ahead.
+  extendIndefinitely Boolean @default(false)
 
   package  Package           @relation(fields: [packageId], references: [id], onDelete: Cascade)
   client   ClientProfile     @relation(fields: [clientId], references: [id], onDelete: Cascade)

@@ -30,6 +30,9 @@ const SLOT_SEARCH_DAYS = 60
 const ONGOING_MAX_SESSIONS = 52
 // Default end date offered for ongoing packages (12 weeks from start).
 const ONGOING_DEFAULT_WEEKS = 12
+// Initial buffer materialised when the trainer picks "No end date".
+// Subsequent loads keep topping up via lib/extend-ongoing-packages.
+const EXTEND_BUFFER_WEEKS = 6
 
 export function AssignPackageFromScheduleButton({
   clients,
@@ -113,6 +116,9 @@ export function AssignPackageFromScheduleModal({
   // to ONGOING_DEFAULT_WEEKS after the start date and recomputes whenever the
   // start date changes — see effect below.
   const [endDate, setEndDate] = useState(() => addWeeksISO(defaultStartDate ?? defaultTomorrow(), ONGOING_DEFAULT_WEEKS))
+  // "No end date" — the assignment auto-extends ~6 weeks at a time on each
+  // schedule load. Only applies to ongoing packages.
+  const [noEnd, setNoEnd] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -140,7 +146,10 @@ export function AssignPackageFromScheduleModal({
     const start = parseDate(startDate)
     if (!start) return isOngoing ? [] : Array.from({ length: pkg.sessionCount }, () => ({ at: null }))
 
-    const end = isOngoing ? parseDate(endDate) : null
+    // "No end date" mode generates an initial 6-week buffer, then schedule
+    // page loads keep topping it up via extendOngoingPackages.
+    const effectiveEndStr = noEnd ? addWeeksISO(startDate, EXTEND_BUFFER_WEEKS) : endDate
+    const end = isOngoing ? parseDate(effectiveEndStr) : null
     // For ongoing packages, weeksBetween 0 would loop forever — clamp to 1.
     const cadenceWeeks = isOngoing ? Math.max(1, pkg.weeksBetween) : pkg.weeksBetween
     const limit = isOngoing ? ONGOING_MAX_SESSIONS : pkg.sessionCount
@@ -173,7 +182,7 @@ export function AssignPackageFromScheduleModal({
       cursor = next
     }
     return out
-  }, [availability, pkg, startDate, startTime, endDate, isOngoing])
+  }, [availability, pkg, startDate, startTime, endDate, isOngoing, noEnd])
 
   const placedCount = proposals.filter(p => p.at !== null).length
   const allPlaced = isOngoing ? placedCount > 0 : placedCount === pkg.sessionCount
@@ -225,7 +234,12 @@ export function AssignPackageFromScheduleModal({
     const res = await fetch(`/api/clients/${clientId}/packages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ packageId, sessionDates, dogId }),
+      body: JSON.stringify({
+        packageId,
+        sessionDates,
+        dogId,
+        extendIndefinitely: isOngoing && noEnd,
+      }),
     })
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
@@ -339,16 +353,30 @@ export function AssignPackageFromScheduleModal({
 
           {isOngoing && (
             <div>
-              <label className="text-sm font-medium text-slate-700 block mb-1.5">End date</label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-sm font-medium text-slate-700">End date</label>
+                <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={noEnd}
+                    onChange={e => setNoEnd(e.target.checked)}
+                    className="h-3.5 w-3.5 rounded border-slate-300"
+                  />
+                  No end date
+                </label>
+              </div>
               <input
                 type="date"
                 value={endDate}
                 min={startDate}
                 onChange={e => setEndDate(e.target.value)}
-                className="h-12 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={noEnd}
+                className="h-12 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-50 disabled:text-slate-400"
               />
               <p className="text-[11px] text-slate-400 mt-1">
-                Ongoing package — sessions repeat every {Math.max(1, pkg.weeksBetween)} week{Math.max(1, pkg.weeksBetween) > 1 ? 's' : ''} until this date.
+                {noEnd
+                  ? `Forever ongoing — first ${EXTEND_BUFFER_WEEKS} weeks created now; the schedule keeps ${EXTEND_BUFFER_WEEKS} weeks of upcoming sessions topped up automatically.`
+                  : `Ongoing package — sessions repeat every ${Math.max(1, pkg.weeksBetween)} week${Math.max(1, pkg.weeksBetween) > 1 ? 's' : ''} until this date.`}
               </p>
             </div>
           )}
