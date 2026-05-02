@@ -192,108 +192,220 @@ export function ClientsList({ clients, tab, columns, customFields, customValues 
           <p className="text-sm">No matches for &ldquo;{query}&rdquo;.</p>
         </div>
       ) : (
-        <div className="flex flex-col gap-3">
-          {filtered.map(c => (
-            <ClientCard
-              key={c.id}
-              client={c}
-              tab={tab}
-              visible={visible}
-              customFields={customFields}
-              customValues={customValues}
-            />
-          ))}
-        </div>
+        <ClientTable
+          clients={filtered}
+          tab={tab}
+          visible={visible}
+          customFields={customFields}
+          customValues={customValues}
+        />
       )}
     </>
   )
 }
 
-function ClientCard({ client, tab, visible, customFields, customValues }: {
-  client: ClientRow
+// ─── Table-style row layout ──────────────────────────────────────────────────
+
+interface DataColumn {
+  key: string
+  label: string
+  align?: 'left' | 'right'
+  /** CSS grid template fragment for this column. */
+  width: string
+  render: (c: ClientRow) => React.ReactNode
+}
+
+function buildDataColumns(
+  visible: Set<string>,
+  customFields: CustomFieldMeta[],
+  customValues: Record<string, string>,
+): DataColumn[] {
+  const cols: DataColumn[] = []
+
+  if (visible.has('email')) {
+    cols.push({
+      key: 'email',
+      label: 'Email',
+      width: 'minmax(140px, 1.4fr)',
+      render: c => <span className="truncate text-slate-500">{c.email}</span>,
+    })
+  }
+  if (visible.has('dog')) {
+    cols.push({
+      key: 'dog',
+      label: 'Primary dog',
+      width: 'minmax(120px, 1.2fr)',
+      render: c => (
+        <span className="truncate text-slate-700">
+          {c.dogName ? <>🐕 {c.dogName}{c.dogBreed ? <span className="text-slate-400"> · {c.dogBreed}</span> : null}</> : <span className="text-slate-400 italic">No dog</span>}
+        </span>
+      ),
+    })
+  }
+  if (visible.has('extraDogs')) {
+    cols.push({
+      key: 'extraDogs',
+      label: 'Additional dogs',
+      width: 'minmax(120px, 1fr)',
+      render: c => c.extraDogNames.length > 0
+        ? <span className="truncate text-slate-600">{c.extraDogNames.join(', ')}</span>
+        : <span className="text-slate-300">—</span>,
+    })
+  }
+  if (visible.has('nextSession')) {
+    cols.push({
+      key: 'nextSession',
+      label: 'Next session',
+      width: 'minmax(140px, 1fr)',
+      render: c => {
+        const d = c.nextSessionAt ? new Date(c.nextSessionAt) : null
+        if (!d) return <span className="text-slate-300">—</span>
+        return (
+          <span className="inline-flex items-center gap-1 text-blue-600 truncate">
+            <Calendar className="h-3 w-3 flex-shrink-0" />
+            {d.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}
+            <span className="text-slate-400">·</span>
+            {d.toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit', hour12: true })}
+          </span>
+        )
+      },
+    })
+  }
+  for (const f of customFields) {
+    if (!visible.has(`custom:${f.id}`)) continue
+    cols.push({
+      key: `custom:${f.id}`,
+      label: f.label,
+      width: 'minmax(120px, 1fr)',
+      render: c => {
+        const v = customValues[`${c.id}:${f.id}`]
+        return v ? <span className="truncate text-slate-700">{v}</span> : <span className="text-slate-300">—</span>
+      },
+    })
+  }
+  if (visible.has('compliance')) {
+    cols.push({
+      key: 'compliance',
+      label: '7-day',
+      align: 'right',
+      width: 'minmax(72px, auto)',
+      render: c => {
+        if (c.taskCount === 0) return <span className="text-xs text-slate-300">no tasks</span>
+        const rate = Math.round((c.completedCount / c.taskCount) * 100)
+        const color = rate >= 70 ? 'text-green-600' : rate >= 40 ? 'text-amber-600' : 'text-red-500'
+        return <span className={`font-semibold tabular-nums ${color}`}>{rate}%</span>
+      },
+    })
+  }
+
+  return cols
+}
+
+function ClientTable({ clients, tab, visible, customFields, customValues }: {
+  clients: ClientRow[]
   tab: Props['tab']
   visible: Set<string>
   customFields: CustomFieldMeta[]
   customValues: Record<string, string>
 }) {
-  const complianceRate = client.taskCount > 0
-    ? Math.round((client.completedCount / client.taskCount) * 100)
-    : null
-  const nextSession = client.nextSessionAt ? new Date(client.nextSessionAt) : null
-  const showCompliance = visible.has('compliance')
-  const showNextSession = visible.has('nextSession') && nextSession
-  const showDog = visible.has('dog')
-  const showExtraDogs = visible.has('extraDogs') && client.extraDogNames.length > 0
-  const showEmail = visible.has('email') && client.name && client.email && client.name !== client.email
+  const dataColumns = buildDataColumns(visible, customFields, customValues)
+  // Identity column (avatar+name) is always present and gets generous space.
+  const gridTemplate = `minmax(220px, 1.6fr) ${dataColumns.map(c => c.width).join(' ')}`.trim()
+
+  return (
+    <>
+      {/* Header row — only on md+ where columns actually align. */}
+      {dataColumns.length > 0 && (
+        <div
+          className="hidden md:grid items-center gap-4 px-4 mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400"
+          style={{ gridTemplateColumns: gridTemplate }}
+        >
+          <span>Client</span>
+          {dataColumns.map(c => (
+            <span key={c.key} className={`truncate ${c.align === 'right' ? 'text-right' : ''}`}>{c.label}</span>
+          ))}
+        </div>
+      )}
+
+      <div className="flex flex-col gap-2">
+        {clients.map(c => (
+          <ClientRowCard
+            key={c.id}
+            client={c}
+            tab={tab}
+            visible={visible}
+            dataColumns={dataColumns}
+            gridTemplate={gridTemplate}
+          />
+        ))}
+      </div>
+    </>
+  )
+}
+
+function ClientRowCard({ client, tab, visible, dataColumns, gridTemplate }: {
+  client: ClientRow
+  tab: Props['tab']
+  visible: Set<string>
+  dataColumns: DataColumn[]
+  gridTemplate: string
+}) {
   const showShared = visible.has('shared') && client.shared
 
   return (
     <Link href={`/clients/${client.id}`}>
       <Card className={`p-4 hover:border-blue-200 hover:shadow-md transition-all cursor-pointer ${tab === 'inactive' ? 'opacity-70' : ''} ${tab === 'new' ? 'border-amber-200 bg-amber-50/30' : ''}`}>
-        <div className="flex items-center gap-4">
-          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-blue-100 text-blue-700 font-semibold text-sm flex-shrink-0">
-            {getInitials(client.name ?? client.email)}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <p className="font-semibold text-slate-900 truncate">
-                {client.name ?? client.email}
-              </p>
-              {showShared && (
-                <span className="flex-shrink-0 text-xs font-medium px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700">
-                  Shared
-                </span>
+        {/* md+: tabular grid. <md: stacked, label-prefixed cells for context. */}
+        <div
+          className="md:grid md:items-center md:gap-4 flex items-center gap-4"
+          style={{ gridTemplateColumns: gridTemplate }}
+        >
+          {/* Identity column (always) */}
+          <div className="flex items-center gap-3 min-w-0 flex-1 md:flex-initial">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-blue-700 font-semibold text-xs flex-shrink-0">
+              {getInitials(client.name ?? client.email)}
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <p className="font-semibold text-slate-900 truncate text-sm">
+                  {client.name ?? client.email}
+                </p>
+                {showShared && (
+                  <span className="flex-shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700">
+                    Shared
+                  </span>
+                )}
+              </div>
+              {/* On mobile, surface email as secondary line if name and email differ */}
+              {client.name && client.email && client.name !== client.email && (
+                <p className="md:hidden text-xs text-slate-400 truncate">{client.email}</p>
               )}
             </div>
-            {showEmail && (
-              <p className="text-xs text-slate-400 truncate">{client.email}</p>
-            )}
-            {showDog && (
-              <p className="text-sm text-slate-500 truncate">
-                {client.dogName ? `🐕 ${client.dogName}${client.dogBreed ? ` · ${client.dogBreed}` : ''}` : 'No dog added yet'}
-              </p>
-            )}
-            {showExtraDogs && (
-              <p className="text-xs text-slate-500 truncate">
-                + {client.extraDogNames.join(', ')}
-              </p>
-            )}
-            {showNextSession && (
-              <p className="text-xs text-blue-600 mt-0.5 flex items-center gap-1">
-                <Calendar className="h-3 w-3" />
-                Next: {nextSession!.toLocaleDateString('en-NZ', { weekday: 'short', day: 'numeric', month: 'short' })}
-                {' · '}
-                {nextSession!.toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit', hour12: true })}
-              </p>
-            )}
-            {customFields
-              .filter(f => visible.has(`custom:${f.id}`))
-              .map(f => {
-                const value = customValues[`${client.id}:${f.id}`]
-                if (!value) return null
-                return (
-                  <p key={f.id} className="text-xs text-slate-500 truncate">
-                    <span className="text-slate-400">{f.label}: </span>
-                    {value}
-                  </p>
-                )
-              })}
           </div>
-          {showCompliance && (
-            <div className="text-right flex-shrink-0">
-              {complianceRate !== null ? (
-                <>
-                  <p className={`text-lg font-bold ${complianceRate >= 70 ? 'text-green-600' : complianceRate >= 40 ? 'text-amber-600' : 'text-red-500'}`}>
-                    {complianceRate}%
-                  </p>
-                  <p className="text-xs text-slate-400">7-day compliance</p>
-                </>
-              ) : (
-                <p className="text-xs text-slate-400">No tasks assigned</p>
-              )}
+
+          {/* Mobile: stacked label/value rows. Desktop: grid cells. */}
+          <div className="md:contents flex-shrink-0 hidden md:flex" />
+          {dataColumns.map(c => (
+            <div
+              key={c.key}
+              className={`hidden md:flex min-w-0 text-sm ${c.align === 'right' ? 'justify-end' : ''}`}
+            >
+              {c.render(client)}
             </div>
-          )}
+          ))}
         </div>
+
+        {/* <md: stacked label/value rows under the identity row */}
+        {dataColumns.length > 0 && (
+          <dl className="md:hidden mt-3 grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 text-xs">
+            {dataColumns.map(c => (
+              <div key={c.key} className="contents">
+                <dt className="text-slate-400 uppercase tracking-wide text-[10px] self-center">{c.label}</dt>
+                <dd className="text-slate-700 min-w-0 truncate">{c.render(client)}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
       </Card>
     </Link>
   )
