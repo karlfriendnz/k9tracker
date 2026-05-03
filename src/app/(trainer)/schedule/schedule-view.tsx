@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -12,10 +12,9 @@ import { Alert } from '@/components/ui/alert'
 import Link from 'next/link'
 import {
   ChevronLeft, ChevronRight, Plus, Calendar, LayoutGrid, List,
-  Clock, Trash2, X, Settings, MapPin, Video, ExternalLink, Loader2, Play, Pencil, AlertTriangle, Search, BarChart2,
+  Clock, Trash2, X, MapPin, Video, ExternalLink, Loader2, Play, Pencil, AlertTriangle, Search, BarChart2,
 } from 'lucide-react'
 import {
-  AssignPackageFromScheduleButton,
   AssignPackageFromScheduleModal,
 } from './assign-package-from-schedule'
 import { ScheduleSettings } from './schedule-settings'
@@ -181,8 +180,8 @@ function fmtFullDate(dateStr: string): string {
 }
 
 // Convert time offset in grid to HH:MM
-function yToTime(y: number, startHour = DEFAULT_START_HOUR, endHour = DEFAULT_END_HOUR): string {
-  const totalMins = startHour * 60 + (y / PX_PER_HOUR) * 60
+function yToTime(y: number, startHour = DEFAULT_START_HOUR, endHour = DEFAULT_END_HOUR, pxPerHour = PX_PER_HOUR): string {
+  const totalMins = startHour * 60 + (y / pxPerHour) * 60
   const snapped   = Math.round(totalMins / SNAP_MINS) * SNAP_MINS
   const clamped   = Math.max(startHour * 60, Math.min(endHour * 60 - 30, snapped))
   const h = Math.floor(clamped / 60)
@@ -191,28 +190,29 @@ function yToTime(y: number, startHour = DEFAULT_START_HOUR, endHour = DEFAULT_EN
 }
 
 // Top offset + height (in px) for a time range
-function timeToY(timeStr: string, startHour = DEFAULT_START_HOUR): number {
+function timeToY(timeStr: string, startHour = DEFAULT_START_HOUR, pxPerHour = PX_PER_HOUR): number {
   const [h, m] = timeStr.split(':').map(Number)
-  return ((h * 60 + m - startHour * 60) / 60) * PX_PER_HOUR
+  return ((h * 60 + m - startHour * 60) / 60) * pxPerHour
 }
 
-function sessionTop(iso: string, startHour = DEFAULT_START_HOUR): number {
+function sessionTop(iso: string, startHour = DEFAULT_START_HOUR, pxPerHour = PX_PER_HOUR): number {
   const d = new Date(iso)
   const mins = d.getHours() * 60 + d.getMinutes()
-  return Math.max(0, ((mins - startHour * 60) / 60) * PX_PER_HOUR)
+  return Math.max(0, ((mins - startHour * 60) / 60) * pxPerHour)
 }
 
-function sessionHeight(durationMins: number): number {
-  return Math.max((durationMins / 60) * PX_PER_HOUR, 24)
+function sessionHeight(durationMins: number, pxPerHour = PX_PER_HOUR): number {
+  return Math.max((durationMins / 60) * pxPerHour, 24)
 }
 
 // ─── Availability strip ───────────────────────────────────────────────────────
 
-function AvailStrip({ slot, dayDate, onDelete, startHour }: {
+function AvailStrip({ slot, dayDate, onDelete, startHour, pxPerHour }: {
   slot: AvailSlot
   dayDate: Date
   onDelete: (id: string) => void
   startHour: number
+  pxPerHour: number
 }) {
   // Check if this slot applies to this day
   const dateStr = toDateStr(dayDate)
@@ -252,8 +252,8 @@ function AvailStrip({ slot, dayDate, onDelete, startHour }: {
 
   if (!applies) return null
 
-  const top    = timeToY(slot.startTime, startHour)
-  const height = timeToY(slot.endTime, startHour) - top
+  const top    = timeToY(slot.startTime, startHour, pxPerHour)
+  const height = timeToY(slot.endTime, startHour, pxPerHour) - top
   const LABEL_HEIGHT = 14  // matches the leading-tight + py for the label row
 
   return (
@@ -364,6 +364,7 @@ function SessionBlock({
   onPointerDown,
   onClick,
   startHour,
+  pxPerHour,
   extraFields,
   clientExtras,
   customFields,
@@ -375,12 +376,13 @@ function SessionBlock({
   onPointerDown: (e: React.PointerEvent) => void
   onClick: () => void
   startHour: number
+  pxPerHour: number
   extraFields: string[]
   clientExtras: Record<string, ClientExtra>
   customFields: CustomFieldMeta[]
 }) {
-  const top    = isDragging && dragTop !== null ? dragTop : sessionTop(session.scheduledAt, startHour)
-  const height = sessionHeight(session.durationMins)
+  const top    = isDragging && dragTop !== null ? dragTop : sessionTop(session.scheduledAt, startHour, pxPerHour)
+  const height = sessionHeight(session.durationMins, pxPerHour)
   // Prefer direct client link, fall back to client via dog's primaryFor
   const clientUser = session.client?.user ?? session.dog?.primaryFor[0]?.user
   const clientName = clientUser ? (clientUser.name ?? clientUser.email) : null
@@ -521,6 +523,24 @@ function WeekGrid({
 }) {
   const hours = Array.from({ length: endHour - startHour }, (_, i) => startHour + i)
   const gridRef = useRef<HTMLDivElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  // Stretch the visible-hours range to fill the available height so 7pm sits
+  // at the bottom of the view; clamp at 48px/hr so blocks stay readable on
+  // very short viewports (it'll start scrolling instead).
+  const [pxPerHour, setPxPerHour] = useState(PX_PER_HOUR)
+  const totalHours = Math.max(1, endHour - startHour)
+  useLayoutEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const update = () => {
+      const fitted = Math.max(48, Math.floor(el.clientHeight / totalHours))
+      setPxPerHour(fitted)
+    }
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [totalHours])
 
   // ── Drag state ──────────────────────────────────────────────────────────────
   const [dragging, setDragging] = useState<{
@@ -546,7 +566,7 @@ function WeekGrid({
       originalDayIndex: dayIndex,
       dayIndex,
       offsetY: e.clientY - rect.top,
-      currentTop: sessionTop(session.scheduledAt, startHour),
+      currentTop: sessionTop(session.scheduledAt, startHour, pxPerHour),
       moved: false,
     })
   }, [])
@@ -570,8 +590,8 @@ function WeekGrid({
     if (!col) return
     const colRect = col.getBoundingClientRect()
     const rawY    = e.clientY - colRect.top - dragging.offsetY
-    const snapped = Math.round(rawY / (PX_PER_HOUR / (60 / SNAP_MINS))) * (PX_PER_HOUR / (60 / SNAP_MINS))
-    const clamped = Math.max(0, Math.min(snapped, (endHour - startHour - dragging.session.durationMins / 60) * PX_PER_HOUR))
+    const snapped = Math.round(rawY / (pxPerHour / (60 / SNAP_MINS))) * (pxPerHour / (60 / SNAP_MINS))
+    const clamped = Math.max(0, Math.min(snapped, (endHour - startHour - dragging.session.durationMins / 60) * pxPerHour))
 
     setDragging(prev => prev ? { ...prev, dayIndex: targetColIndex, currentTop: clamped, moved: true } : null)
   }, [dragging])
@@ -581,7 +601,7 @@ function WeekGrid({
     if (dragging.moved) {
       // Build new ISO string from target column + snapped top
       const day = weekDays[dragging.dayIndex]
-      const timeStr = yToTime(dragging.currentTop, startHour, endHour)
+      const timeStr = yToTime(dragging.currentTop, startHour, endHour, pxPerHour)
       const [h, m]  = timeStr.split(':').map(Number)
       const newDate  = new Date(day)
       newDate.setHours(h, m, 0, 0)
@@ -615,16 +635,16 @@ function WeekGrid({
     if (!col) return
     const rect = col.getBoundingClientRect()
     const y    = e.clientY - rect.top
-    const time = yToTime(y, startHour, endHour)
+    const time = yToTime(y, startHour, endHour, pxPerHour)
     onSlotClick(toDateStr(dayDate), time)
   }
 
-  const totalHeight = (endHour - startHour) * PX_PER_HOUR
+  const totalHeight = totalHours * pxPerHour
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+    <div className="h-full flex flex-col bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
       {/* Day headers */}
-      <div className="grid border-b border-slate-100" style={{ gridTemplateColumns: `48px repeat(${weekDays.length}, 1fr)` }}>
+      <div className="grid border-b border-slate-100 flex-shrink-0" style={{ gridTemplateColumns: `48px repeat(${weekDays.length}, 1fr)` }}>
         <div className="border-r border-slate-100" />
         {weekDays.map((d) => {
           const ds = toDateStr(d)
@@ -646,7 +666,7 @@ function WeekGrid({
       </div>
 
       {/* Grid body */}
-      <div className="overflow-y-auto" style={{ maxHeight: 'calc(100vh - 280px)' }}>
+      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto">
         <div
           ref={gridRef}
           className="relative grid"
@@ -660,7 +680,7 @@ function WeekGrid({
               <div
                 key={h}
                 className="absolute right-2 text-[10px] text-slate-400 leading-none"
-                style={{ top: (h - startHour) * PX_PER_HOUR - 6 }}
+                style={{ top: (h - startHour) * pxPerHour - 6 }}
               >
                 {h === 12 ? '12pm' : h < 12 ? `${h}am` : `${h - 12}pm`}
               </div>
@@ -685,7 +705,7 @@ function WeekGrid({
                   <div
                     key={h}
                     className="absolute left-0 right-0 border-t border-slate-100 pointer-events-none"
-                    style={{ top: (h - startHour) * PX_PER_HOUR }}
+                    style={{ top: (h - startHour) * pxPerHour }}
                   />
                 ))}
                 {/* Half-hour lines */}
@@ -693,7 +713,7 @@ function WeekGrid({
                   <div
                     key={`${h}half`}
                     className="absolute left-0 right-0 border-t border-slate-50 pointer-events-none"
-                    style={{ top: (h - startHour) * PX_PER_HOUR + PX_PER_HOUR / 2 }}
+                    style={{ top: (h - startHour) * pxPerHour + pxPerHour / 2 }}
                   />
                 ))}
 
@@ -717,7 +737,7 @@ function WeekGrid({
 
                 {/* Availability strips */}
                 {availSlots.map((slot) => (
-                  <AvailStrip key={slot.id} slot={slot} dayDate={d} onDelete={onDeleteAvail} startHour={startHour} />
+                  <AvailStrip key={slot.id} slot={slot} dayDate={d} onDelete={onDeleteAvail} startHour={startHour} pxPerHour={pxPerHour} />
                 ))}
 
                 {/* Sessions that belong to this day */}
@@ -740,6 +760,7 @@ function WeekGrid({
                         onPointerDown={(e) => handlePointerDown(e, s, dayIndex)}
                         onClick={() => { /* handled in pointerUp */ }}
                         startHour={startHour}
+                        pxPerHour={pxPerHour}
                         extraFields={extraFields}
                         clientExtras={clientExtras}
                         customFields={customFields}
@@ -758,6 +779,7 @@ function WeekGrid({
                       onPointerDown={() => {}}
                       onClick={() => {}}
                       startHour={startHour}
+                      pxPerHour={pxPerHour}
                       extraFields={extraFields}
                       clientExtras={clientExtras}
                       customFields={customFields}
@@ -871,6 +893,7 @@ function AvailabilityManager({
 }) {
   const [error, setError] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [tab, setTab] = useState<'hours' | 'holidays'>('hours')
   const formRef = useRef<HTMLFormElement>(null)
   const defaultValues: AvailForm = { type: 'weekly', startTime: '09:00', endTime: '17:00' }
   const { register, handleSubmit, watch, reset, formState: { errors, isSubmitting } } = useForm<AvailForm>({
@@ -994,12 +1017,41 @@ function AvailabilityManager({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
       <div className="relative z-50 bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between p-5 border-b border-slate-100">
-          <h2 className="font-semibold text-slate-900">Availability slots</h2>
+        <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-slate-100">
+          <h2 className="font-semibold text-slate-900">Availability</h2>
           <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600"><X className="h-5 w-5" /></button>
         </div>
 
+        {/* Tab strip */}
+        <div className="px-5 pt-3 pb-0 border-b border-slate-100">
+          <div className="flex p-0.5 bg-slate-100 rounded-xl gap-0.5 w-full">
+            <button
+              type="button"
+              onClick={() => setTab('hours')}
+              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${tab === 'hours' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
+            >
+              <Clock className="h-3.5 w-3.5" /> Hours
+              {slots.length > 0 && (
+                <span className={`text-[10px] tabular-nums ${tab === 'hours' ? 'text-slate-400' : 'text-slate-400'}`}>
+                  {slots.length}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab('holidays')}
+              className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${tab === 'holidays' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
+            >
+              <Calendar className="h-3.5 w-3.5" /> Holidays
+              {blackouts.length > 0 && (
+                <span className="text-[10px] tabular-nums text-slate-400">{blackouts.length}</span>
+              )}
+            </button>
+          </div>
+        </div>
+
         <div className="p-5">
+          {tab === 'hours' && <>
           {/* Existing slots */}
           {slots.length > 0 && (
             <div className="mb-5">
@@ -1126,10 +1178,10 @@ function AvailabilityManager({
               </Button>
             </div>
           </form>
+          </>}
 
-          {/* Blackouts / holidays section */}
-          <div className="mt-6 pt-5 border-t border-slate-100">
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Holidays / blackouts</p>
+          {tab === 'holidays' && <div>
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Your holidays</p>
             {blackouts.length > 0 && (
               <div className="flex flex-col gap-2 mb-3">
                 {blackouts.map(b => (
@@ -1179,10 +1231,10 @@ function AvailabilityManager({
                 onChange={e => setBlackoutReason(e.target.value)}
               />
               <Button type="submit" variant="secondary" loading={savingBlackout} className="self-start">
-                Add blackout
+                Add holiday
               </Button>
             </form>
-          </div>
+          </div>}
         </div>
       </div>
     </div>
@@ -2398,13 +2450,6 @@ export function ScheduleView({
       return visibleDaySet.has(iso)
     })
 
-  const weekLabel = (() => {
-    const end = addDays(weekStart, 6)
-    return weekStart.getMonth() === end.getMonth()
-      ? weekStart.toLocaleDateString('en-NZ', { month: 'long', year: 'numeric' })
-      : `${weekStart.toLocaleDateString('en-NZ', { month: 'short' })} – ${end.toLocaleDateString('en-NZ', { month: 'short', year: 'numeric' })}`
-  })()
-
   // Client-side week/day navigation. We avoid `router.push` here because that
   // re-runs the whole server component on every click (3+ seconds in dev
   // because of Turbopack and ~5 sequential DB queries). Instead we hit a
@@ -2573,100 +2618,56 @@ export function ScheduleView({
 
   return (
     <div className="flex flex-col h-full">
-      {/* ── Header ──────────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between px-4 md:px-6 py-4 gap-3 flex-wrap border-b border-slate-100 bg-white">
+      {/* ── Header (title + date nav on the left, controls on the right) ────── */}
+      <div className="flex items-center px-4 md:px-6 py-3 gap-3 flex-wrap border-b border-slate-100 bg-white">
         <h1 className="text-xl font-bold text-slate-900">Schedule</h1>
-        <div className="flex items-center gap-2 flex-wrap">
-          {!googleCalendarConnected ? (
-            <a href="/api/google-calendar/connect">
-              <Button variant="secondary" size="sm">
-                <Calendar className="h-4 w-4" /> Connect Google Calendar
-              </Button>
-            </a>
-          ) : (
-            <span className="flex items-center gap-1 text-xs text-green-600 bg-green-50 px-2.5 py-1.5 rounded-full border border-green-100">
-              <Calendar className="h-3.5 w-3.5" /> Google Calendar synced
-            </span>
-          )}
 
-          {/* Reports button */}
-          <Button variant="secondary" size="sm" onClick={() => setShowReport(true)}>
-            <BarChart2 className="h-4 w-4" /> Reports
-          </Button>
-
-          {/* Availability button */}
-          <Button variant="secondary" size="sm" onClick={() => setShowAvail(true)}>
-            <Settings className="h-4 w-4" /> Availability
-          </Button>
-
-          <ScheduleSettings
-            startHour={scheduleStartHour}
-            endHour={scheduleEndHour}
-            days={scheduleDays}
-            extraFields={extraFields}
-            customFields={customFields}
-          />
-
-          {/* Day/Week toggle */}
-          <div className="flex p-0.5 bg-slate-100 rounded-xl gap-0.5">
-            <button
-              onClick={() => setView('day')}
-              className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${view === 'day' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
-            >
-              <List className="h-3.5 w-3.5" /> Day
-            </button>
-            <button
-              onClick={() => setView('week')}
-              className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${view === 'week' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
-            >
-              <LayoutGrid className="h-3.5 w-3.5" /> Week
-            </button>
-          </div>
-
-          <AssignPackageFromScheduleButton
-            clients={clients.map(c => ({ id: c.id, name: c.name, dogs: c.dogs }))}
-            packages={packages}
-            availability={availSlots}
-          />
-        </div>
-      </div>
-
-      {/* ── Navigation bar ───────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between px-4 md:px-6 py-3 bg-white border-b border-slate-100">
-        <button onClick={() => navigate(-1)} disabled={navigatingWeek} className="p-2 rounded-xl hover:bg-slate-100 text-slate-500 disabled:opacity-40">
-          <ChevronLeft className="h-5 w-5" />
-        </button>
-        <div className="text-center">
-          {view === 'week' ? (
-            <>
-              <p className="font-semibold text-slate-900 text-sm">{weekLabel}</p>
-              <p className="text-xs text-slate-400">
+        {/* Date nav — sits next to the title */}
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => navigate(-1)}
+            disabled={navigatingWeek}
+            className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 disabled:opacity-40"
+            aria-label="Previous"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <div className="min-w-[8rem] text-center">
+            {view === 'week' ? (
+              <p className="font-semibold text-slate-900 text-sm tabular-nums">
                 {weekStart.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })} – {addDays(weekStart, 6).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}
               </p>
-            </>
-          ) : (
-            <>
-              <p className="font-semibold text-slate-900 text-sm">{fmtFullDate(selectedDate)}</p>
-              {selectedDate === today && <p className="text-xs text-blue-600 font-medium">Today</p>}
-            </>
-          )}
+            ) : (
+              <p className="font-semibold text-slate-900 text-sm">
+                {fmtFullDate(selectedDate)}{selectedDate === today && <span className="ml-1 text-xs text-blue-600 font-medium">· Today</span>}
+              </p>
+            )}
+          </div>
+          <button
+            onClick={() => navigate(1)}
+            disabled={navigatingWeek}
+            className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 disabled:opacity-40"
+            aria-label="Next"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
         </div>
-        <button onClick={() => navigate(1)} disabled={navigatingWeek} className="p-2 rounded-xl hover:bg-slate-100 text-slate-500 disabled:opacity-40">
-          <ChevronRight className="h-5 w-5" />
-        </button>
-      </div>
 
-      {/* Search — fades non-matching blocks to 20% opacity until cleared. */}
-      <div className="flex items-center gap-2 px-4 md:px-6 py-2 bg-white border-b border-slate-100">
-        <div className="relative flex-1 max-w-md">
+        {/* Search (pushed to the right cluster) */}
+        <div className="relative w-56 lg:w-64 ml-auto">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <input
             type="search"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Search sessions by client, dog, title, location…"
-            className="w-full h-9 pl-9 pr-9 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="Search sessions…"
+            className="w-full h-8 pl-9 pr-14 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
+          {searchTokens.length > 0 && (
+            <span className="absolute right-7 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 tabular-nums">
+              {matchedIds.size}
+            </span>
+          )}
           {search && (
             <button
               onClick={() => setSearch('')}
@@ -2677,22 +2678,60 @@ export function ScheduleView({
             </button>
           )}
         </div>
-        {searchTokens.length > 0 && (
-          <span className="text-xs text-slate-500">
-            {matchedIds.size} match{matchedIds.size === 1 ? '' : 'es'}
-          </span>
-        )}
-      </div>
 
-      {/* ── Hint bar (week view only) ────────────────────────────────────────── */}
-      {view === 'week' && (
-        <div className="flex items-center gap-4 px-4 md:px-6 py-1.5 text-[10px] text-slate-400 bg-slate-50 border-b border-slate-100">
-          <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> Click empty slot to assign a package</span>
-          <span>· Drag sessions to reschedule</span>
-          <span>· Click session to open client</span>
-          <span className="flex items-center gap-1 ml-auto"><span className="w-3 h-3 rounded-sm bg-emerald-200 inline-block" /> Availability</span>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {!googleCalendarConnected ? (
+            <a href="/api/google-calendar/connect" title="Connect Google Calendar">
+              <Button variant="secondary" size="sm" aria-label="Connect Google Calendar">
+                <Calendar className="h-4 w-4" />
+              </Button>
+            </a>
+          ) : (
+            <span
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-emerald-600 bg-emerald-50 border border-emerald-100"
+              title="Google Calendar synced"
+            >
+              <Calendar className="h-3.5 w-3.5" />
+            </span>
+          )}
+
+          <Button variant="secondary" size="sm" onClick={() => setShowReport(true)} title="Weekly report">
+            <BarChart2 className="h-4 w-4" /> Reports
+          </Button>
+
+          <Button variant="secondary" size="sm" onClick={() => setShowAvail(true)} title="Availability hours">
+            <Clock className="h-4 w-4" /> Hours
+          </Button>
+
+          <ScheduleSettings
+            startHour={scheduleStartHour}
+            endHour={scheduleEndHour}
+            days={scheduleDays}
+            extraFields={extraFields}
+            customFields={customFields}
+          />
+
+          {/* Day/Week toggle (icon-only) */}
+          <div className="flex p-0.5 bg-slate-100 rounded-xl gap-0.5">
+            <button
+              onClick={() => setView('day')}
+              title="Day view"
+              aria-label="Day view"
+              className={`flex items-center px-2 py-1.5 rounded-lg text-xs font-medium transition-all ${view === 'day' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
+            >
+              <List className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={() => setView('week')}
+              title="Week view"
+              aria-label="Week view"
+              className={`flex items-center px-2 py-1.5 rounded-lg text-xs font-medium transition-all ${view === 'week' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
-      )}
+      </div>
 
       {dropWarning && (
         <div className="flex items-start gap-2 px-4 md:px-6 py-2 bg-amber-50 border-b border-amber-200 text-xs text-amber-800">
