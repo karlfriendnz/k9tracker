@@ -191,6 +191,7 @@ model TrainerProfile {
   packages           Package[]
   sessionForms       SessionForm[]
   products           Product[]
+  achievements       Achievement[]
 
   @@map("trainer_profiles")
 }
@@ -764,6 +765,30 @@ model BlackoutPeriod {
 
   @@index([trainerId])
   @@map("blackout_periods")
+}
+
+// ─── Trainer-defined Achievements ────────────────────────────────────────────
+
+// Trainer-curated catalogue of achievements / badges they want clients to earn.
+// Award rules and per-client awarding live elsewhere; this is just the catalogue.
+model Achievement {
+  id          String   @id @default(cuid())
+  trainerId   String
+  name        String
+  description String?  @db.Text
+  // Short emoji or symbol shown on the badge (eg "🏆", "⭐", "🐾").
+  icon        String?
+  // Tailwind palette key chosen by the trainer for the badge accent
+  // (eg "blue", "emerald", "amber"). Renderer falls back to a default.
+  color       String?
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  trainer TrainerProfile @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+
+  @@index([trainerId])
+  @@map("achievements")
 }
 
 // ─── Embed Forms ──────────────────────────────────────────────────────────────

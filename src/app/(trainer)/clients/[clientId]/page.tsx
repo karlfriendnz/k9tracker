@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { getClientAccess } from '@/lib/trainer-access'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, Pencil } from 'lucide-react'
+import { ArrowLeft, Pencil, Eye } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 import { ShareClientModal } from './share-client-modal'
 import { DeleteClientButton } from './delete-client-button'
@@ -170,6 +170,12 @@ export default async function ClientDetailPage({
                 <Button variant="secondary" size="sm">
                   <Pencil className="h-4 w-4" />
                   Edit
+                </Button>
+              </Link>
+              <Link href={`/preview-as/${client.id}`} target="_blank" rel="noopener">
+                <Button variant="secondary" size="sm" title="See what this client sees when they log in">
+                  <Eye className="h-4 w-4" />
+                  View as client
                 </Button>
               </Link>
             </>
