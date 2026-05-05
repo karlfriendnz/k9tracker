@@ -1,4 +1,4 @@
-import type { TrainingSession } from '@prisma/client'
+import type { TrainingSession } from '@/generated/prisma'
 
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token'
 const GOOGLE_CALENDAR_API = 'https://www.googleapis.com/calendar/v3'

@@ -1,4 +1,4 @@
-import type { NotificationType, NotificationChannel } from '@prisma/client'
+import type { NotificationType, NotificationChannel } from '@/generated/prisma'
 
 // Single source of truth for everything about each notification type:
 // human label, default channels, default copy, and what placeholders are

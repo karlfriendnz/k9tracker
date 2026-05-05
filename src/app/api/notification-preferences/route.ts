@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { NOTIFICATION_TYPES } from '@/lib/notification-types'
-import type { NotificationType, NotificationChannel } from '@prisma/client'
+import type { NotificationType, NotificationChannel } from '@/generated/prisma'
 
 export const runtime = 'nodejs'
 

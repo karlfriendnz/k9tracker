@@ -1,5 +1,9 @@
 generator client {
   provider = "prisma-client-js"
+  // Generate into the source tree so Vercel never serves a stale @prisma/client
+  // from a cached node_modules between deploys. (Default node_modules/.prisma/
+  // path was being cached across deploys, missing newly-added models.)
+  output   = "../src/generated/prisma"
 }
 
 datasource db {

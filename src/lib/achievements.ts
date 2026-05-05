@@ -7,7 +7,7 @@
 // unique constraint, so it's safe to call from many write-points.
 
 import { prisma } from '@/lib/prisma'
-import type { Achievement, AchievementTrigger } from '@prisma/client'
+import type { Achievement, AchievementTrigger } from '@/generated/prisma'
 
 interface ClientCounters {
   sessionsCompleted: number

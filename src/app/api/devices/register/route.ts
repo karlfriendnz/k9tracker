@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { DevicePlatform } from '@prisma/client'
+import { DevicePlatform } from '@/generated/prisma'
 
 export async function POST(req: Request) {
   const session = await auth()

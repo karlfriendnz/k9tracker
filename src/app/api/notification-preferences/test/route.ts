@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { sendApns, INVALID_TOKEN_REASONS } from '@/lib/apns'
 import { NOTIFICATION_TYPES, renderTemplate } from '@/lib/notification-types'
 import { resolvePref } from '@/lib/notification-prefs'
-import type { NotificationType } from '@prisma/client'
+import type { NotificationType } from '@/generated/prisma'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
