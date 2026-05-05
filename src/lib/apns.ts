@@ -1,5 +1,6 @@
 import { connect, type ClientHttp2Session } from 'node:http2'
 import { createSign } from 'node:crypto'
+import { env } from '@/lib/env'
 
 // Apple Push Notification service — token-based JWT auth (.p8 key).
 // Docs: https://developer.apple.com/documentation/usernotifications/sending_notification_requests_to_apns
@@ -28,17 +29,14 @@ interface SendResult {
 }
 
 function getConfig(): ApnsConfig {
-  const keyId = process.env.APNS_KEY_ID
-  const teamId = process.env.APNS_TEAM_ID
-  const bundleId = process.env.APNS_BUNDLE_ID
-  const privateKeyPem = process.env.APNS_PRIVATE_KEY
-
-  if (!keyId || !teamId || !bundleId || !privateKeyPem) {
-    throw new Error('APNS env vars missing — set APNS_KEY_ID, APNS_TEAM_ID, APNS_BUNDLE_ID, APNS_PRIVATE_KEY')
-  }
   // Vercel env vars don't preserve real newlines in single-line input, so we
   // accept the .p8 with literal "\n" sequences and restore them here.
-  return { keyId, teamId, bundleId, privateKeyPem: privateKeyPem.replace(/\\n/g, '\n') }
+  return {
+    keyId: env.APNS_KEY_ID,
+    teamId: env.APNS_TEAM_ID,
+    bundleId: env.APNS_BUNDLE_ID,
+    privateKeyPem: env.APNS_PRIVATE_KEY.replace(/\\n/g, '\n'),
+  }
 }
 
 let cachedJwt: { token: string; expiresAt: number } | null = null
