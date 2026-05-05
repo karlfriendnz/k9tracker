@@ -21,6 +21,15 @@ html {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Native (Capacitor) shell: respect notch / home indicator. NativeBootstrap
+   sets data-native on <html> so these only apply inside the wrapped app. */
+html[data-native='true'] body {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
 /* Minimum touch target size */
 button, a, [role="button"] {
   min-height: 44px;

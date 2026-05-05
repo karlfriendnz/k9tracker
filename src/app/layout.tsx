@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Geist } from 'next/font/google'
 import './globals.css'
+import { NativeBootstrap } from '@/components/native/NativeBootstrap'
 
 const geist = Geist({
   variable: '--font-geist',
@@ -18,10 +19,6 @@ export const metadata: Metadata = {
     capable: true,
     statusBarStyle: 'black-translucent',
     title: 'PupManager',
-    startupImage: '/apple-icon',
-  },
-  icons: {
-    apple: '/apple-icon',
   },
 }
 
@@ -29,6 +26,7 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
+  viewportFit: 'cover',
   themeColor: '#2563eb',
 }
 
@@ -43,6 +41,7 @@ export default function RootLayout({
           Grammarly) inject classes onto <body> before React hydrates. Without this,
           every page logs a benign hydration mismatch. */}
       <body suppressHydrationWarning className="min-h-full bg-slate-50 text-slate-900 flex flex-col">
+        <NativeBootstrap />
         {children}
       </body>
     </html>

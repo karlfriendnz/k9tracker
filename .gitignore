@@ -48,3 +48,24 @@ next-env.d.ts
 .claude/
 .playwright-mcp/
 .env.vercel.prod
+
+# capacitor / native build artifacts
+/ios/App/Pods
+/ios/App/build
+/ios/App/App/public
+/ios/DerivedData
+/ios/.xcode.env.local
+/android/.gradle
+/android/build
+/android/app/build
+/android/app/src/main/assets/public
+/android/local.properties
+/android/captures
+/android/.idea
+*.xcuserdatad
+*.xcuserstate
+
+# local design references / internal docs
+/dashboard-*.png
+/login-*.png
+/branding/

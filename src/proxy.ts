@@ -69,5 +69,5 @@ export default auth((req) => {
 export const config = {
   // Skip auth/role checks for static assets and App Router metadata routes
   // (manifest.json, icon, apple-icon, sitemap, robots) — these are public by design.
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|manifest.json|icon|apple-icon|sitemap.xml|robots.txt|public/).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|manifest.json|icon|apple-icon|logo.png|icons/|sitemap.xml|robots.txt|public/).*)'],
 }

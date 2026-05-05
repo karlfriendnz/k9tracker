@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">PupManager</string>
+    <string name="title_activity_main">PupManager</string>
+    <string name="package_name">com.pupmanager.app</string>
+    <string name="custom_url_scheme">com.pupmanager.app</string>
+</resources>

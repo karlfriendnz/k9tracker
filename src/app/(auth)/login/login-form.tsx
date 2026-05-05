@@ -6,6 +6,7 @@ import { signIn } from 'next-auth/react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import { ShieldCheck, PawPrint, MailCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardBody } from '@/components/ui/card'
@@ -55,42 +56,59 @@ export function LoginForm({ error, callbackUrl }: { error?: string; callbackUrl?
   }
 
   return (
-    <Card>
+    <Card className="border-slate-100/80 shadow-md shadow-slate-900/5">
       <CardBody className="pt-6">
-        {/* Role toggle */}
-        <div className="mb-6 flex rounded-xl bg-slate-100 p-1">
+        <div
+          role="tablist"
+          aria-label="Choose account type"
+          className="mb-6 grid grid-cols-2 rounded-xl bg-slate-100 p-1"
+        >
           <button
             type="button"
+            role="tab"
+            aria-selected={mode === 'trainer'}
             onClick={() => setMode('trainer')}
-            className={`flex-1 rounded-lg py-2 text-sm font-medium transition-all ${
+            className={`inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-medium transition-colors duration-200 ${
               mode === 'trainer'
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700'
+                ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-900/5'
+                : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            I&apos;m a trainer
+            <ShieldCheck className="h-4 w-4" aria-hidden />
+            Trainer
           </button>
           <button
             type="button"
+            role="tab"
+            aria-selected={mode === 'client'}
             onClick={() => setMode('client')}
-            className={`flex-1 rounded-lg py-2 text-sm font-medium transition-all ${
+            className={`inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-medium transition-colors duration-200 ${
               mode === 'client'
-                ? 'bg-white text-slate-900 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700'
+                ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-900/5'
+                : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            I&apos;m a client
+            <PawPrint className="h-4 w-4" aria-hidden />
+            Client
           </button>
         </div>
 
-        {errorMessage && <Alert variant="error" className="mb-4">{errorMessage}</Alert>}
+        {errorMessage && (
+          <Alert variant="error" className="mb-4">
+            {errorMessage}
+          </Alert>
+        )}
 
         {mode === 'trainer' ? (
-          <form onSubmit={trainerForm.handleSubmit(onTrainerSubmit)} className="flex flex-col gap-4">
+          <form
+            onSubmit={trainerForm.handleSubmit(onTrainerSubmit)}
+            className="flex flex-col gap-4"
+          >
             <Input
               label="Email address"
               type="email"
               autoComplete="email"
+              placeholder="you@yourbusiness.com"
               error={trainerForm.formState.errors.email?.message}
               {...trainerForm.register('email')}
             />
@@ -101,10 +119,10 @@ export function LoginForm({ error, callbackUrl }: { error?: string; callbackUrl?
               error={trainerForm.formState.errors.password?.message}
               {...trainerForm.register('password')}
             />
-            <div className="flex justify-end">
+            <div className="-mt-2 flex justify-end">
               <Link
                 href="/forgot-password"
-                className="text-xs text-blue-600 hover:underline"
+                className="text-xs font-medium text-blue-600 transition-colors hover:text-blue-700 hover:underline"
               >
                 Forgot password?
               </Link>
@@ -112,30 +130,41 @@ export function LoginForm({ error, callbackUrl }: { error?: string; callbackUrl?
             <Button
               type="submit"
               size="lg"
-              className="w-full mt-1"
+              className="mt-1 w-full"
               loading={trainerForm.formState.isSubmitting}
             >
               Sign in
             </Button>
             <p className="text-center text-sm text-slate-500">
               New trainer?{' '}
-              <Link href="/register" className="text-red-600 font-medium hover:underline">
+              <Link
+                href="/register"
+                className="font-medium text-blue-600 transition-colors hover:text-blue-700 hover:underline"
+              >
                 Create an account
               </Link>
             </p>
           </form>
         ) : magicLinkSent ? (
-          <Alert variant="success">
-            <p className="font-medium">Check your inbox!</p>
-            <p className="mt-1 text-xs">
-              We&apos;ve sent a login link to your email. It expires in 15 minutes.
-            </p>
-          </Alert>
+          <div className="flex flex-col items-center gap-3 rounded-xl bg-green-50/70 px-4 py-6 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100 text-green-700">
+              <MailCheck className="h-6 w-6" aria-hidden />
+            </div>
+            <div>
+              <p className="text-base font-semibold text-slate-900">Check your inbox</p>
+              <p className="mt-1 text-sm text-slate-600">
+                We&apos;ve sent a one-tap login link to your email. It expires in 15 minutes.
+              </p>
+            </div>
+          </div>
         ) : (
-          <form onSubmit={clientForm.handleSubmit(onClientSubmit)} className="flex flex-col gap-4">
-            <Alert variant="info">
+          <form
+            onSubmit={clientForm.handleSubmit(onClientSubmit)}
+            className="flex flex-col gap-4"
+          >
+            <p className="text-sm text-slate-600">
               Enter your email and we&apos;ll send you a one-tap login link — no password needed.
-            </Alert>
+            </p>
             <Input
               label="Email address"
               type="email"

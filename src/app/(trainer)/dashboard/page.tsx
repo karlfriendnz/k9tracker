@@ -3,8 +3,9 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import Link from 'next/link'
 import { Card } from '@/components/ui/card'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { UserPlus, TrendingUp, Calendar, MapPin, Video, ChevronLeft, ChevronRight, Play, ShoppingBag } from 'lucide-react'
+import { UserPlus, TrendingUp, Calendar, MapPin, Video, ChevronLeft, ChevronRight, ArrowRight, ShoppingBag, Dog, Users, CheckCircle2, type LucideIcon } from 'lucide-react'
 import { WeeklyTasksStat, type WeeklyTask } from './weekly-tasks-stat'
 import { PendingRequestsPanel } from './pending-requests-panel'
 import { startOfDayInTz, endOfDayInTz, todayInTz } from '@/lib/timezone'
@@ -154,59 +155,73 @@ export default async function DashboardPage({
 
   return (
     <div className="p-4 md:p-8 max-w-4xl mx-auto">
-      <div className="mb-8">
+      <div className="mb-6">
         <h1 className="text-2xl font-bold text-slate-900">
           Good {getGreeting()}, {session.user.name?.split(' ')[0]} 👋
         </h1>
         <p className="text-slate-500 text-sm mt-1">{session.user.businessName}</p>
       </div>
 
-      {/* Day-scoped session list — surfaced first so the trainer sees what's
-          on today before scrolling past stats and quick actions. */}
+      {/* Quick actions — top-of-page so primary jobs-to-be-done are one tap away. */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+        <QuickAction href="/clients/invite" icon={<UserPlus className="h-5 w-5" />} label="Invite client" />
+        <QuickAction href="/schedule" icon={<Calendar className="h-5 w-5" />} label="Book session" />
+        <QuickAction href="/progress" icon={<TrendingUp className="h-5 w-5" />} label="View progress" />
+        <QuickAction href="/schedule" icon={<Calendar className="h-5 w-5" />} label="Schedule" />
+      </div>
+
+      {/* Day-scoped session list — surfaced next so the trainer sees what's
+          on today before scrolling past stats. */}
       <div className="mb-8">
-        <div className="flex items-center justify-between mb-3 gap-2">
-          <h2 className="font-semibold text-slate-900">
-            {isToday
-              ? 'Coming up today'
-              : `Sessions on ${new Date(`${focusDateStr}T12:00:00Z`).toLocaleDateString('en-NZ', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' })}`}
-          </h2>
+        <div className="mb-3 flex items-baseline justify-between gap-3">
           <div className="flex items-center gap-1">
+            <h2 className="text-base font-semibold text-slate-900">
+              {isToday
+                ? "Today's sessions"
+                : new Date(`${focusDateStr}T12:00:00Z`).toLocaleDateString('en-NZ', {
+                    weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC',
+                  })}
+            </h2>
             <Link
               href={prevHref}
               aria-label="Previous day"
-              className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500"
+              className="ml-2 p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
             >
               <ChevronLeft className="h-4 w-4" />
+            </Link>
+            <Link
+              href={nextHref}
+              aria-label="Next day"
+              className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            >
+              <ChevronRight className="h-4 w-4" />
             </Link>
             {!isToday && (
               <Link
                 href={todayHref}
-                className="text-xs font-medium px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100"
+                className="ml-1 text-xs font-medium text-blue-600 hover:underline"
               >
                 Today
               </Link>
             )}
-            <Link
-              href={nextHref}
-              aria-label="Next day"
-              className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Link>
-            <Link href="/schedule" className="text-sm text-blue-600 hover:underline ml-2">
-              View schedule
-            </Link>
           </div>
+          <Link
+            href="/schedule"
+            className="inline-flex items-center gap-0.5 text-sm font-medium text-blue-600 hover:text-blue-700 whitespace-nowrap"
+          >
+            View schedule
+            <ChevronRight className="h-4 w-4" />
+          </Link>
         </div>
         {todaysSessions.length === 0 ? (
-          <Card className="p-6 text-center">
+          <Card className="p-8 text-center border-dashed">
             <Calendar className="h-8 w-8 mx-auto mb-2 text-slate-300" />
             <p className="text-sm text-slate-500">
               {isToday ? 'No sessions scheduled for today.' : 'No sessions on this day.'}
             </p>
           </Card>
         ) : (
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2.5">
             {todaysSessions.map((s) => {
               const clientUser = s.client?.user ?? s.dog?.primaryFor[0]?.user
               const clientName = clientUser ? (clientUser.name ?? clientUser.email) : null
@@ -214,75 +229,90 @@ export default async function DashboardPage({
               const isPast = start.getTime() + s.durationMins * 60_000 < new Date().getTime()
               const meta = STATUS_META[s.status]
               const sessionRequests = s.clientId ? requestsByClient.get(s.clientId) ?? [] : []
+              const startTime = start.toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: tz })
+              const isVirtual = s.sessionType === 'VIRTUAL'
               return (
-                <Card key={s.id} className={`p-3 transition-all ${isPast ? 'opacity-60' : ''}`}>
-                  <div className="flex items-center gap-3">
-                    <div className="flex-shrink-0 text-center min-w-[56px]">
-                      <p className="text-sm font-bold text-blue-600">
-                        {start.toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: tz })}
-                      </p>
-                      <p className="text-[10px] text-slate-400">{s.durationMins}m</p>
+                <Card
+                  key={s.id}
+                  className={cn(
+                    'p-0 overflow-hidden transition-all hover:shadow-md hover:-translate-y-px',
+                    isPast && 'opacity-60'
+                  )}
+                >
+                  <div className="flex items-stretch sm:h-12 sm:min-h-12">
+                    {/* Time rail — colour-coded by status, compact on desktop */}
+                    <div className={cn(
+                      'flex-shrink-0 w-[72px] sm:w-auto sm:px-3 flex flex-col sm:flex-row items-center justify-center sm:gap-1.5 px-2 py-2.5 sm:py-0 text-center border-r',
+                      isPast
+                        ? 'bg-slate-50 border-slate-100 text-slate-500'
+                        : 'bg-blue-50/60 border-blue-100 text-blue-700'
+                    )}>
+                      <p className="text-base sm:text-sm font-bold leading-none tabular-nums">{startTime}</p>
+                      <p className="text-[10px] sm:text-[11px] font-medium opacity-70 mt-0.5 sm:mt-0">{s.durationMins} min</p>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-900 truncate">{s.title}</p>
-                      <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
-                        {clientName && <span className="truncate">{clientName}</span>}
-                        {s.dog && <span className="text-slate-400 truncate">🐕 {s.dog.name}</span>}
-                      </div>
-                      <div className="flex items-center gap-3 text-[11px] text-slate-400 mt-0.5">
-                        {s.sessionType === 'VIRTUAL' ? (
-                          <span className="flex items-center gap-1"><Video className="h-3 w-3" />Virtual</span>
+
+                    {/* Body — stacked on mobile (Dog → Client → Package), one row on desktop */}
+                    <div className="flex-1 min-w-0 px-3 py-2 sm:py-0 sm:px-3.5 flex flex-col sm:flex-row sm:items-center gap-y-0.5 sm:gap-y-0 sm:gap-x-2">
+                      {/* Dog (or fallback to title if no dog) */}
+                      <div className="inline-flex items-center gap-1.5 min-w-0">
+                        {s.dog ? (
+                          <>
+                            <Dog className="h-3.5 w-3.5 text-blue-500 flex-shrink-0" aria-hidden />
+                            <p className="text-sm font-semibold text-slate-900 truncate">{s.dog.name}</p>
+                          </>
                         ) : (
-                          <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{s.location ?? 'In person'}</span>
+                          <p className="text-sm font-semibold text-slate-900 truncate">{s.title}</p>
                         )}
                       </div>
+
+                      {clientName && (
+                        <>
+                          <span className="hidden sm:inline text-slate-300" aria-hidden>·</span>
+                          <p className="text-xs font-medium text-slate-700 truncate sm:max-w-[18ch]">{clientName}</p>
+                        </>
+                      )}
+
+                      {s.dog && (
+                        <>
+                          <span className="hidden sm:inline text-slate-300" aria-hidden>·</span>
+                          <p className="text-xs text-slate-500 truncate sm:max-w-[26ch]">{s.title}</p>
+                        </>
+                      )}
+
+                      {/* Status pill — sits inline on desktop, on its own row on mobile */}
+                      <span className={cn(
+                        'inline-flex text-[10px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap self-start mt-1 sm:mt-0 sm:ml-auto sm:self-auto',
+                        meta.colour
+                      )}>
+                        {meta.label}
+                      </span>
+
+                      {sessionRequests.length > 0 && (
+                        <span
+                          className="hidden sm:inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 whitespace-nowrap flex-shrink-0"
+                          title={sessionRequests.map(r => r.product.name).join(', ')}
+                        >
+                          <ShoppingBag className="h-3 w-3" aria-hidden />
+                          {sessionRequests.length} to bring
+                        </span>
+                      )}
                     </div>
-                    <span className={`flex-shrink-0 text-[10px] font-medium px-2 py-0.5 rounded-full border ${meta.colour}`}>
-                      {meta.label}
-                    </span>
+
+                    {/* Action rail */}
                     <Link
                       href={`/sessions/${s.id}`}
-                      className="flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors flex-shrink-0"
+                      aria-label={`Start session: ${s.title}`}
+                      className="group flex-shrink-0 w-14 sm:w-auto flex items-center justify-center gap-1 sm:gap-1.5 px-0 sm:px-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white transition-colors"
                     >
-                      <Play className="h-3 w-3" />
-                      Start
+                      <span className="hidden sm:inline text-xs font-semibold">Start</span>
+                      <ArrowRight className="h-4 w-4 sm:h-3.5 sm:w-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden />
                     </Link>
                   </div>
-
-                  {sessionRequests.length > 0 && (
-                    <div className="mt-2.5 pt-2.5 border-t border-slate-100 flex items-center gap-2 flex-wrap">
-                      <span className="text-[11px] font-semibold text-amber-700 uppercase tracking-wide flex items-center gap-1">
-                        <ShoppingBag className="h-3 w-3" /> Bring
-                      </span>
-                      {sessionRequests.map(r => (
-                        <span
-                          key={r.id}
-                          className="inline-flex items-center text-[11px] font-medium text-amber-900 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-full"
-                          title={r.note ?? undefined}
-                        >
-                          {r.product.name}
-                        </span>
-                      ))}
-                    </div>
-                  )}
                 </Card>
               )
             })}
           </div>
         )}
-      </div>
-
-      {/* Stats row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <StatCard label="Clients" value={String(totalClients)} />
-        <WeeklyTasksStat tasks={weeklyTasks} />
-        <StatCard label="Completed" value={String(weeklyTasksCompleted)} />
-        <StatCard
-          label="Compliance"
-          value={overallCompliance != null ? `${overallCompliance}%` : '—'}
-          highlight={overallCompliance != null}
-          highlightGood={overallCompliance != null && overallCompliance >= 70}
-        />
       </div>
 
       {/* Pending product requests */}
@@ -333,12 +363,36 @@ export default async function DashboardPage({
         </div>
       )}
 
-      {/* Quick actions */}
+      {/* Stats — kept at the bottom as supporting context, not primary action area. */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <QuickAction href="/clients/invite" icon={<UserPlus className="h-5 w-5" />} label="Invite client" />
-        <QuickAction href="/schedule" icon={<Calendar className="h-5 w-5" />} label="Book session" />
-        <QuickAction href="/progress" icon={<TrendingUp className="h-5 w-5" />} label="View progress" />
-        <QuickAction href="/schedule" icon={<Calendar className="h-5 w-5" />} label="Schedule" />
+        <StatCard
+          label="Clients"
+          value={String(totalClients)}
+          icon={Users}
+          iconClass="bg-blue-50 text-blue-600"
+        />
+        <WeeklyTasksStat tasks={weeklyTasks} />
+        <StatCard
+          label="Completed"
+          value={String(weeklyTasksCompleted)}
+          icon={CheckCircle2}
+          iconClass="bg-emerald-50 text-emerald-600"
+          sub={weeklyTasksAssigned > 0 ? `of ${weeklyTasksAssigned}` : undefined}
+        />
+        <StatCard
+          label="Compliance"
+          value={overallCompliance != null ? `${overallCompliance}%` : '—'}
+          icon={TrendingUp}
+          iconClass={overallCompliance == null
+            ? 'bg-slate-100 text-slate-500'
+            : overallCompliance >= 70
+              ? 'bg-emerald-50 text-emerald-600'
+              : 'bg-rose-50 text-rose-600'
+          }
+          highlight={overallCompliance != null}
+          highlightGood={overallCompliance != null && overallCompliance >= 70}
+          progress={overallCompliance ?? undefined}
+        />
       </div>
     </div>
   )
@@ -354,20 +408,50 @@ const STATUS_META: Record<'UPCOMING' | 'COMPLETED' | 'COMMENTED' | 'INVOICED', {
 function StatCard({
   label,
   value,
+  icon: Icon,
+  iconClass,
+  sub,
   highlight,
   highlightGood,
+  progress,
 }: {
   label: string
   value: string
+  icon: LucideIcon
+  iconClass?: string
+  sub?: React.ReactNode
   highlight?: boolean
   highlightGood?: boolean
+  progress?: number
 }) {
   return (
-    <Card className="p-4 text-center">
-      <p className={`text-2xl font-bold ${highlight ? (highlightGood ? 'text-green-600' : 'text-red-500') : 'text-slate-900'}`}>
-        {value}
-      </p>
-      <p className="text-xs text-slate-400 mt-0.5">{label}</p>
+    <Card className="p-4 flex flex-col gap-2">
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+        <span className={cn(
+          'flex h-7 w-7 items-center justify-center rounded-lg flex-shrink-0',
+          iconClass ?? 'bg-slate-100 text-slate-500'
+        )}>
+          <Icon className="h-3.5 w-3.5" aria-hidden />
+        </span>
+      </div>
+      <div className="flex items-baseline gap-1.5">
+        <p className={cn(
+          'text-2xl font-bold tabular-nums leading-none',
+          highlight ? (highlightGood ? 'text-emerald-600' : 'text-rose-500') : 'text-slate-900'
+        )}>
+          {value}
+        </p>
+        {sub && <p className="text-xs text-slate-500">{sub}</p>}
+      </div>
+      {progress != null && (
+        <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+          <div
+            className={cn('h-full transition-all', progress >= 70 ? 'bg-emerald-500' : 'bg-rose-400')}
+            style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
+          />
+        </div>
+      )}
     </Card>
   )
 }
