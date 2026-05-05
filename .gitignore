@@ -69,3 +69,8 @@ next-env.d.ts
 /dashboard-*.png
 /login-*.png
 /branding/
+
+# playwright artifacts
+/playwright-report
+/test-results
+/playwright/.cache
