@@ -1,14 +1,12 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useSession } from 'next-auth/react';
 import { Capacitor } from '@capacitor/core';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { PushNotifications } from '@capacitor/push-notifications';
+import { App as CapacitorApp } from '@capacitor/app';
 
 export function NativeBootstrap() {
-  const { status } = useSession();
-
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
 
@@ -22,16 +20,32 @@ export function NativeBootstrap() {
     document.documentElement.dataset.nativePlatform = Capacitor.getPlatform();
   }, []);
 
-  // Only register for push once the user is authenticated — the registration
-  // endpoint requires a session, and asking for permission before login is
-  // jarring UX.
+  // The app uses server-side `auth()` only — there's no client SessionProvider —
+  // so we detect login by hitting /api/auth/session. Registration runs on launch
+  // and again whenever the app returns to foreground, which catches the case
+  // where the user logged in via the web flow before opening the app.
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
-    if (status !== 'authenticated') return;
+    if (Capacitor.getPlatform() !== 'ios') return; // Android push uses FCM, not wired yet
 
+    let registered = false;
     let cancelled = false;
 
-    (async () => {
+    async function isLoggedIn(): Promise<boolean> {
+      try {
+        const r = await fetch('/api/auth/session', { cache: 'no-store' });
+        if (!r.ok) return false;
+        const data = await r.json();
+        return Boolean(data?.user);
+      } catch {
+        return false;
+      }
+    }
+
+    async function tryRegister() {
+      if (registered || cancelled) return;
+      if (!(await isLoggedIn())) return;
+
       let perm = await PushNotifications.checkPermissions();
       if (perm.receive === 'prompt' || perm.receive === 'prompt-with-rationale') {
         perm = await PushNotifications.requestPermissions();
@@ -39,33 +53,32 @@ export function NativeBootstrap() {
       if (perm.receive !== 'granted') return;
 
       await PushNotifications.addListener('registration', async (token) => {
-        if (cancelled) return;
         try {
           await fetch('/api/devices/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              token: token.value,
-              platform: Capacitor.getPlatform() === 'ios' ? 'IOS' : 'ANDROID',
-            }),
+            body: JSON.stringify({ token: token.value, platform: 'IOS' }),
           });
-        } catch {
-          // swallowed — next launch will retry on registration event
-        }
+        } catch { /* swallowed — retry on next launch */ }
       });
 
-      await PushNotifications.addListener('registrationError', () => {
-        // surfaced via Xcode logs; nothing user-actionable here
-      });
-
+      await PushNotifications.addListener('registrationError', () => {});
       await PushNotifications.register();
-    })();
+      registered = true;
+    }
+
+    void tryRegister();
+
+    const stateHandle = CapacitorApp.addListener('appStateChange', ({ isActive }) => {
+      if (isActive) void tryRegister();
+    });
 
     return () => {
       cancelled = true;
+      void stateHandle.then(h => h.remove());
       PushNotifications.removeAllListeners().catch(() => {});
     };
-  }, [status]);
+  }, []);
 
   return null;
 }
