@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { sendApns, INVALID_TOKEN_REASONS } from '@/lib/apns'
+import { renderTemplate, NOTIFICATION_TYPES } from '@/lib/notification-types'
+import { resolvePrefsForUsers } from '@/lib/notification-prefs'
 
-// Vercel Cron runs this every 5 minutes; we look ~20 minutes ahead with a
-// generous window so a missed cron run still catches sessions on the next tick,
-// and `reminderPushSentAt` guarantees no duplicates.
-const LOOKAHEAD_MIN = 20
-const WINDOW_MIN = 10
+// Cron tick interval — must match Supabase pg_cron schedule. Defines the
+// fuzziness window for matching a session against a trainer's chosen lead time.
+const TICK_INTERVAL_MIN = 5
+// We never look more than this far ahead; keeps the per-tick query bounded.
+const MAX_LEAD_MIN = 240
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -18,12 +20,11 @@ export async function GET(req: Request) {
   }
 
   const now = new Date()
-  const windowStart = new Date(now.getTime() + (LOOKAHEAD_MIN - WINDOW_MIN / 2) * 60_000)
-  const windowEnd = new Date(now.getTime() + (LOOKAHEAD_MIN + WINDOW_MIN / 2) * 60_000)
-
+  // Pull every upcoming-soon session that hasn't been notified yet; we apply
+  // each trainer's per-pref lead time in code below.
   const sessions = await prisma.trainingSession.findMany({
     where: {
-      scheduledAt: { gte: windowStart, lte: windowEnd },
+      scheduledAt: { gt: now, lte: new Date(now.getTime() + MAX_LEAD_MIN * 60_000) },
       status: 'UPCOMING',
       reminderPushSentAt: null,
     },
@@ -45,33 +46,48 @@ export async function GET(req: Request) {
     },
   })
 
+  if (sessions.length === 0) {
+    return NextResponse.json({ sessionsConsidered: 0, pushesSent: 0, tokensInvalidated: 0 })
+  }
+
+  const trainerUserIds = Array.from(new Set(sessions.map(s => s.trainer.user.id)))
+  const prefs = await resolvePrefsForUsers(trainerUserIds, 'SESSION_REMINDER', 'PUSH')
+
   let pushed = 0
   const tokensToDelete: string[] = []
+  const meta = NOTIFICATION_TYPES.SESSION_REMINDER
 
   for (const s of sessions) {
     const trainerUser = s.trainer.user
-    if (!trainerUser.notifyPush) {
-      // Still mark as sent so we don't re-evaluate every cron tick.
-      await prisma.trainingSession.update({
-        where: { id: s.id },
-        data: { reminderPushSentAt: now },
-      })
+    const pref = prefs.get(trainerUser.id)!
+    const lead = pref.minutesBefore ?? meta.defaults.minutesBefore!
+    const minutesUntil = (s.scheduledAt.getTime() - now.getTime()) / 60_000
+    const inWindow = Math.abs(minutesUntil - lead) <= TICK_INTERVAL_MIN / 2
+
+    if (!inWindow) continue
+
+    // Channel kill-switch on the user, plus per-pref enable, plus device check.
+    if (!trainerUser.notifyPush || !pref.enabled || trainerUser.deviceTokens.length === 0) {
+      // Mark as sent so we don't keep evaluating this session every tick.
+      await prisma.trainingSession.update({ where: { id: s.id }, data: { reminderPushSentAt: now } })
       continue
     }
-    if (trainerUser.deviceTokens.length === 0) continue
 
-    const subjectName = s.dog?.name ?? s.client?.user?.name ?? 'a session'
     const startTime = s.scheduledAt.toLocaleTimeString('en-NZ', {
       hour: 'numeric', minute: '2-digit', hour12: true, timeZone: trainerUser.timezone,
     })
+    const subs = {
+      dogName: s.dog?.name ?? '',
+      clientName: s.client?.user?.name ?? '',
+      title: s.title,
+      startTime,
+      minutesBefore: String(lead),
+    }
 
     const results = await sendApns(
       trainerUser.deviceTokens.map(d => d.token),
       {
-        alert: {
-          title: `Upcoming session — ${subjectName}`,
-          body: `${s.title} at ${startTime} (in ~20 min)`,
-        },
+        alert: { title: renderTemplate(pref.title, subs), body: renderTemplate(pref.body, subs) },
         customData: { sessionId: s.id, type: 'session-reminder' },
       },
     )
@@ -81,10 +97,7 @@ export async function GET(req: Request) {
       else if (r.reason && INVALID_TOKEN_REASONS.has(r.reason)) tokensToDelete.push(r.token)
     }
 
-    await prisma.trainingSession.update({
-      where: { id: s.id },
-      data: { reminderPushSentAt: now },
-    })
+    await prisma.trainingSession.update({ where: { id: s.id }, data: { reminderPushSentAt: now } })
   }
 
   if (tokensToDelete.length > 0) {

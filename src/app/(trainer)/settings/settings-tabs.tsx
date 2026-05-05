@@ -1,10 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import { User, ListChecks, Globe } from 'lucide-react'
+import { User, ListChecks, Globe, Bell } from 'lucide-react'
 
 const TABS = [
   { id: 'profile', label: 'Profile', icon: User },
+  { id: 'notifications', label: 'Notifications', icon: Bell },
   { id: 'custom', label: 'Custom fields', icon: ListChecks },
   { id: 'forms', label: 'Embed forms', icon: Globe },
 ] as const
@@ -13,10 +14,12 @@ type TabId = typeof TABS[number]['id']
 
 export function SettingsTabs({
   profile,
+  notifications,
   customFields,
   forms,
 }: {
   profile: React.ReactNode
+  notifications: React.ReactNode
   customFields: React.ReactNode
   forms: React.ReactNode
 }) {
@@ -49,6 +52,7 @@ export function SettingsTabs({
 
       <div>
         <div className={tab === 'profile' ? '' : 'hidden'}>{profile}</div>
+        <div className={tab === 'notifications' ? '' : 'hidden'}>{notifications}</div>
         <div className={tab === 'custom' ? '' : 'hidden'}>{customFields}</div>
         <div className={tab === 'forms' ? '' : 'hidden'}>{forms}</div>
       </div>

@@ -255,7 +255,9 @@ export function TrainerSettingsForm({
               <span className="text-sm font-medium text-slate-700">Push notifications</span>
               <input type="checkbox" className="h-5 w-5" {...notifForm.register('notifyPush')} />
             </label>
-            <TestPushButton />
+            <p className="text-xs text-slate-400">
+              These are channel-level kill switches. Per-type controls (and a test button for each) live in the <strong>Notifications</strong> tab.
+            </p>
 
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-slate-700">Timezone</label>
@@ -319,45 +321,4 @@ export function TrainerSettingsForm({
   )
 }
 
-function TestPushButton() {
-  const [state, setState] = useState<{ kind: 'idle' } | { kind: 'sending' } | { kind: 'sent'; sent: number } | { kind: 'noDevices' } | { kind: 'error'; message: string }>({ kind: 'idle' })
-
-  async function send() {
-    setState({ kind: 'sending' })
-    try {
-      const r = await fetch('/api/devices/test-push', { method: 'POST' })
-      const text = await r.text()
-      let data: any
-      try { data = JSON.parse(text) } catch {
-        return setState({ kind: 'error', message: `HTTP ${r.status} — non-JSON body: ${text.slice(0, 200) || '(empty)'}` })
-      }
-      if (data.reason === 'no-devices') return setState({ kind: 'noDevices' })
-      if (data.reason === 'crash') return setState({ kind: 'error', message: `Server error: ${data.message ?? 'unknown'}` })
-      if (!data.ok) {
-        const detail = data.details?.[0]?.reason ?? data.details?.[0]?.status ?? 'unknown'
-        return setState({ kind: 'error', message: `Push failed: ${detail}` })
-      }
-      setState({ kind: 'sent', sent: data.sent })
-    } catch (e) {
-      setState({ kind: 'error', message: e instanceof Error ? e.message : 'Network error' })
-    }
-  }
-
-  return (
-    <div className="flex flex-col gap-2 rounded-xl border border-dashed border-slate-200 p-3">
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-slate-700">Test push notification</p>
-          <p className="text-xs text-slate-500">Sends a one-off push to every iOS device signed in to this account.</p>
-        </div>
-        <Button type="button" size="sm" variant="secondary" loading={state.kind === 'sending'} onClick={send}>
-          Send test
-        </Button>
-      </div>
-      {state.kind === 'sent' && <Alert variant="success">Sent to {state.sent} device{state.sent === 1 ? '' : 's'}. Check your iPhone.</Alert>}
-      {state.kind === 'noDevices' && <Alert variant="info">No iOS devices registered yet. Open the app on iPhone, allow notifications, then try again.</Alert>}
-      {state.kind === 'error' && <Alert variant="error">{state.message}</Alert>}
-    </div>
-  )
-}
 

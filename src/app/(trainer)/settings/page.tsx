@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { TrainerSettingsForm } from './trainer-settings-form'
 import { CustomFieldsManager } from './custom-fields-manager'
 import { SettingsTabs } from './settings-tabs'
+import { NotificationsPanel } from './notifications-panel'
 import { Globe, ChevronRight } from 'lucide-react'
 import type { Metadata } from 'next'
 
@@ -37,6 +38,7 @@ export default async function TrainerSettingsPage() {
 
       <SettingsTabs
         profile={<TrainerSettingsForm user={user} profile={trainerProfile} />}
+        notifications={<NotificationsPanel />}
         customFields={
           <CustomFieldsManager
             initialFields={customFields.map(f => ({

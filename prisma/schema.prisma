@@ -94,12 +94,56 @@ model User {
   // Push notification device tokens (one user can have multiple devices)
   deviceTokens DeviceToken[]
 
+  // Per-(type, channel) preferences. Absence of a row means "use the default".
+  notificationPreferences NotificationPreference[]
+
   @@map("users")
 }
 
 enum DevicePlatform {
   IOS
   ANDROID
+}
+
+// What kind of event a notification is for. Add new variants as we wire up
+// more triggers — the preference matrix UI renders one row per type.
+enum NotificationType {
+  SESSION_REMINDER             // n minutes before a TrainingSession starts
+  NEW_CLIENT_INVITE_ACCEPTED   // a client used the invite link to sign up
+  CLIENT_COMPLETED_TASKS       // a client completed all of today's tasks
+  NEW_MESSAGE                  // a new in-app message landed
+  DAILY_SUMMARY                // morning digest of today's sessions/tasks
+}
+
+enum NotificationChannel {
+  PUSH
+  EMAIL
+}
+
+// Per-(user, type, channel) preference. Absence of a row means "use the
+// type's default" (typically enabled). `minutesBefore` is only meaningful for
+// time-relative types like SESSION_REMINDER; null otherwise.
+model NotificationPreference {
+  id            String              @id @default(cuid())
+  userId        String
+  type          NotificationType
+  channel       NotificationChannel
+  enabled       Boolean             @default(true)
+  // Time-relative (e.g. SESSION_REMINDER) — minutes before the event fires.
+  minutesBefore Int?
+  // Time-of-day (e.g. DAILY_SUMMARY) — hour 0–23 in the user's timezone.
+  dailyAtHour   Int?
+  // Optional per-user copy overrides. Support {{placeholders}} that the
+  // sender substitutes (e.g. {{dogName}}, {{startTime}}, {{count}}). Null
+  // values fall back to the type's default template.
+  customTitle   String?
+  customBody    String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type, channel])
+  @@index([userId])
+  @@map("notification_preferences")
 }
 
 model DeviceToken {
