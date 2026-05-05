@@ -56,7 +56,7 @@ export default async function DashboardPage({
 
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
 
-  const todaysSessions = await prisma.trainingSession.findMany({
+  const todaysSessionsRaw = await prisma.trainingSession.findMany({
     where: { trainerId, scheduledAt: { gte: focusStart, lte: focusEnd } },
     include: {
       client: { select: { user: { select: { name: true, email: true } } } },
@@ -68,6 +68,17 @@ export default async function DashboardPage({
       },
     },
     orderBy: { scheduledAt: 'asc' },
+  })
+
+  // Push finished sessions to the bottom so the next/current one is on top.
+  // For past or future days every row falls in the same bucket so chronological
+  // order is preserved.
+  const nowMs = Date.now()
+  const todaysSessions = [...todaysSessionsRaw].sort((a, b) => {
+    const aPast = a.scheduledAt.getTime() + a.durationMins * 60_000 < nowMs ? 1 : 0
+    const bPast = b.scheduledAt.getTime() + b.durationMins * 60_000 < nowMs ? 1 : 0
+    if (aPast !== bPast) return aPast - bPast
+    return a.scheduledAt.getTime() - b.scheduledAt.getTime()
   })
 
   const prevDate = new Date(focusDate); prevDate.setDate(prevDate.getDate() - 1)
@@ -159,11 +170,11 @@ export default async function DashboardPage({
         <h1 className="text-2xl font-bold text-slate-900">
           Good {getGreeting()}, {session.user.name?.split(' ')[0]} 👋
         </h1>
-        <p className="text-slate-500 text-sm mt-1">{session.user.businessName}</p>
+        <p className="hidden sm:block text-slate-500 text-sm mt-1">{session.user.businessName}</p>
       </div>
 
       {/* Quick actions — top-of-page so primary jobs-to-be-done are one tap away. */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+      <div className="grid grid-cols-4 gap-2 sm:gap-3 mb-8">
         <QuickAction href="/clients/invite" icon={<UserPlus className="h-5 w-5" />} label="Invite client" />
         <QuickAction href="/schedule" icon={<Calendar className="h-5 w-5" />} label="Book session" />
         <QuickAction href="/progress" icon={<TrendingUp className="h-5 w-5" />} label="View progress" />
@@ -173,45 +184,38 @@ export default async function DashboardPage({
       {/* Day-scoped session list — surfaced next so the trainer sees what's
           on today before scrolling past stats. */}
       <div className="mb-8">
-        <div className="mb-3 flex items-baseline justify-between gap-3">
-          <div className="flex items-center gap-1">
-            <h2 className="text-base font-semibold text-slate-900">
-              {isToday
-                ? "Today's sessions"
-                : new Date(`${focusDateStr}T12:00:00Z`).toLocaleDateString('en-NZ', {
-                    weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC',
-                  })}
-            </h2>
+        <div className="mb-3 flex items-center justify-between gap-3 h-9">
+          <h2 className="text-base font-semibold text-slate-900 leading-none min-w-0 truncate">
+            {isToday
+              ? "Today's sessions"
+              : new Date(`${focusDateStr}T12:00:00Z`).toLocaleDateString('en-NZ', {
+                  weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC',
+                })}
+          </h2>
+          <div className="flex items-center gap-0.5 shrink-0">
             <Link
               href={prevHref}
               aria-label="Previous day"
-              className="ml-2 p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+              className="h-9 w-9 inline-flex items-center justify-center rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
             >
-              <ChevronLeft className="h-4 w-4" />
+              <ChevronLeft className="h-5 w-5" />
             </Link>
             <Link
               href={nextHref}
               aria-label="Next day"
-              className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+              className="h-9 w-9 inline-flex items-center justify-center rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
             >
-              <ChevronRight className="h-4 w-4" />
+              <ChevronRight className="h-5 w-5" />
             </Link>
             {!isToday && (
               <Link
                 href={todayHref}
-                className="ml-1 text-xs font-medium text-blue-600 hover:underline"
+                className="h-9 inline-flex items-center px-2 text-xs font-medium text-blue-600 hover:underline"
               >
                 Today
               </Link>
             )}
           </div>
-          <Link
-            href="/schedule"
-            className="inline-flex items-center gap-0.5 text-sm font-medium text-blue-600 hover:text-blue-700 whitespace-nowrap"
-          >
-            View schedule
-            <ChevronRight className="h-4 w-4" />
-          </Link>
         </div>
         {todaysSessions.length === 0 ? (
           <Card className="p-8 text-center border-dashed">
@@ -222,7 +226,11 @@ export default async function DashboardPage({
           </Card>
         ) : (
           <div className="flex flex-col gap-2.5">
-            {todaysSessions.map((s) => {
+            {(() => {
+              const firstPastIndex = todaysSessions.findIndex(
+                (s) => s.scheduledAt.getTime() + s.durationMins * 60_000 < nowMs
+              )
+              return todaysSessions.map((s, idx) => {
               const clientUser = s.client?.user ?? s.dog?.primaryFor[0]?.user
               const clientName = clientUser ? (clientUser.name ?? clientUser.email) : null
               const start = new Date(s.scheduledAt)
@@ -231,9 +239,17 @@ export default async function DashboardPage({
               const sessionRequests = s.clientId ? requestsByClient.get(s.clientId) ?? [] : []
               const startTime = start.toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: tz })
               const isVirtual = s.sessionType === 'VIRTUAL'
+              const showDivider = idx === firstPastIndex && firstPastIndex > 0
               return (
+                <div key={s.id} className="contents">
+                {showDivider && (
+                  <div className="flex items-center gap-3 pt-2 pb-1" aria-hidden>
+                    <div className="h-px flex-1 bg-slate-200" />
+                    <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Earlier</span>
+                    <div className="h-px flex-1 bg-slate-200" />
+                  </div>
+                )}
                 <Card
-                  key={s.id}
                   className={cn(
                     'p-0 overflow-hidden transition-all hover:shadow-md hover:-translate-y-px',
                     isPast && 'opacity-60'
@@ -309,8 +325,10 @@ export default async function DashboardPage({
                     </Link>
                   </div>
                 </Card>
+                </div>
               )
-            })}
+            })
+            })()}
           </div>
         )}
       </div>
@@ -458,10 +476,10 @@ function StatCard({
 
 function QuickAction({ href, icon, label }: { href: string; icon: React.ReactNode; label: string }) {
   return (
-    <Link href={href}>
-      <Card className="p-4 flex flex-col items-center gap-2 hover:border-blue-200 hover:shadow-md transition-all cursor-pointer text-center">
+    <Link href={href} className="block h-full">
+      <Card className="h-full p-3 sm:p-4 flex flex-col items-center justify-start gap-1.5 sm:gap-2 hover:border-blue-200 hover:shadow-md transition-all cursor-pointer text-center">
         <span className="text-blue-600">{icon}</span>
-        <span className="text-xs font-medium text-slate-700">{label}</span>
+        <span className="text-[11px] sm:text-xs font-medium text-slate-700 leading-tight">{label}</span>
       </Card>
     </Link>
   )
