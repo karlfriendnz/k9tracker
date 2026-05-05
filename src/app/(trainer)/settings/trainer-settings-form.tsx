@@ -326,9 +326,17 @@ function TestPushButton() {
     setState({ kind: 'sending' })
     try {
       const r = await fetch('/api/devices/test-push', { method: 'POST' })
-      const data = await r.json()
+      const text = await r.text()
+      let data: any
+      try { data = JSON.parse(text) } catch {
+        return setState({ kind: 'error', message: `HTTP ${r.status} — non-JSON body: ${text.slice(0, 200) || '(empty)'}` })
+      }
       if (data.reason === 'no-devices') return setState({ kind: 'noDevices' })
-      if (!data.ok) return setState({ kind: 'error', message: `${data.failed ?? 0} push${data.failed === 1 ? '' : 'es'} failed — check Vercel logs` })
+      if (data.reason === 'crash') return setState({ kind: 'error', message: `Server error: ${data.message ?? 'unknown'}` })
+      if (!data.ok) {
+        const detail = data.details?.[0]?.reason ?? data.details?.[0]?.status ?? 'unknown'
+        return setState({ kind: 'error', message: `Push failed: ${detail}` })
+      }
       setState({ kind: 'sent', sent: data.sent })
     } catch (e) {
       setState({ kind: 'error', message: e instanceof Error ? e.message : 'Network error' })
