@@ -29,12 +29,13 @@ const schema = z.object({
   RESEND_API_KEY: z.string().startsWith('re_', 'RESEND_API_KEY must start with re_'),
   RESEND_FROM_EMAIL: z.string().email(),
 
-  // S3 — video / image uploads. Required because the app surfaces upload UIs
-  // even on first run; failing fast beats a confusing 500 mid-upload.
-  AWS_REGION: z.string().min(1),
-  AWS_ACCESS_KEY_ID: z.string().min(1),
-  AWS_SECRET_ACCESS_KEY: z.string().min(1),
-  AWS_S3_BUCKET: z.string().min(1),
+  // S3 — only needed for the legacy video upload route. The main upload path
+  // is Vercel Blob (BLOB_READ_WRITE_TOKEN). Marked optional so a project that
+  // doesn't use the S3 route can deploy without these.
+  AWS_REGION: optionalString,
+  AWS_ACCESS_KEY_ID: optionalString,
+  AWS_SECRET_ACCESS_KEY: optionalString,
+  AWS_S3_BUCKET: optionalString,
 
   // APNs — required because push notifications are now a first-class feature.
   APNS_KEY_ID: z.string().min(1),
