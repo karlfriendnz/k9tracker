@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardBody } from '@/components/ui/card'
 import { Alert } from '@/components/ui/alert'
+import { OAuthButtons, type EnabledOAuth } from '../oauth-buttons'
 
 const schema = z
   .object({
@@ -26,7 +27,7 @@ const schema = z
 
 type FormData = z.infer<typeof schema>
 
-export function RegisterForm() {
+export function RegisterForm({ enabledOAuth }: { enabledOAuth: EnabledOAuth }) {
   const router = useRouter()
   const [serverError, setServerError] = useState<string | null>(null)
 
@@ -64,6 +65,7 @@ export function RegisterForm() {
         {serverError && (
           <Alert variant="error" className="mb-4">{serverError}</Alert>
         )}
+        <OAuthButtons enabledOAuth={enabledOAuth} ctaPrefix="Sign up with" />
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
           <Input
             label="Your name"

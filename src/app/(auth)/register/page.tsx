@@ -4,6 +4,10 @@ import { RegisterForm } from './register-form'
 export const metadata: Metadata = { title: 'Create account' }
 
 export default function RegisterPage() {
+  const enabledOAuth = {
+    google: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
+    apple: Boolean(process.env.APPLE_CLIENT_ID && process.env.APPLE_TEAM_ID && process.env.APPLE_KEY_ID && process.env.APPLE_PRIVATE_KEY),
+  }
   return (
     <div className="flex flex-col gap-6">
       <div className="text-center">
@@ -12,7 +16,7 @@ export default function RegisterPage() {
           Start managing your clients and training plans
         </p>
       </div>
-      <RegisterForm />
+      <RegisterForm enabledOAuth={enabledOAuth} />
     </div>
   )
 }
