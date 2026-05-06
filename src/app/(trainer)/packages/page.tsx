@@ -13,11 +13,18 @@ export default async function PackagesPage() {
   const trainerId = session.user.trainerId
   if (!trainerId) redirect('/onboarding')
 
-  const packages = await prisma.package.findMany({
-    where: { trainerId },
-    orderBy: [{ order: 'asc' }, { createdAt: 'desc' }],
-    include: { _count: { select: { assignments: true } } },
-  })
+  const [packages, sessionForms] = await Promise.all([
+    prisma.package.findMany({
+      where: { trainerId },
+      orderBy: [{ order: 'asc' }, { createdAt: 'desc' }],
+      include: { _count: { select: { assignments: true } } },
+    }),
+    prisma.sessionForm.findMany({
+      where: { trainerId },
+      orderBy: [{ order: 'asc' }, { createdAt: 'desc' }],
+      select: { id: true, name: true },
+    }),
+  ])
 
   return (
     <PackagesView
@@ -32,8 +39,10 @@ export default async function PackagesPage() {
         priceCents: p.priceCents,
         specialPriceCents: p.specialPriceCents,
         color: (p.color ?? null) as 'blue' | 'emerald' | 'amber' | 'rose' | 'purple' | 'orange' | 'teal' | 'indigo' | 'pink' | 'cyan' | null,
+        defaultSessionFormId: p.defaultSessionFormId ?? null,
         assignments: p._count.assignments,
       }))}
+      sessionForms={sessionForms}
     />
   )
 }

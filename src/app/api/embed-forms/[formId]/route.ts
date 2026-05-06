@@ -13,6 +13,7 @@ const schema = z.object({
   description: z.string().optional().nullable(),
   fields: z.array(fieldSchema).optional(),
   customFieldIds: z.array(z.string()).optional(),
+  thankYouTitle: z.string().optional().nullable(),
   thankYouMessage: z.string().optional().nullable(),
   isActive: z.boolean().optional(),
 })
@@ -41,6 +42,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ formId
       ...(parsed.data.description !== undefined && { description: parsed.data.description }),
       ...(parsed.data.fields !== undefined && { fields: parsed.data.fields }),
       ...(parsed.data.customFieldIds !== undefined && { customFieldIds: parsed.data.customFieldIds }),
+      ...(parsed.data.thankYouTitle !== undefined && { thankYouTitle: parsed.data.thankYouTitle }),
       ...(parsed.data.thankYouMessage !== undefined && { thankYouMessage: parsed.data.thankYouMessage }),
       ...(parsed.data.isActive !== undefined && { isActive: parsed.data.isActive }),
     },

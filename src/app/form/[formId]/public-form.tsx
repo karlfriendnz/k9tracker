@@ -14,6 +14,7 @@ interface CustomField {
 interface Props {
   formId: string
   description: string | null
+  thankYouTitle: string | null
   thankYouMessage: string | null
   fields: { key: string; required: boolean }[]
   customFields: CustomField[]
@@ -27,6 +28,7 @@ const FIELD_LABELS: Record<string, string> = {
 export function PublicForm({
   formId,
   description,
+  thankYouTitle,
   thankYouMessage,
   fields,
   customFields,
@@ -101,7 +103,7 @@ export function PublicForm({
           <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-100 mx-auto mb-4">
             <CheckCircle className="h-8 w-8 text-green-600" />
           </div>
-          <h2 className="text-xl font-bold text-slate-900 mb-2">You're registered!</h2>
+          <h2 className="text-xl font-bold text-slate-900 mb-2">{thankYouTitle || `You're registered!`}</h2>
           <p className="text-slate-500 text-sm">
             {thankYouMessage || `Thanks for registering. Check your email — we've sent you a link to access your training diary.`}
           </p>

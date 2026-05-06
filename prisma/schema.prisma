@@ -536,14 +536,19 @@ model Package {
   // sessions assigned to this package render in that colour on the calendar.
   color        String?
   order        Int      @default(0)   // display order, lowest first
+  // Optional default session form. When a session is opened with this package
+  // and no form responses exist, the default form is auto-attached.
+  defaultSessionFormId String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  trainer     TrainerProfile  @relation(fields: [trainerId], references: [id], onDelete: Cascade)
-  assignments ClientPackage[]
+  trainer            TrainerProfile  @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  assignments        ClientPackage[]
+  defaultSessionForm SessionForm?    @relation("PackageDefaultSessionForm", fields: [defaultSessionFormId], references: [id], onDelete: SetNull)
 
   @@index([trainerId])
+  @@index([defaultSessionFormId])
   @@map("packages")
 }
 
@@ -589,8 +594,9 @@ model SessionForm {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  trainer   TrainerProfile        @relation(fields: [trainerId], references: [id], onDelete: Cascade)
-  responses SessionFormResponse[]
+  trainer            TrainerProfile        @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  responses          SessionFormResponse[]
+  defaultForPackages Package[]             @relation("PackageDefaultSessionForm")
 
   @@index([trainerId])
   @@map("session_forms")
@@ -932,6 +938,7 @@ model EmbedForm {
   fields          Json     @default("[]")
   // JSON string[] of CustomField ids to include
   customFieldIds  Json     @default("[]")
+  thankYouTitle   String?  @db.Text
   thankYouMessage String?  @db.Text
   isActive        Boolean  @default(true)
   createdAt       DateTime @default(now())

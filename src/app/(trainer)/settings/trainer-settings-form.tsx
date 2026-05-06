@@ -17,6 +17,7 @@ const profileSchema = z.object({
   email: z.string().email(),
   businessName: z.string().min(2),
   phone: z.string().optional(),
+  timezone: z.string(),
   logoUrl: z.string().url().optional().or(z.literal('')),
   dashboardBgUrl: z.string().url().optional().or(z.literal('')),
   // Hex (#rgb / #rrggbb) — empty string clears to default.
@@ -25,18 +26,11 @@ const profileSchema = z.object({
 
 const DEFAULT_EMAIL_ACCENT = '#7c3aed'
 
-const notifSchema = z.object({
-  notifyEmail: z.boolean(),
-  notifyPush: z.boolean(),
-  timezone: z.string(),
-})
-
 const templateSchema = z.object({
   inviteTemplate: z.string().min(20),
 })
 
 type ProfileData = z.infer<typeof profileSchema>
-type NotifData = z.infer<typeof notifSchema>
 type TemplateData = z.infer<typeof templateSchema>
 
 const DEFAULT_TEMPLATE = `Hi {{clientName}},
@@ -51,12 +45,11 @@ export function TrainerSettingsForm({
   user,
   profile,
 }: {
-  user: { name: string | null; email: string; timezone: string; notifyEmail: boolean; notifyPush: boolean }
+  user: { name: string | null; email: string; timezone: string }
   profile: { businessName: string; phone: string | null; logoUrl: string | null; dashboardBgUrl: string | null; inviteTemplate: string | null; emailAccentColor: string | null }
 }) {
   const router = useRouter()
   const [profileMsg, setProfileMsg] = useState<string | null>(null)
-  const [notifMsg, setNotifMsg] = useState<string | null>(null)
   const [templateMsg, setTemplateMsg] = useState<string | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -68,6 +61,7 @@ export function TrainerSettingsForm({
       email: user.email,
       businessName: profile.businessName,
       phone: profile.phone ?? '',
+      timezone: user.timezone,
       logoUrl: profile.logoUrl ?? '',
       dashboardBgUrl: profile.dashboardBgUrl ?? '',
       emailAccentColor: profile.emailAccentColor ?? '',
@@ -103,15 +97,6 @@ export function TrainerSettingsForm({
     }
   }
 
-  const notifForm = useForm<NotifData>({
-    resolver: zodResolver(notifSchema),
-    defaultValues: {
-      notifyEmail: user.notifyEmail,
-      notifyPush: user.notifyPush,
-      timezone: user.timezone,
-    },
-  })
-
   const templateForm = useForm<TemplateData>({
     resolver: zodResolver(templateSchema),
     defaultValues: { inviteTemplate: profile.inviteTemplate ?? DEFAULT_TEMPLATE },
@@ -120,21 +105,10 @@ export function TrainerSettingsForm({
   async function saveProfile(data: ProfileData) {
     setProfileMsg(null)
     const [r1, r2] = await Promise.all([
-      fetch('/api/user', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: data.name }) }),
+      fetch('/api/user', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: data.name, timezone: data.timezone }) }),
       fetch('/api/trainer/profile', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ businessName: data.businessName, phone: data.phone, logoUrl: data.logoUrl, dashboardBgUrl: data.dashboardBgUrl, emailAccentColor: data.emailAccentColor }) }),
     ])
     setProfileMsg(r1.ok && r2.ok ? 'Saved!' : 'Failed to save.')
-    router.refresh()
-  }
-
-  async function saveNotifs(data: NotifData) {
-    setNotifMsg(null)
-    const res = await fetch('/api/user', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    })
-    setNotifMsg(res.ok ? 'Saved!' : 'Failed to save.')
     router.refresh()
   }
 
@@ -166,6 +140,13 @@ export function TrainerSettingsForm({
             <Input label="Email address" type="email" disabled error={profileForm.formState.errors.email?.message} {...profileForm.register('email')} />
             <Input label="Business name" error={profileForm.formState.errors.businessName?.message} {...profileForm.register('businessName')} />
             <Input label="Phone number" type="tel" error={profileForm.formState.errors.phone?.message} {...profileForm.register('phone')} />
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-slate-700">Timezone</label>
+              <select className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" {...profileForm.register('timezone')}>
+                {TIMEZONES.map(tz => <option key={tz} value={tz}>{tz}</option>)}
+              </select>
+            </div>
 
             {/* Logo upload */}
             <div className="flex flex-col gap-2">
@@ -281,35 +262,6 @@ export function TrainerSettingsForm({
             {uploadError && <Alert variant="error">{uploadError}</Alert>}
 
             <Button type="submit" size="sm" className="self-start" loading={profileForm.formState.isSubmitting}>Save profile</Button>
-          </form>
-        </CardBody>
-      </Card>
-
-      {/* Notifications & Timezone */}
-      <Card>
-        <CardBody className="pt-5">
-          <h2 className="font-semibold text-slate-900 mb-4">Notifications & Timezone</h2>
-          {notifMsg && <Alert variant={notifMsg === 'Saved!' ? 'success' : 'error'} className="mb-3">{notifMsg}</Alert>}
-          <form onSubmit={notifForm.handleSubmit(saveNotifs)} className="flex flex-col gap-4">
-            <label className="flex items-center justify-between">
-              <span className="text-sm font-medium text-slate-700">Email notifications</span>
-              <input type="checkbox" className="h-5 w-5" {...notifForm.register('notifyEmail')} />
-            </label>
-            <label className="flex items-center justify-between">
-              <span className="text-sm font-medium text-slate-700">Push notifications</span>
-              <input type="checkbox" className="h-5 w-5" {...notifForm.register('notifyPush')} />
-            </label>
-            <p className="text-xs text-slate-400">
-              These are channel-level kill switches. Per-type controls (and a test button for each) live in the <strong>Notifications</strong> tab.
-            </p>
-
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-slate-700">Timezone</label>
-              <select className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" {...notifForm.register('timezone')}>
-                {TIMEZONES.map(tz => <option key={tz} value={tz}>{tz}</option>)}
-              </select>
-            </div>
-            <Button type="submit" size="sm" className="self-start" loading={notifForm.formState.isSubmitting}>Save preferences</Button>
           </form>
         </CardBody>
       </Card>

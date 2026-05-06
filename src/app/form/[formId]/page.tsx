@@ -30,6 +30,7 @@ export default async function PublicFormPage({
     <PublicForm
       formId={form.id}
       description={form.description}
+      thankYouTitle={form.thankYouTitle}
       thankYouMessage={form.thankYouMessage}
       fields={fields}
       customFields={customFields.map(f => ({

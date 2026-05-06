@@ -17,6 +17,7 @@ const schema = z.object({
   // Tailwind palette key. Keep this list in sync with PACKAGE_COLORS in
   // schedule-view.tsx — both must include any new option.
   color: z.enum(['blue', 'emerald', 'amber', 'rose', 'purple', 'orange', 'teal', 'indigo', 'pink', 'cyan']).nullable().optional(),
+  defaultSessionFormId: z.string().nullable().optional(),
 })
 
 export async function GET() {
@@ -65,6 +66,7 @@ export async function POST(req: Request) {
       priceCents: parsed.data.priceCents ?? null,
       specialPriceCents: parsed.data.specialPriceCents ?? null,
       color: parsed.data.color ?? null,
+      defaultSessionFormId: parsed.data.defaultSessionFormId ?? null,
       order: nextOrder,
     },
   })

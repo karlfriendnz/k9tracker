@@ -23,7 +23,13 @@ interface PrefRow {
 const MINUTES_OPTIONS = [5, 10, 15, 20, 30, 45, 60, 90, 120, 180]
 const HOUR_OPTIONS = Array.from({ length: 24 }, (_, h) => h)
 
-export function NotificationsPanel() {
+export function NotificationsPanel({
+  notifyEmail: initialNotifyEmail,
+  notifyPush: initialNotifyPush,
+}: {
+  notifyEmail: boolean
+  notifyPush: boolean
+}) {
   const [rows, setRows] = useState<PrefRow[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
 
@@ -44,30 +50,87 @@ export function NotificationsPanel() {
       .catch(e => setLoadError(e.message ?? 'Failed to load'))
   }, [])
 
-  if (loadError) return <Alert variant="error">Couldn&apos;t load preferences: {loadError}</Alert>
-  if (!rows) return <div className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
-
   const updateLocal = (type: NotificationType, channel: Channel, patch: Partial<PrefRow>) => {
     setRows(prev => prev?.map(r => r.type === type && r.channel === channel ? { ...r, ...patch } : r) ?? null)
   }
 
   return (
-    <section>
-      <div className="mb-4">
+    <section className="flex flex-col gap-4">
+      <div>
         <h2 className="text-base font-semibold text-slate-900">Notifications</h2>
         <p className="text-sm text-slate-500">Choose which alerts you want, when they fire, and how the message reads. Use {'{{placeholders}}'} to personalise the copy.</p>
       </div>
-      <div className="flex flex-col gap-3">
-        {Object.values(NOTIFICATION_TYPES).map(meta => (
-          <NotificationCard
-            key={meta.type}
-            meta={meta}
-            rows={rows.filter(r => r.type === meta.type)}
-            onLocalChange={(channel, patch) => updateLocal(meta.type as NotificationType, channel, patch)}
-          />
-        ))}
-      </div>
+
+      <ChannelKillSwitches initialEmail={initialNotifyEmail} initialPush={initialNotifyPush} />
+
+      {loadError && <Alert variant="error">Couldn&apos;t load preferences: {loadError}</Alert>}
+      {!loadError && !rows && (
+        <div className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
+      )}
+      {rows && (
+        <div className="flex flex-col gap-3">
+          {Object.values(NOTIFICATION_TYPES).map(meta => (
+            <NotificationCard
+              key={meta.type}
+              meta={meta}
+              rows={rows.filter(r => r.type === meta.type)}
+              onLocalChange={(channel, patch) => updateLocal(meta.type as NotificationType, channel, patch)}
+            />
+          ))}
+        </div>
+      )}
     </section>
+  )
+}
+
+function ChannelKillSwitches({ initialEmail, initialPush }: { initialEmail: boolean; initialPush: boolean }) {
+  const [notifyEmail, setNotifyEmail] = useState(initialEmail)
+  const [notifyPush, setNotifyPush] = useState(initialPush)
+  const [saving, startSaving] = useTransition()
+  const [savedAt, setSavedAt] = useState<number | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  function save(patch: { notifyEmail?: boolean; notifyPush?: boolean }) {
+    if (patch.notifyEmail !== undefined) setNotifyEmail(patch.notifyEmail)
+    if (patch.notifyPush !== undefined) setNotifyPush(patch.notifyPush)
+    startSaving(async () => {
+      setError(null)
+      try {
+        const r = await fetch('/api/user', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(patch),
+        })
+        if (!r.ok) throw new Error('Save failed')
+        setSavedAt(Date.now())
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Save failed')
+      }
+    })
+  }
+
+  return (
+    <Card>
+      <CardBody className="pt-4">
+        <h3 className="text-sm font-semibold text-slate-900">Channels</h3>
+        <p className="text-xs text-slate-500 mt-0.5 mb-3">Master switches for each delivery channel. Per-type controls are below.</p>
+        <div className="flex flex-col gap-3">
+          <label className="flex items-center justify-between">
+            <span className="inline-flex items-center gap-2 text-sm font-medium text-slate-700"><Mail className="h-4 w-4 text-slate-500" /> Email notifications</span>
+            <input type="checkbox" className="h-5 w-5" checked={notifyEmail} onChange={e => save({ notifyEmail: e.target.checked })} />
+          </label>
+          <label className="flex items-center justify-between">
+            <span className="inline-flex items-center gap-2 text-sm font-medium text-slate-700"><Bell className="h-4 w-4 text-slate-500" /> Push notifications</span>
+            <input type="checkbox" className="h-5 w-5" checked={notifyPush} onChange={e => save({ notifyPush: e.target.checked })} />
+          </label>
+        </div>
+        <div className="min-h-[18px] mt-2 text-xs">
+          {saving && <span className="text-slate-400 inline-flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Saving…</span>}
+          {!saving && savedAt && <span className="text-emerald-600">Saved</span>}
+          {error && <span className="text-red-600">{error}</span>}
+        </div>
+      </CardBody>
+    </Card>
   )
 }
 

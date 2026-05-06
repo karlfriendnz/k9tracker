@@ -36,7 +36,13 @@ interface PkgRow {
   priceCents: number | null
   specialPriceCents: number | null
   color: PackageColor | null
+  defaultSessionFormId: string | null
   assignments: number
+}
+
+export interface SessionFormOption {
+  id: string
+  name: string
 }
 
 // We collect price as a decimal string from the user (e.g. "120" or "120.50")
@@ -93,7 +99,13 @@ function packageIconClasses(color: PackageColor | null): string {
 
 type FormValues = z.infer<typeof formSchema>
 
-export function PackagesView({ initialPackages }: { initialPackages: PkgRow[] }) {
+export function PackagesView({
+  initialPackages,
+  sessionForms,
+}: {
+  initialPackages: PkgRow[]
+  sessionForms: SessionFormOption[]
+}) {
   const [packages, setPackages] = useState(initialPackages)
   const [editing, setEditing] = useState<PkgRow | null>(null)
   const [showCreate, setShowCreate] = useState(false)
@@ -240,6 +252,7 @@ export function PackagesView({ initialPackages }: { initialPackages: PkgRow[] })
       {(showCreate || editing) && (
         <PackageModal
           existing={editing}
+          sessionForms={sessionForms}
           onClose={() => { setShowCreate(false); setEditing(null) }}
           onSaved={(p, isNew) => { upsert(p, isNew); setShowCreate(false); setEditing(null) }}
         />
@@ -250,15 +263,18 @@ export function PackagesView({ initialPackages }: { initialPackages: PkgRow[] })
 
 function PackageModal({
   existing,
+  sessionForms,
   onClose,
   onSaved,
 }: {
   existing: PkgRow | null
+  sessionForms: SessionFormOption[]
   onClose: () => void
   onSaved: (p: PkgRow, isNew: boolean) => void
 }) {
   const [error, setError] = useState<string | null>(null)
   const [color, setColor] = useState<PackageColor | null>(existing?.color ?? null)
+  const [defaultSessionFormId, setDefaultSessionFormId] = useState<string | null>(existing?.defaultSessionFormId ?? null)
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: existing
@@ -291,6 +307,7 @@ function PackageModal({
         priceCents: dollarsToCents(price),
         specialPriceCents: dollarsToCents(specialPrice),
         color,
+        defaultSessionFormId,
       }),
     })
     if (!res.ok) { setError('Failed to save.'); return }
@@ -307,6 +324,7 @@ function PackageModal({
         priceCents: saved.priceCents ?? null,
         specialPriceCents: saved.specialPriceCents ?? null,
         color: saved.color ?? null,
+        defaultSessionFormId: saved.defaultSessionFormId ?? null,
         assignments: existing?.assignments ?? 0,
       },
       !existing
@@ -393,6 +411,21 @@ function PackageModal({
               placeholder="—"
               {...register('specialPrice')}
             />
+          </div>
+
+          <div>
+            <label className="text-sm font-medium text-slate-700 block mb-1.5">Default session form</label>
+            <p className="text-[11px] text-slate-400 mb-1.5">
+              Auto-attached to each new session in this package. Trainer can still swap it on the session.
+            </p>
+            <select
+              value={defaultSessionFormId ?? ''}
+              onChange={e => setDefaultSessionFormId(e.target.value || null)}
+              className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">None</option>
+              {sessionForms.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+            </select>
           </div>
 
           <div>

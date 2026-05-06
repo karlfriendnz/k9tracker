@@ -15,21 +15,45 @@ export async function GET(
 
   const { sessionId } = await params
 
-  // Verify trainer owns the session
+  // Verify trainer owns the session and pull the package's default form id so
+  // we can lazily auto-attach it when no responses exist yet.
   const owns = await prisma.trainingSession.findFirst({
     where: { id: sessionId, trainerId },
-    select: { id: true },
+    select: {
+      id: true,
+      clientPackage: { select: { package: { select: { defaultSessionFormId: true } } } },
+    },
   })
   if (!owns) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  // Return the responses with their form questions inlined so the client can
-  // render labels alongside answers without a second round-trip.
-  const responses = await prisma.sessionFormResponse.findMany({
+  let responses = await prisma.sessionFormResponse.findMany({
     where: { sessionId },
     orderBy: { createdAt: 'asc' },
     include: {
       form: { select: { id: true, name: true, questions: true, introText: true, closingText: true } },
     },
   })
+
+  // Lazy auto-attach: first time a package-linked session is opened with no
+  // responses, materialise the package's default form. Subsequent opens skip
+  // because there's now at least one response.
+  const defaultFormId = owns.clientPackage?.package?.defaultSessionFormId
+  if (responses.length === 0 && defaultFormId) {
+    try {
+      await prisma.sessionFormResponse.create({
+        data: { sessionId, formId: defaultFormId, answers: {}, imagesByQuestion: {} },
+      })
+      responses = await prisma.sessionFormResponse.findMany({
+        where: { sessionId },
+        orderBy: { createdAt: 'asc' },
+        include: {
+          form: { select: { id: true, name: true, questions: true, introText: true, closingText: true } },
+        },
+      })
+    } catch {
+      // Race or stale form id — fall through with whatever we have.
+    }
+  }
+
   return NextResponse.json(responses)
 }

@@ -13,7 +13,7 @@ export type Question =
   | { id: string; type: 'SHORT_TEXT' | 'LONG_TEXT' | 'NUMBER' | 'RATING_1_5'; label: string; required: boolean }
   | { id: string; type: 'CUSTOM_FIELD'; customFieldId: string; required: boolean }
 
-interface CustomFieldOption {
+export interface CustomFieldOption {
   id: string
   label: string
   type: 'TEXT' | 'NUMBER' | 'DROPDOWN'
@@ -21,7 +21,7 @@ interface CustomFieldOption {
   category: string | null
 }
 
-interface FormRow {
+export interface FormRow {
   id: string
   name: string
   description: string | null
@@ -136,7 +136,7 @@ export function SessionFormsManager({
   )
 }
 
-function FormEditorModal({
+export function FormEditorModal({
   existing,
   customFields,
   onClose,

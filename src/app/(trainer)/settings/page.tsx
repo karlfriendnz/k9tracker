@@ -1,12 +1,11 @@
-import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { TrainerSettingsForm } from './trainer-settings-form'
-import { CustomFieldsManager } from './custom-fields-manager'
 import { SettingsTabs } from './settings-tabs'
 import { NotificationsPanel } from './notifications-panel'
-import { Globe, ChevronRight } from 'lucide-react'
+import { FormsManager } from '../forms/forms-manager'
+import type { Question } from '../forms/session/session-forms-manager'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Settings' }
@@ -27,49 +26,78 @@ export default async function TrainerSettingsPage() {
 
   if (!user || !trainerProfile) redirect('/login')
 
-  const customFields = await prisma.customField.findMany({
-    where: { trainerId: trainerProfile.id },
-    orderBy: { order: 'asc' },
-  })
+  const [customFields, embedForms, sessionForms] = await Promise.all([
+    prisma.customField.findMany({
+      where: { trainerId: trainerProfile.id },
+      orderBy: { order: 'asc' },
+    }),
+    prisma.embedForm.findMany({
+      where: { trainerId: trainerProfile.id },
+      orderBy: { createdAt: 'desc' },
+    }),
+    prisma.sessionForm.findMany({
+      where: { trainerId: trainerProfile.id },
+      orderBy: [{ order: 'asc' }, { createdAt: 'desc' }],
+      include: { _count: { select: { responses: true } } },
+    }),
+  ])
+
+  const intakeFields = customFields.map(f => ({
+    id: f.id,
+    label: f.label,
+    type: f.type as 'TEXT' | 'NUMBER' | 'DROPDOWN',
+    required: f.required,
+    options: Array.isArray(f.options) ? f.options as string[] : [],
+    category: f.category ?? null,
+    appliesTo: (f.appliesTo ?? 'OWNER') as 'OWNER' | 'DOG',
+  }))
 
   return (
-    <div className="p-4 md:p-8 max-w-2xl mx-auto">
+    <div className="p-4 md:p-8 max-w-2xl md:max-w-[872px] mx-auto">
       <h1 className="text-2xl font-bold text-slate-900 mb-6">Settings</h1>
 
       <SettingsTabs
         profile={<TrainerSettingsForm user={user} profile={trainerProfile} />}
-        notifications={<NotificationsPanel />}
-        customFields={
-          <CustomFieldsManager
-            initialFields={customFields.map(f => ({
+        notifications={<NotificationsPanel notifyEmail={user.notifyEmail} notifyPush={user.notifyPush} />}
+        forms={
+          <FormsManager
+            initialForms={embedForms.map(f => ({
+              id: f.id,
+              title: f.title,
+              description: f.description,
+              fields: Array.isArray(f.fields) ? f.fields as { key: string; required: boolean }[] : [],
+              customFieldIds: Array.isArray(f.customFieldIds) ? f.customFieldIds as string[] : [],
+              thankYouTitle: f.thankYouTitle,
+              thankYouMessage: f.thankYouMessage,
+              isActive: f.isActive,
+            }))}
+            customFields={intakeFields.map(f => ({
+              id: f.id,
+              label: f.label,
+              type: f.type,
+              required: f.required,
+              appliesTo: f.appliesTo,
+            }))}
+            initialSessionForms={sessionForms.map(f => ({
+              id: f.id,
+              name: f.name,
+              description: f.description,
+              introText: f.introText,
+              closingText: f.closingText,
+              backgroundColor: f.backgroundColor,
+              backgroundUrl: f.backgroundUrl,
+              questions: Array.isArray(f.questions) ? f.questions as unknown as Question[] : [],
+              responses: f._count.responses,
+            }))}
+            intakeCustomFields={intakeFields}
+            sessionCustomFieldOptions={customFields.map(f => ({
               id: f.id,
               label: f.label,
               type: f.type as 'TEXT' | 'NUMBER' | 'DROPDOWN',
-              required: f.required,
-              options: Array.isArray(f.options) ? f.options as string[] : [],
-              category: f.category ?? null,
               appliesTo: (f.appliesTo ?? 'OWNER') as 'OWNER' | 'DOG',
+              category: f.category,
             }))}
           />
-        }
-        forms={
-          <section>
-            <h2 className="text-base font-semibold text-slate-900 mb-1">Embed forms</h2>
-            <p className="text-sm text-slate-500 mb-3">Public intake / lead-capture forms you can drop on your website.</p>
-            <Link
-              href="/forms"
-              className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 hover:bg-slate-50 transition-colors"
-            >
-              <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-                <Globe className="h-4 w-4" />
-              </span>
-              <span className="flex-1 min-w-0">
-                <span className="block text-sm font-medium text-slate-900">Manage embed forms</span>
-                <span className="block text-xs text-slate-500">Create, edit, and grab embed codes</span>
-              </span>
-              <ChevronRight className="h-4 w-4 text-slate-400" />
-            </Link>
-          </section>
         }
       />
     </div>

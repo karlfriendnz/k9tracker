@@ -13,6 +13,7 @@ const schema = z.object({
   description: z.string().optional().nullable(),
   fields: z.array(fieldSchema).default([]),
   customFieldIds: z.array(z.string()).default([]),
+  thankYouTitle: z.string().optional().nullable(),
   thankYouMessage: z.string().optional().nullable(),
   isActive: z.boolean().default(true),
 })
@@ -56,6 +57,7 @@ export async function POST(req: Request) {
         description: parsed.data.description ?? null,
         fields: parsed.data.fields,
         customFieldIds: parsed.data.customFieldIds,
+        thankYouTitle: parsed.data.thankYouTitle ?? null,
         thankYouMessage: parsed.data.thankYouMessage ?? null,
         isActive: parsed.data.isActive,
       },
