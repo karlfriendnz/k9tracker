@@ -644,6 +644,7 @@ function FormFillerBody({
       answers: saved.answers as Record<string, string>,
       form: { id: template.id, name: template.name, questions: template.questions },
     })
+    setSaving(false)
   }
 
   return (
