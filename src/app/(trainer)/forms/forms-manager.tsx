@@ -432,7 +432,7 @@ export function FormsManager({
 
   return (
     <>
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-col items-start gap-3 mb-4">
         <p className="text-sm text-slate-500">
           All your forms in one place. Intake gates new clients, embed forms capture leads, session forms record reports.
         </p>
