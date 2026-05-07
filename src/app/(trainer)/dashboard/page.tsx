@@ -5,7 +5,8 @@ import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { UserPlus, TrendingUp, Calendar, MapPin, Video, ChevronLeft, ChevronRight, ArrowRight, ShoppingBag, Dog, Users, CheckCircle2, Inbox, type LucideIcon } from 'lucide-react'
+import { UserPlus, TrendingUp, Calendar, ChevronLeft, ChevronRight, ArrowRight, Users, CheckCircle2, Inbox, type LucideIcon } from 'lucide-react'
+import { SessionRowCard } from '@/components/shared/session-row-card'
 import { WeeklyTasksStat, type WeeklyTask } from './weekly-tasks-stat'
 import { PendingRequestsPanel } from './pending-requests-panel'
 import { OnboardingPanel } from './onboarding-panel'
@@ -258,108 +259,28 @@ export default async function DashboardPage({
           <div className="flex flex-col gap-2.5">
             {(() => {
               const firstPastIndex = todaysSessions.findIndex(
-                (s) => s.scheduledAt.getTime() + s.durationMins * 60_000 < nowMs
+                (s) => s.scheduledAt.getTime() + s.durationMins * 60_000 < nowMs,
               )
               return todaysSessions.map((s, idx) => {
-              const clientUser = s.client?.user ?? s.dog?.primaryFor[0]?.user
-              const clientName = clientUser ? (clientUser.name ?? clientUser.email) : null
-              const start = new Date(s.scheduledAt)
-              const isPast = start.getTime() + s.durationMins * 60_000 < new Date().getTime()
-              const meta = STATUS_META[s.status]
-              const sessionRequests = s.clientId ? requestsByClient.get(s.clientId) ?? [] : []
-              const startTime = start.toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: tz })
-              const isVirtual = s.sessionType === 'VIRTUAL'
-              const showDivider = idx === firstPastIndex && firstPastIndex > 0
-              return (
-                <div key={s.id} className="contents">
-                {showDivider && (
-                  <div className="flex items-center gap-3 pt-2 pb-1" aria-hidden>
-                    <div className="h-px flex-1 bg-slate-200" />
-                    <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Earlier</span>
-                    <div className="h-px flex-1 bg-slate-200" />
-                  </div>
-                )}
-                <Link
-                  href={`/sessions/${s.id}`}
-                  aria-label={`Open session: ${s.title}`}
-                  className={cn(
-                    'block rounded-2xl border border-slate-100 bg-white shadow-sm overflow-hidden transition-all hover:shadow-md hover:-translate-y-px hover:border-blue-200',
-                    isPast && 'opacity-60'
-                  )}
-                >
-                  <div className="flex items-stretch sm:h-12 sm:min-h-12">
-                    {/* Time rail — colour-coded by status, compact on desktop */}
-                    <div className={cn(
-                      'flex-shrink-0 w-[72px] sm:w-auto sm:px-3 flex flex-col sm:flex-row items-center justify-center sm:gap-1.5 px-2 py-2.5 sm:py-0 text-center border-r',
-                      isPast
-                        ? 'bg-slate-50 border-slate-100 text-slate-500'
-                        : 'bg-blue-50/60 border-blue-100 text-blue-700'
-                    )}>
-                      <p className="text-base sm:text-sm font-bold leading-none tabular-nums">{startTime}</p>
-                      <p className="text-[10px] sm:text-[11px] font-medium opacity-70 mt-0.5 sm:mt-0">{s.durationMins} min</p>
-                    </div>
-
-                    {/* Body — stacked on mobile (Dog → Client → Package), one row on desktop */}
-                    <div className="flex-1 min-w-0 px-3 py-2 sm:py-0 sm:px-3.5 flex flex-col sm:flex-row sm:items-center gap-y-0.5 sm:gap-y-0 sm:gap-x-2">
-                      {/* Dog (or fallback to title if no dog) */}
-                      <div className="inline-flex items-center gap-1.5 min-w-0">
-                        {s.dog ? (
-                          <>
-                            <Dog className="h-3.5 w-3.5 text-blue-500 flex-shrink-0" aria-hidden />
-                            <p className="text-sm font-semibold text-slate-900 truncate">{s.dog.name}</p>
-                          </>
-                        ) : (
-                          <p className="text-sm font-semibold text-slate-900 truncate">{s.title}</p>
-                        )}
+                const sessionRequests = s.clientId ? requestsByClient.get(s.clientId) ?? [] : []
+                const showDivider = idx === firstPastIndex && firstPastIndex > 0
+                return (
+                  <div key={s.id} className="contents">
+                    {showDivider && (
+                      <div className="flex items-center gap-3 pt-2 pb-1" aria-hidden>
+                        <div className="h-px flex-1 bg-slate-200" />
+                        <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">Earlier</span>
+                        <div className="h-px flex-1 bg-slate-200" />
                       </div>
-
-                      {clientName && (
-                        <>
-                          <span className="hidden sm:inline text-slate-300" aria-hidden>·</span>
-                          <p className="text-xs font-medium text-slate-700 truncate sm:max-w-[18ch]">{clientName}</p>
-                        </>
-                      )}
-
-                      {s.dog && (
-                        <>
-                          <span className="hidden sm:inline text-slate-300" aria-hidden>·</span>
-                          <p className="text-xs text-slate-500 truncate sm:max-w-[26ch]">{s.title}</p>
-                        </>
-                      )}
-
-                      {/* Status pill — sits inline on desktop, on its own row on mobile */}
-                      <span className={cn(
-                        'inline-flex text-[10px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap self-start mt-1 sm:mt-0 sm:ml-auto sm:self-auto',
-                        meta.colour
-                      )}>
-                        {meta.label}
-                      </span>
-
-                      {sessionRequests.length > 0 && (
-                        <span
-                          className="hidden sm:inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 whitespace-nowrap flex-shrink-0"
-                          title={sessionRequests.map(r => r.product.name).join(', ')}
-                        >
-                          <ShoppingBag className="h-3 w-3" aria-hidden />
-                          {sessionRequests.length} to bring
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Action rail — visual only, the parent Link handles
-                        navigation now (whole card is clickable). */}
-                    <div
-                      aria-hidden
-                      className="group flex-shrink-0 w-14 sm:w-auto flex items-center justify-center gap-1 sm:gap-1.5 px-0 sm:px-3 bg-blue-600 text-white transition-colors"
-                    >
-                      <span className="hidden sm:inline text-xs font-semibold">Start</span>
-                      <ArrowRight className="h-4 w-4 sm:h-3.5 sm:w-3.5 transition-transform group-hover:translate-x-0.5" />
-                    </div>
+                    )}
+                    <SessionRowCard
+                      session={s}
+                      tz={tz}
+                      toBringCount={sessionRequests.length}
+                    />
                   </div>
-                </Link>
-                </div>
-              )
-            })
+                )
+              })
             })()}
           </div>
         )}
@@ -517,13 +438,6 @@ export default async function DashboardPage({
       </div>
     </div>
   )
-}
-
-const STATUS_META: Record<'UPCOMING' | 'COMPLETED' | 'COMMENTED' | 'INVOICED', { label: string; colour: string }> = {
-  UPCOMING:  { label: 'Upcoming',  colour: 'bg-blue-50 text-blue-700 border-blue-200' },
-  COMPLETED: { label: 'Completed', colour: 'bg-green-50 text-green-700 border-green-200' },
-  COMMENTED: { label: 'Commented', colour: 'bg-amber-50 text-amber-700 border-amber-200' },
-  INVOICED:  { label: 'Invoiced',  colour: 'bg-purple-50 text-purple-700 border-purple-200' },
 }
 
 function StatCard({

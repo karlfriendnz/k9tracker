@@ -20,6 +20,7 @@ import {
 import { ScheduleSettings } from './schedule-settings'
 import { ScheduleReport } from './schedule-report'
 import { SessionFormReport } from '@/components/session-form-report'
+import { SessionRowCard } from '@/components/shared/session-row-card'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -800,13 +801,18 @@ function WeekGrid({
 function DayList({
   sessions,
   onDelete,
-  onNavigateClient,
   matchedIds,
   searchActive,
 }: {
   sessions: Session[]
   onDelete: (id: string) => void
-  onNavigateClient: (clientId: string) => void
+  /**
+   * Kept in the prop signature for callers that previously routed clicks
+   * to the client profile. The shared SessionRowCard now navigates to the
+   * session detail (matching the dashboard behaviour); the trainer can
+   * jump to the client from there.
+   */
+  onNavigateClient?: (clientId: string) => void
   matchedIds: Set<string>
   searchActive: boolean
 }) {
@@ -821,47 +827,24 @@ function DayList({
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-2.5">
       {sessions.map((s) => {
-        const client   = s.dog?.primaryFor[0]?.user
-        const clientId = s.dog?.primaryFor[0]?.id
         const dimmed = searchActive && !matchedIds.has(s.id)
         return (
-          <Card key={s.id} className={`cursor-pointer hover:border-blue-200 transition-all ${dimmed ? 'opacity-20' : ''}`} onClick={() => clientId && onNavigateClient(clientId)}>
-            <CardBody className="pt-4 pb-4">
-              <div className="flex items-start gap-4">
-                <div className="flex-shrink-0 text-center min-w-[48px]">
-                  <p className="text-xs font-bold text-blue-600">{fmtTime(s.scheduledAt)}</p>
-                  <p className="text-xs text-slate-400">{s.durationMins}m</p>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-slate-900">{s.title}</p>
-                  {(client || s.clientId) && (
-                    <p className="text-sm text-slate-500 mt-0.5">
-                      {s.dog ? `🐕 ${s.dog.name} · ` : ''}{client?.name ?? client?.email ?? ''}
-                    </p>
-                  )}
-                  {s.location && (
-                    <p className="text-xs text-slate-400 mt-1">{s.location}</p>
-                  )}
-                </div>
-                <Link
-                  href={`/sessions/${s.id}`}
-                  onClick={(e) => e.stopPropagation()}
-                  className="flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors flex-shrink-0"
-                >
-                  <Play className="h-3 w-3" />
-                  Start session
-                </Link>
-                <button
-                  onClick={(e) => { e.stopPropagation(); onDelete(s.id) }}
-                  className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-            </CardBody>
-          </Card>
+          <SessionRowCard
+            key={s.id}
+            session={s}
+            dimmed={dimmed}
+            trailing={
+              <button
+                onClick={() => onDelete(s.id)}
+                aria-label="Delete session"
+                className="self-stretch px-2 rounded-2xl text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            }
+          />
         )
       })}
     </div>
