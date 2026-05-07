@@ -18,7 +18,11 @@ const config: CapacitorConfig = {
     allowNavigation: [REMOTE_HOST],
   },
   ios: {
-    contentInset: 'always',
+    // 'never' keeps the WebView flush with the screen edges. 'always' (the old
+    // value) made iOS reserve scroll insets for the keyboard/home-indicator,
+    // which combined with StatusBar overlay:false made the bottom nav sit
+    // above the home-indicator strip with native white showing below it.
+    contentInset: 'never',
     limitsNavigationsToAppBoundDomains: false,
   },
   android: {

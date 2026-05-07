@@ -10,11 +10,18 @@ export function NativeBootstrap() {
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
 
-    StatusBar.setStyle({ style: Style.Light }).catch(() => {});
+    // Headers are white/light, so the status bar needs dark text to be
+    // legible. Style.Dark = dark glyphs in @capacitor/status-bar.
+    StatusBar.setStyle({ style: Style.Dark }).catch(() => {});
     if (Capacitor.getPlatform() === 'android') {
-      StatusBar.setBackgroundColor({ color: '#2563eb' }).catch(() => {});
+      StatusBar.setBackgroundColor({ color: '#ffffff' }).catch(() => {});
     }
-    StatusBar.setOverlaysWebView({ overlay: false }).catch(() => {});
+    // overlay:true lets the WebView extend full-screen so env(safe-area-inset-*)
+    // returns real values. Each sticky/fixed nav already pads itself with the
+    // matching inset — without overlay the WebView is clipped to the safe area
+    // and `bottom: 0` lands above the home-indicator strip, leaving a white
+    // gap underneath. Same story for the notch on top.
+    StatusBar.setOverlaysWebView({ overlay: true }).catch(() => {});
 
     document.documentElement.dataset.native = 'true';
     document.documentElement.dataset.nativePlatform = Capacitor.getPlatform();
