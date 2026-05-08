@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Dog, ShoppingBag, ArrowRight } from 'lucide-react'
+import { Dog, ShoppingBag, ArrowRight, DollarSign } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export type SessionRowStatus = 'UPCOMING' | 'COMPLETED' | 'COMMENTED' | 'INVOICED'
@@ -46,7 +46,6 @@ const STATUS_META: Record<SessionRowStatus, { label: string; colour: string }> =
   INVOICED:  { label: 'Invoiced',  colour: 'bg-purple-50 text-purple-700 border-purple-200' },
 }
 
-const INVOICED_META = { label: 'Invoiced', colour: 'bg-purple-50 text-purple-700 border-purple-200' }
 
 /**
  * The dashboard-style session card — coloured time rail on the left,
@@ -64,11 +63,12 @@ export function SessionRowCard({
 }: SessionRowCardProps) {
   const start = new Date(s.scheduledAt)
   const isPast = start.getTime() + s.durationMins * 60_000 < Date.now()
-  // Invoiced overrides the status pill — billing is the more useful signal
-  // for the trainer at-a-glance. Legacy rows that still have status=INVOICED
-  // (pre-migration) are treated the same.
+  // Invoiced is now signalled by the standalone dollar-sign disc, not the
+  // status pill, so the pill keeps its workflow meaning. Legacy rows that
+  // still have status=INVOICED (pre-migration) are treated as invoiced for
+  // the disc colour.
   const isInvoiced = s.invoicedAt != null || s.status === 'INVOICED'
-  const meta = isInvoiced ? INVOICED_META : STATUS_META[s.status]
+  const meta = STATUS_META[s.status]
   const startTime = start.toLocaleTimeString('en-NZ', {
     hour: 'numeric', minute: '2-digit', hour12: true, timeZone: tz,
   })
@@ -129,6 +129,22 @@ export function SessionRowCard({
             meta.colour,
           )}>
             {meta.label}
+          </span>
+
+          {/* Invoice indicator — green-filled disc when invoiced, red outlined
+              disc when not. Always shows so the trainer can see billing state
+              at a glance without opening the session. */}
+          <span
+            className={cn(
+              'inline-flex items-center justify-center h-5 w-5 rounded-full self-start mt-1 sm:mt-0 sm:self-auto flex-shrink-0',
+              isInvoiced
+                ? 'bg-emerald-500 text-white'
+                : 'border-2 border-rose-500 text-rose-500 bg-white',
+            )}
+            title={isInvoiced ? 'Invoiced' : 'Not invoiced'}
+            aria-label={isInvoiced ? 'Invoiced' : 'Not invoiced'}
+          >
+            <DollarSign className="h-3 w-3" strokeWidth={isInvoiced ? 2.5 : 3} />
           </span>
 
           {toBringCount != null && toBringCount > 0 && (
