@@ -51,6 +51,12 @@ interface AppShellProps {
   userEmail?: string
   trainerLogo?: string | null
   businessName?: string
+  /**
+   * If set to a TRAINER_NAV href, that menu item gets a small pulsing dot
+   * pinned beside its label/icon — used during onboarding to point at the
+   * page the trainer should click next.
+   */
+  highlightMenuHref?: string | null
 }
 
 export function AppShell(props: AppShellProps) {
@@ -171,6 +177,7 @@ function TrainerShell({
   userEmail,
   trainerLogo,
   businessName,
+  highlightMenuHref,
 }: AppShellProps) {
   const pathname = usePathname()
   const [showEmail, setShowEmail] = useState(false)
@@ -234,6 +241,7 @@ function TrainerShell({
         <nav className={cn('flex-1 overflow-y-auto py-4 space-y-1', collapsed ? 'px-2' : 'px-3')}>
           {TRAINER_NAV.map((item) => {
             const active = pathname === item.href || pathname.startsWith(item.href + '/')
+            const highlighted = !!highlightMenuHref && item.href === highlightMenuHref
             const Icon = item.icon
             return (
               <Link
@@ -241,7 +249,7 @@ function TrainerShell({
                 href={item.href}
                 title={collapsed ? item.label : undefined}
                 className={cn(
-                  'flex items-center rounded-xl text-sm font-medium transition-colors',
+                  'relative flex items-center rounded-xl text-sm font-medium transition-colors',
                   collapsed ? 'justify-center h-10 w-10 mx-auto' : 'gap-3 px-3 py-2.5',
                   active
                     ? 'bg-blue-50 text-blue-700'
@@ -250,6 +258,12 @@ function TrainerShell({
               >
                 <Icon className="h-5 w-5 flex-shrink-0" />
                 {!collapsed && item.label}
+                {highlighted && (
+                  <span
+                    aria-hidden
+                    className="absolute right-2 top-1/2 -translate-y-1/2 h-2 w-2 rounded-full bg-indigo-500 animate-pm-menu-dot"
+                  />
+                )}
               </Link>
             )
           })}

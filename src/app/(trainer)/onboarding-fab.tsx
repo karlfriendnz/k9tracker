@@ -3,31 +3,38 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
-import { ArrowRight, Building2, ClipboardList, Notebook, Package, Trophy, Eye, Mail, PawPrint, Calendar, CheckCircle2, type LucideIcon } from 'lucide-react'
+import { CheckCircle2 } from 'lucide-react'
 
-const STEP_ICON: Record<string, LucideIcon> = {
-  business_profile: Building2,
-  intake_form: ClipboardList,
-  session_form: Notebook,
-  program_package: Package,
-  achievements: Trophy,
-  client_view: Eye,
-  invite_client: Mail,
-  schedule_session: Calendar,
+// Conversational copy for the LEFT side of the FAB. Two flavours:
+//
+//  STEP_HINT (incomplete) — "here's what to do, told plainly". Points at the
+//  menu item they need to click. Pairs with the pulsing dot AppShell renders
+//  beside the matching menu item so the trainer actually learns the layout
+//  instead of being teleported by FAB clicks.
+//
+//  STEP_TRANSITION (just completed) — "nice work + here's what's next, no
+//  pressure". Friendlier mentor tone; mentions that optional steps can be
+//  done later.
+const STEP_HINT: Record<string, string> = {
+  business_profile: "Let's set up your business — click 'Settings' on the left to add your name and logo.",
+  intake_form: "Click 'Settings' on the left, then the 'Forms' tab, to set up the form new clients fill in.",
+  session_form: "Click 'Settings' on the left, then 'Forms', to set up the form for after each session.",
+  program_package: "Time to add a programme. Click 'Packages' on the left to create your first one.",
+  achievements: "Pick the badges your clients can earn. Click 'Achievements' on the left.",
+  client_view: "See what your clients see — click 'Clients' on the left, then 'View as client'.",
+  invite_client: "Send your first real client a sign-up link. Click 'Clients' on the left.",
+  schedule_session: "Book your first session. Click 'Schedule' on the left.",
 }
 
-// One-line nudge so the trainer knows exactly what "complete" means
-// without having to open the wizard. Keep these short and action-first;
-// the panel/modal carries the longer copy.
-const STEP_HINT: Record<string, string> = {
-  business_profile: 'Drop your business name, contact details and logo into Settings.',
-  intake_form: 'Check the intake form and publish it when you\'re happy.',
-  session_form: 'Set up the form your clients see after each session.',
-  program_package: 'Create your first programme so you can assign sessions.',
-  achievements: 'Tweak the starter achievements and publish the ones you like.',
-  client_view: 'Take a quick walk through what your clients will see.',
-  invite_client: 'Invite your first real client to get the ball rolling.',
-  schedule_session: 'Pop a session in the calendar for your client.',
+const STEP_TRANSITION: Record<string, string> = {
+  business_profile: "Nice work — your business is all set up! Now let's get your intake form ready. Click 'Settings' on the left, then 'Forms'.",
+  intake_form: "Awesome — your intake form is ready! You can do the other forms later. Now let's add your first programme — click 'Packages' on the left.",
+  session_form: "Sweet — your session form is set! Now let's add your first programme. Click 'Packages' on the left.",
+  program_package: "Boom — your first programme is in! Now let's pick some fun achievements. Click 'Achievements' on the left.",
+  achievements: "Nice — your achievements are live! Want to see what your clients see? Click 'Clients' on the left, then 'View as client'.",
+  client_view: "Cool — you've seen the client view! Time to invite a real client. Click 'Clients' on the left.",
+  invite_client: "Done — your first invite is on its way! Now let's book a session. Click 'Schedule' on the left.",
+  schedule_session: "Booked — your first session is on the calendar! That's the basics done. You're all set up 🎉",
 }
 
 // Resolves the trainer's current location to the wizard step that page
@@ -123,10 +130,9 @@ export function OnboardingFab({ nextStep, steps, totalSteps }: Props) {
   if (!mounted) return null
   if (pathname === '/dashboard') return null
 
-  // LEFT side describes the page the trainer is on (the path-matched step).
-  // RIGHT side is the SEQUENTIAL next step — the one immediately after the
-  // LEFT step in the flow, regardless of completion status. The trainer
-  // sees the chain: "you're on step N, here's step N+1."
+  // Resolve the focused step from the trainer's current URL — the FAB
+  // describes that step's status. When no path matches, fall back to the
+  // next-incomplete step.
   const locationKey = `${pathname}${tab ? `?tab=${tab}` : ''}${hash}`
   const pathStepKey = stepKeyForLocation(locationKey)
   const pathStep = pathStepKey ? steps.find(s => s.key === pathStepKey) : null
@@ -134,80 +140,38 @@ export function OnboardingFab({ nextStep, steps, totalSteps }: Props) {
   const leftCompleted = leftStep.status === 'completed'
   const leftHint = STEP_HINT[leftStep.key] ?? `Wrap up ${leftStep.title.toLowerCase()}.`
 
-  const rightStep = steps.find(s => s.order === leftStep.order + 1) ?? null
-  const rightIcon = rightStep ? (STEP_ICON[rightStep.key] ?? PawPrint) : null
-  const rightCompleted = rightStep?.status === 'completed'
-
-  // Click follows the flow forward — to the step after LEFT. Falls back to
-  // the actual next-incomplete when LEFT is the last step (rare).
-  const href = rightStep?.ctaHref || nextStep.ctaHref || '/dashboard?wizard=1'
+  // Click is a fallback for trainers who'd rather skip the menu — points
+  // at the next-incomplete step. The pulsing dot on the sidebar is the
+  // primary affordance now, since the goal is to teach navigation.
+  const href = nextStep.ctaHref || '/dashboard?wizard=1'
 
   return (
     <Link
       href={href}
-      aria-label={rightStep ? `Next step: ${rightStep.title}` : `Continue setup: ${nextStep.title}`}
-      className="group sticky top-2.5 z-30 mx-2.5 mt-2.5 mb-2 flex items-center gap-4 px-4 sm:px-5 py-3 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 text-white rounded-2xl shadow-[0_10px_30px_-8px_rgba(99,102,241,0.55)] hover:shadow-[0_16px_40px_-8px_rgba(99,102,241,0.7)] transition-shadow animate-pm-fab-slide"
+      aria-label={`Next: ${nextStep.title}`}
+      className="group sticky top-2.5 z-30 mx-2.5 mt-2.5 mb-2 flex items-center gap-3 px-4 sm:px-5 py-3 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 text-white rounded-2xl shadow-[0_10px_30px_-8px_rgba(99,102,241,0.55)] hover:shadow-[0_16px_40px_-8px_rgba(99,102,241,0.7)] transition-shadow animate-pm-fab-slide"
     >
-      {/* LEFT: status of the step matching this page. Green check tile when
-          done; otherwise the "What to do" hint. */}
-      <div className="flex items-center gap-3 flex-1 min-w-0">
-        {leftCompleted && (
-          <span
-            aria-hidden
-            className="grid place-items-center h-9 w-9 shrink-0 rounded-xl bg-emerald-500 text-white ring-1 ring-emerald-300/40"
-          >
-            <CheckCircle2 className="h-4 w-4" strokeWidth={2.25} />
-          </span>
-        )}
-        <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-white/70 leading-none">
-            {leftCompleted ? 'Step done' : 'What to do'}
-          </p>
-          <p className="text-sm text-white leading-snug mt-1.5 line-clamp-2">
-            {leftCompleted
-              ? `${leftStep.title} is complete — nice work.`
-              : leftHint}
-          </p>
-        </div>
-      </div>
-
-      {/* Sequential next step — only renders when there's a step after LEFT
-          in the flow. Hidden when LEFT is the final step. */}
-      {rightStep && rightIcon && (
-        <>
-          <span className="hidden sm:block self-stretch w-px bg-white/25" aria-hidden />
-
-          <div className="flex items-center gap-2.5 sm:gap-3 flex-shrink-0">
-            <span
-              aria-hidden
-              className={`relative grid place-items-center h-9 w-9 shrink-0 rounded-xl text-white ${
-                celebrating
-                  ? 'bg-emerald-500 shadow-emerald-500/40 animate-pm-fab-flash'
-                  : 'bg-white/15 backdrop-blur-sm ring-1 ring-white/20'
-              }`}
-            >
-              {(() => {
-                const RightIcon = rightIcon
-                return <RightIcon className="h-4 w-4" strokeWidth={2} />
-              })()}
-              {rightCompleted && (
-                <span className="absolute -top-1 -right-1 grid place-items-center h-4 w-4 rounded-full bg-emerald-500 ring-2 ring-blue-700 text-white">
-                  <CheckCircle2 className="h-3 w-3" strokeWidth={2.5} />
-                </span>
-              )}
-            </span>
-            <div className="hidden sm:flex flex-col min-w-0 max-w-[180px] md:max-w-[220px]">
-              <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-white/70 leading-none">
-                Step {rightStep.order} of {totalSteps}
-              </span>
-              <span className="text-sm font-semibold text-white truncate leading-tight mt-0.5">
-                {rightStep.title}
-              </span>
-            </div>
-            <ArrowRight className="h-4 w-4 text-white/80 transition-transform group-hover:translate-x-0.5 group-hover:text-white" />
-          </div>
-        </>
+      {/* Single column: status of the focused step, with celebration copy
+          when it's just been completed. Green check tile sits on the left
+          edge when the step is done; absent otherwise. */}
+      {leftCompleted && (
+        <span
+          aria-hidden
+          className={`grid place-items-center h-9 w-9 shrink-0 rounded-xl bg-emerald-500 text-white ring-1 ring-emerald-300/40 ${celebrating ? 'animate-pm-fab-flash' : ''}`}
+        >
+          <CheckCircle2 className="h-4 w-4" strokeWidth={2.25} />
+        </span>
       )}
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-white/70 leading-none">
+          {leftCompleted ? 'Step done 🎉' : 'What to do'}
+        </p>
+        <p className="text-sm text-white leading-snug mt-1.5 line-clamp-3">
+          {leftCompleted
+            ? STEP_TRANSITION[leftStep.key] ?? `${leftStep.title} is complete — nice work.`
+            : leftHint}
+        </p>
+      </div>
     </Link>
   )
 }
