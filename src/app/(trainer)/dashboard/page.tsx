@@ -177,15 +177,17 @@ export default async function DashboardPage({
     where: { trainerId, status: 'NEW', viewedAt: null },
   })
 
-  // Past sessions waiting on a write-up — surfaced as a CTA on the dashboard
-  // so the trainer can clear the backlog without trawling the schedule.
-  const sessionsAwaitingNotesCount = await prisma.trainingSession.count({
+  // Past sessions still needing notes OR an invoice — the dashboard CTA links
+  // to /sessions/needs-notes which is now framed as a generic "to do" list.
+  const sessionsToActionCount = await prisma.trainingSession.count({
     where: {
       trainerId,
       scheduledAt: { lt: new Date() },
-      status: { in: ['UPCOMING', 'COMPLETED', 'COMMENTED'] },
-      formResponses: { none: {} },
       clientId: { not: null },
+      OR: [
+        { formResponses: { none: {} } },
+        { invoicedAt: null },
+      ],
     },
   })
 
@@ -305,10 +307,9 @@ export default async function DashboardPage({
         )}
       </div>
 
-      {/* Notes-to-write CTA — only renders when there's a backlog. Linked to
-          the dedicated /sessions/needs-notes page where they're grouped by
-          week so the trainer can knock out a week at a time. */}
-      {sessionsAwaitingNotesCount > 0 && (
+      {/* Sessions-to-action CTA — past sessions still needing notes or an
+          invoice. Links to the wrap-up todo list on /sessions/needs-notes. */}
+      {sessionsToActionCount > 0 && (
         <Link
           href="/sessions/needs-notes"
           className="mb-6 block rounded-2xl border bg-amber-50 border-amber-100 hover:border-amber-200 p-4 transition-colors"
@@ -320,10 +321,10 @@ export default async function DashboardPage({
               </span>
               <div className="min-w-0">
                 <p className="font-semibold text-sm leading-tight text-amber-900">
-                  {sessionsAwaitingNotesCount} session{sessionsAwaitingNotesCount === 1 ? '' : 's'} need a write-up
+                  {sessionsToActionCount} session{sessionsToActionCount === 1 ? '' : 's'} to wrap up
                 </p>
                 <p className="text-xs mt-0.5 text-amber-700/80">
-                  Past sessions without notes — grouped by week.
+                  Past sessions still needing notes or invoicing.
                 </p>
               </div>
             </div>

@@ -2,26 +2,25 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { ArrowLeft, FileText, ChevronRight, Dog } from 'lucide-react'
+import { ArrowLeft, ListTodo, ChevronRight, Dog, FileText, Receipt } from 'lucide-react'
 import type { Metadata } from 'next'
 
-export const metadata: Metadata = { title: 'Notes to write' }
+export const metadata: Metadata = { title: 'To do' }
 
-// "Needs notes" = past session, status not yet INVOICED, no SessionFormResponse
-// row. Once the trainer writes the notes (creates a response) the row drops
-// off the list automatically; once they mark INVOICED we treat that as
-// "trainer is done thinking about this" and stop nagging.
+// Past sessions that still need either a write-up OR an invoice. Once both
+// are recorded the row drops off automatically. Note that we don't filter on
+// status here — invoicing/notes are independent of the completion lifecycle.
 async function loadPendingSessions(trainerId: string) {
   const now = new Date()
   return prisma.trainingSession.findMany({
     where: {
       trainerId,
       scheduledAt: { lt: now },
-      status: { in: ['UPCOMING', 'COMPLETED', 'COMMENTED'] },
-      formResponses: { none: {} },
-      // Hide orphans whose client was deleted — same reason as the dashboard
-      // and schedule queries.
       clientId: { not: null },
+      OR: [
+        { formResponses: { none: {} } },
+        { invoicedAt: null },
+      ],
     },
     // Oldest first — this is a backlog queue, not a feed. The next session
     // the trainer needs to work on is the one that's been waiting longest.
@@ -32,6 +31,8 @@ async function loadPendingSessions(trainerId: string) {
       scheduledAt: true,
       durationMins: true,
       status: true,
+      invoicedAt: true,
+      _count: { select: { formResponses: true } },
       client: { select: { user: { select: { name: true, email: true } } } },
       dog: {
         select: {
@@ -63,17 +64,19 @@ function formatWeekLabel(weekStart: Date): string {
   return weekStart.toLocaleDateString('en-NZ', { day: 'numeric', month: 'long', year: 'numeric' })
 }
 
-export default async function NeedsNotesPage() {
+export default async function SessionsTodoPage() {
   const session = await auth()
   if (!session) redirect('/login')
   const trainerId = session.user.trainerId
   if (!trainerId) redirect('/login')
 
   const sessions = await loadPendingSessions(trainerId)
+  const needsNotesCount = sessions.filter(s => s._count.formResponses === 0).length
+  const needsInvoiceCount = sessions.filter(s => s.invoicedAt == null).length
 
   // Group by Monday-anchored week so the trainer can scan one week at a time.
-  // Map preserves insertion order which is now ASC by scheduledAt, so the
-  // oldest week is at the top — the "next up" in the backlog queue.
+  // Map preserves insertion order which is ASC by scheduledAt, so the oldest
+  // week is at the top — the "next up" in the backlog queue.
   type Row = (typeof sessions)[number]
   const byWeek = new Map<string, { weekStart: Date; sessions: Row[] }>()
   for (const s of sessions) {
@@ -95,21 +98,27 @@ export default async function NeedsNotesPage() {
 
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-          <FileText className="h-6 w-6 text-amber-500" />
-          Notes to write
+          <ListTodo className="h-6 w-6 text-amber-500" />
+          Sessions to wrap up
         </h1>
         <p className="text-sm text-slate-500 mt-1">
           {sessions.length === 0
-            ? 'You\'re all caught up — every past session has a write-up.'
-            : `${sessions.length} session${sessions.length === 1 ? '' : 's'} still need your notes.`}
+            ? 'You\'re all caught up — every past session has notes recorded and is invoiced.'
+            : (
+              <>
+                {needsNotesCount > 0 && <>{needsNotesCount} need notes</>}
+                {needsNotesCount > 0 && needsInvoiceCount > 0 && <> · </>}
+                {needsInvoiceCount > 0 && <>{needsInvoiceCount} need invoicing</>}
+              </>
+            )}
         </p>
       </div>
 
       {sessions.length === 0 ? (
         <div className="rounded-2xl bg-white border border-dashed border-slate-200 p-10 text-center">
-          <FileText className="h-8 w-8 mx-auto text-slate-300" />
+          <ListTodo className="h-8 w-8 mx-auto text-slate-300" />
           <p className="text-sm font-medium text-slate-600 mt-3">All caught up</p>
-          <p className="text-xs text-slate-400 mt-1">Past sessions with notes recorded won&apos;t show here.</p>
+          <p className="text-xs text-slate-400 mt-1">Past sessions only show here while notes or invoicing are pending.</p>
         </div>
       ) : (
         <div className="flex flex-col gap-6">
@@ -127,6 +136,8 @@ export default async function NeedsNotesPage() {
                   const clientUser = s.client?.user ?? s.dog?.primaryFor[0]?.user
                   const clientName = clientUser ? (clientUser.name ?? clientUser.email) : null
                   const start = new Date(s.scheduledAt)
+                  const needsNotes = s._count.formResponses === 0
+                  const needsInvoice = s.invoicedAt == null
                   return (
                     <Link
                       key={s.id}
@@ -160,6 +171,33 @@ export default async function NeedsNotesPage() {
                             {start.toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit', hour12: true })}
                           </span>
                         </div>
+                      </div>
+                      {/* Pending-action chips — one per outstanding task on
+                          the row. Both can show side-by-side. Hidden on the
+                          narrowest viewports to keep the row tight; the
+                          colour pip below the row name carries the same
+                          info on phones. */}
+                      <div className="hidden sm:flex items-center gap-1.5 flex-shrink-0">
+                        {needsNotes && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                            <FileText className="h-3 w-3" /> Notes
+                          </span>
+                        )}
+                        {needsInvoice && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
+                            <Receipt className="h-3 w-3" /> Invoice
+                          </span>
+                        )}
+                      </div>
+                      {/* Mobile: show compact dot indicators instead of full
+                          chips. Same colour code as the desktop chips. */}
+                      <div className="sm:hidden flex items-center gap-1 flex-shrink-0">
+                        {needsNotes && (
+                          <span className="h-2 w-2 rounded-full bg-amber-500" title="Needs notes" />
+                        )}
+                        {needsInvoice && (
+                          <span className="h-2 w-2 rounded-full bg-purple-500" title="Needs invoice" />
+                        )}
                       </div>
                       <ChevronRight className="h-4 w-4 text-slate-300 flex-shrink-0" />
                     </Link>
