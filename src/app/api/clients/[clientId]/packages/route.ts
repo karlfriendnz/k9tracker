@@ -23,6 +23,7 @@ export async function GET(
       id: true,
       startDate: true,
       extendIndefinitely: true,
+      invoicedAt: true,
       package: { select: { id: true, name: true, color: true, sessionCount: true, weeksBetween: true } },
     },
     orderBy: { assignedAt: 'desc' },
@@ -30,6 +31,7 @@ export async function GET(
   return NextResponse.json(assignments.map(a => ({
     ...a,
     startDate: a.startDate.toISOString(),
+    invoicedAt: a.invoicedAt?.toISOString() ?? null,
   })))
 }
 
@@ -45,6 +47,9 @@ const schema = z.object({
   // True = "no end date". The schedule keeps topping the assignment up
   // with ~6 weeks of upcoming sessions on each load.
   extendIndefinitely: z.boolean().optional(),
+  // Trainer ticks this when they've already sent the invoice (Xero/QBO/cash).
+  // Stamps invoicedAt = now; otherwise leaves it null.
+  markInvoiced: z.boolean().optional(),
 })
 
 export async function POST(
@@ -112,6 +117,7 @@ export async function POST(
         clientId,
         startDate,
         extendIndefinitely: parsed.data.extendIndefinitely === true && pkg.sessionCount === 0,
+        invoicedAt: parsed.data.markInvoiced ? new Date() : null,
       },
     })
     await tx.trainingSession.createMany({

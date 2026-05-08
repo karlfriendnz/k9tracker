@@ -575,6 +575,10 @@ model ClientPackage {
   // When true, the schedule auto-creates more sessions on the package's
   // cadence so the calendar always has ~6 weeks of sessions ahead.
   extendIndefinitely Boolean  @default(false)
+  // Manual flag the trainer ticks when they've sent the invoice for this
+  // assignment outside PupManager (Xero/QBO/cash). Null = not invoiced yet.
+  // Once we wire real billing this is what the financial layer keys off.
+  invoicedAt         DateTime?
 
   package  Package           @relation(fields: [packageId], references: [id], onDelete: Cascade)
   client   ClientProfile     @relation(fields: [clientId], references: [id], onDelete: Cascade)

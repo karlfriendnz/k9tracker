@@ -121,6 +121,9 @@ export function AssignPackageFromScheduleModal({
   const [noEnd, setNoEnd] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Trainer-side "I've already invoiced this" flag. Stamps invoicedAt on
+  // the new ClientPackage row.
+  const [markInvoiced, setMarkInvoiced] = useState(false)
 
   const pkg = packages.find(p => p.id === packageId)!
   const isOngoing = pkg.sessionCount === 0
@@ -239,6 +242,7 @@ export function AssignPackageFromScheduleModal({
         sessionDates,
         dogId,
         extendIndefinitely: isOngoing && noEnd,
+        markInvoiced,
       }),
     })
     if (!res.ok) {
@@ -453,6 +457,21 @@ export function AssignPackageFromScheduleModal({
               You can drag any of them on the calendar afterwards.
             </p>
           </div>
+
+          <label className="flex items-start gap-2.5 rounded-xl border border-slate-200 px-3 py-2.5 cursor-pointer hover:bg-slate-50">
+            <input
+              type="checkbox"
+              checked={markInvoiced}
+              onChange={e => setMarkInvoiced(e.target.checked)}
+              className="h-4 w-4 mt-0.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer flex-shrink-0"
+            />
+            <span className="text-sm text-slate-700 leading-snug">
+              Already invoiced
+              <span className="block text-[11px] text-slate-400 mt-0.5">
+                Tick if you&apos;ve sent the invoice for this package outside PupManager.
+              </span>
+            </span>
+          </label>
 
           <div className="flex gap-2 pt-1">
             <Button
