@@ -238,10 +238,16 @@ function TrainerShell({
           )}
         </div>
 
+        {/* The pulsing dot below only renders when the trainer needs to
+            navigate elsewhere — i.e. the highlighted menu isn't the page
+            they're already on. Otherwise the dot would fire while they're
+            still working on the current step, before they've actually
+            finished it. */}
         <nav className={cn('flex-1 overflow-y-auto py-4 space-y-1', collapsed ? 'px-2' : 'px-3')}>
           {TRAINER_NAV.map((item) => {
             const active = pathname === item.href || pathname.startsWith(item.href + '/')
-            const highlighted = !!highlightMenuHref && item.href === highlightMenuHref
+            const onHighlightedPage = !!highlightMenuHref && (pathname === highlightMenuHref || pathname.startsWith(highlightMenuHref + '/'))
+            const highlighted = !!highlightMenuHref && !onHighlightedPage && item.href === highlightMenuHref
             const Icon = item.icon
             return (
               <Link
