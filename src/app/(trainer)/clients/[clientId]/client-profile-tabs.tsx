@@ -84,6 +84,7 @@ interface PendingProductRequest {
 interface Props {
   clientId: string
   canEdit: boolean
+  showHints?: boolean
   stats: Stats
   dogs: Dog[]
   tasks: Task[]
@@ -111,6 +112,7 @@ function groupByCategory<T extends { category: string | null }>(items: T[]) {
 export function ClientProfileTabs({
   clientId,
   canEdit,
+  showHints = false,
   stats,
   dogs,
   tasks,
@@ -245,11 +247,14 @@ export function ClientProfileTabs({
   const ownerFields = customFields.filter(f => f.appliesTo === 'OWNER')
   const dogFields   = customFields.filter(f => f.appliesTo === 'DOG')
 
-  const tabs: { id: Tab; label: string }[] = [
+  // `hint` flags onboarding tabs we want to draw the trainer's eye to —
+  // sessions (their full training history) and achievements (the progress
+  // story their client can see). Dot only renders while showHints is on.
+  const tabs: { id: Tab; label: string; hint?: boolean }[] = [
     { id: 'overview',  label: 'Overview' },
-    { id: 'sessions',  label: sessions.length > 0 ? `Sessions (${sessions.length})` : 'Sessions' },
+    { id: 'sessions',  label: sessions.length > 0 ? `Sessions (${sessions.length})` : 'Sessions', hint: true },
     { id: 'dogs',      label: dogs.length > 1 ? `Dogs (${dogs.length})` : 'Dog' },
-    { id: 'achievements', label: 'Achievements' },
+    { id: 'achievements', label: 'Achievements', hint: true },
     { id: 'details',   label: 'Details' },
   ]
 
@@ -261,13 +266,19 @@ export function ClientProfileTabs({
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
+            className={`relative flex-1 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
               tab === t.id
                 ? 'bg-white text-slate-900 shadow-sm'
                 : 'text-slate-500 hover:text-slate-700'
             }`}
           >
             {t.label}
+            {showHints && t.hint && tab !== t.id && (
+              <span
+                aria-hidden
+                className="pointer-events-none absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-indigo-500 animate-pm-menu-dot ring-2 ring-white"
+              />
+            )}
           </button>
         ))}
       </div>
