@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { CheckCircle2 } from 'lucide-react'
-import { stepKeyForLocation } from '@/lib/onboarding/path-step'
+import { stepKeyForLocation, STEP_TO_MENU } from '@/lib/onboarding/path-step'
 
 // Conversational copy for the LEFT side of the FAB. Two flavours:
 //
@@ -26,6 +26,14 @@ const STEP_HINT: Record<string, string> = {
   client_view: "See what your clients see — click 'Clients' on the left, then 'View as client'.",
   invite_client: "Send your first real client a sign-up link. Click 'Clients' on the left.",
   schedule_session: "Drop your first session onto the calendar. Click 'Schedule' on the left.",
+}
+
+// Hints for trainers on the step's TOP-LEVEL menu page but not yet in the
+// sub-screen the step actually lives in (e.g. /schedule with the
+// availability modal closed). Steps without a sub-screen use ON_PAGE_HINT
+// directly. Checked between subPathHint and ON_PAGE_HINT.
+const STEP_ON_MENU_HINT: Record<string, string> = {
+  availability: "Tap the 'Hours' button (top of the schedule) to open availability and block out your week.",
 }
 
 // On-page hints — used when the trainer is already on the step's primary
@@ -159,8 +167,13 @@ export function OnboardingFab({ nextStep, steps, totalSteps }: Props) {
   //   2. On-page hint (trainer is on the focused step's primary page)
   //   3. Navigational hint (off-page; tells them which menu to click)
   const onPage = !!pathStep && pathStep.key === leftStep.key
+  // Trainer is on the step's menu page (e.g. /schedule for availability)
+  // but hasn't drilled into the sub-screen yet (e.g. clicked the Hours
+  // button). Use a hint that nudges them at the in-page button.
+  const onMenu = !onPage && STEP_TO_MENU[leftStep.key] === pathname
   const leftHint = subPathHint(pathname)
     ?? (onPage ? STEP_ON_PAGE_HINT[leftStep.key] : null)
+    ?? (onMenu ? STEP_ON_MENU_HINT[leftStep.key] : null)
     ?? STEP_HINT[leftStep.key]
     ?? `Wrap up ${leftStep.title.toLowerCase()}.`
 
