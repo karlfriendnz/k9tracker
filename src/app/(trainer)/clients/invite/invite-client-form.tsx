@@ -34,6 +34,11 @@ export function InviteClientForm({ defaultTemplate }: { defaultTemplate: string 
     control,
     formState: { errors, isSubmitting },
   } = useForm<FormData>({
+    // The schema was being defined but never wired in — the form was
+    // shipping any payload to the API and the API was rejecting with a
+    // generic "Invalid input". Hooking the resolver up surfaces field-level
+    // errors inline before submit.
+    resolver: zodResolver(schema),
     defaultValues: {
       emailBody: defaultTemplate,
       dogs: [{ name: '' }],

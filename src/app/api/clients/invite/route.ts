@@ -31,7 +31,15 @@ export async function POST(req: Request) {
   const body = await req.json()
   const parsed = schema.safeParse(body)
   if (!parsed.success) {
-    return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
+    // Surface the first field-level error so the form can show "Email isn't
+    // valid" etc. instead of a generic "Invalid input". flatten() also keeps
+    // the structured details available for callers that want them.
+    const flat = parsed.error.flatten()
+    const firstField = Object.entries(flat.fieldErrors)[0]
+    const message = firstField?.[1]?.[0]
+      ?? flat.formErrors[0]
+      ?? 'Invalid input'
+    return NextResponse.json({ error: message, details: flat }, { status: 400 })
   }
 
   const { clientName, dogNames, clientEmail, sendInvite, emailBody } = parsed.data
