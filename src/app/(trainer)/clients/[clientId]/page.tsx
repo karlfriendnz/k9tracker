@@ -239,6 +239,7 @@ export default async function ClientDetailPage({
           durationMins: s.durationMins,
           sessionType: s.sessionType,
           status: s.status,
+          invoicedAt: s.invoicedAt?.toISOString() ?? null,
           location: s.location,
           virtualLink: s.virtualLink,
           description: s.description,

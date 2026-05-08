@@ -8,6 +8,7 @@ import { X, MapPin, Video, Clock, Calendar, Trash2, AlertTriangle, Play, Shoppin
 import { Button } from '@/components/ui/button'
 import { SessionFormReport } from '@/components/session-form-report'
 import { ClientAchievementsPanel } from './client-achievements-panel'
+import { SessionRowCard } from '@/components/shared/session-row-card'
 import Link from 'next/link'
 
 type Tab = 'overview' | 'sessions' | 'dogs' | 'details' | 'achievements'
@@ -45,6 +46,7 @@ interface TrainingSession {
   durationMins: number
   sessionType: string
   status: SessionStatus
+  invoicedAt: string | null
   location: string | null
   virtualLink: string | null
   description: string | null
@@ -167,7 +169,6 @@ export function ClientProfileTabs({
   const [sessions, setSessions] = useState(initialSessions)
   const [activeSession, setActiveSession] = useState<TrainingSession | null>(null)
   const [savingStatus, setSavingStatus] = useState(false)
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [confirmDelete, setConfirmDelete] = useState<{ ids: string[] } | null>(null)
   const [deleting, setDeleting] = useState(false)
   const searchParams = useSearchParams()
@@ -226,17 +227,6 @@ export function ClientProfileTabs({
     }
   }
 
-  function toggleSelect(id: string) {
-    setSelectedIds(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id); else next.add(id)
-      return next
-    })
-  }
-
-  function clearSelection() {
-    setSelectedIds(new Set())
-  }
 
   async function handleDelete(ids: string[]) {
     setDeleting(true)
@@ -248,11 +238,6 @@ export function ClientProfileTabs({
       return r.status === 'fulfilled' && r.value.ok
     })
     setSessions(prev => prev.filter(s => !successful.includes(s.id)))
-    setSelectedIds(prev => {
-      const next = new Set(prev)
-      for (const id of successful) next.delete(id)
-      return next
-    })
     setDeleting(false)
     setConfirmDelete(null)
   }
@@ -416,116 +401,42 @@ export function ClientProfileTabs({
 
       {/* ── Sessions ─────────────────────────────────────────────────────── */}
       {tab === 'sessions' && (
-        <div className="flex flex-col gap-3">
-          {/* Selection toolbar */}
-          {selectedIds.size > 0 && (
-            <div className="sticky top-2 z-10 flex items-center justify-between gap-3 bg-white border border-blue-200 rounded-xl px-4 py-2.5 shadow-sm">
-              <div className="flex items-center gap-3 text-sm">
-                <span className="font-medium text-slate-900">
-                  {selectedIds.size} selected
-                </span>
-                <button
-                  onClick={clearSelection}
-                  className="text-xs text-slate-500 hover:text-slate-700"
-                >
-                  Clear
-                </button>
-              </div>
-              <Button
-                variant="danger"
-                size="sm"
-                onClick={() => setConfirmDelete({ ids: Array.from(selectedIds) })}
-              >
-                <Trash2 className="h-4 w-4" />
-                Delete
-              </Button>
-            </div>
-          )}
-
+        <div className="flex flex-col gap-2.5">
           {sessions.length === 0 ? (
             <div className="text-center py-12 text-slate-400">
               <p>No sessions scheduled for this client yet.</p>
             </div>
           ) : (
-            sessions.map(s => {
-              const d = new Date(s.scheduledAt)
-              const isPast = d < new Date()
-              const isSelected = selectedIds.has(s.id)
-              return (
-                <Card
-                  key={s.id}
-                  className={`cursor-pointer transition-all ${
-                    isSelected
-                      ? 'border-blue-400 ring-2 ring-blue-100'
-                      : 'hover:border-blue-200 hover:shadow-md'
-                  } ${isPast ? 'opacity-70' : ''}`}
-                  onClick={() => router.push(`/sessions/${s.id}`)}
-                >
-                  <CardBody className="pt-4 pb-4">
-                    <div className="flex items-start gap-4">
-                      {/* Selection checkbox */}
-                      <label
-                        className="flex-shrink-0 mt-0.5 cursor-pointer"
-                        onClick={e => e.stopPropagation()}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => toggleSelect(s.id)}
-                          className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                        />
-                      </label>
-
-                      <div className="flex-shrink-0 text-center min-w-[52px]">
-                        <p className="text-xs font-bold text-blue-600">
-                          {d.toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit', hour12: true })}
-                        </p>
-                        <p className="text-xs text-slate-400">{s.durationMins}m</p>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-slate-900 truncate">{s.title}</p>
-                        <p className="text-xs text-slate-500 mt-0.5">
-                          {d.toLocaleDateString('en-NZ', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
-                          {s.dogName ? ` · 🐕 ${s.dogName}` : ''}
-                        </p>
-                        {s.location && <p className="text-xs text-slate-400 mt-0.5">{s.location}</p>}
-                      </div>
-                      <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                          s.sessionType === 'VIRTUAL'
-                            ? 'bg-purple-100 text-purple-700'
-                            : 'bg-slate-100 text-slate-600'
-                        }`}>
-                          {s.sessionType === 'VIRTUAL' ? 'Virtual' : 'In person'}
-                        </span>
-                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
-                          STATUS_OPTIONS.find(o => o.value === s.status)?.colour ?? 'bg-slate-100 text-slate-600 border-slate-200'
-                        }`}>
-                          {STATUS_OPTIONS.find(o => o.value === s.status)?.label ?? s.status}
-                        </span>
-                      </div>
-                      {/* Start session — opens the full-page form view */}
-                      <Link
-                        href={`/sessions/${s.id}`}
-                        onClick={e => e.stopPropagation()}
-                        className="flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors flex-shrink-0"
-                      >
-                        <Play className="h-3 w-3" />
-                        Start session
-                      </Link>
-                      {/* Per-card delete */}
-                      <button
-                        onClick={e => { e.stopPropagation(); setConfirmDelete({ ids: [s.id] }) }}
-                        className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
-                        aria-label="Delete session"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </CardBody>
-                </Card>
-              )
-            })
+            // Mirrors the dashboard / schedule day-list visual via the
+            // shared SessionRowCard. Client name is suppressed (we're
+            // already on the client's profile) so the body shows dog +
+            // session title without redundant repetition. Per-row delete
+            // hangs off the trailing slot.
+            sessions.map(s => (
+              <SessionRowCard
+                key={s.id}
+                session={{
+                  id: s.id,
+                  title: s.title,
+                  scheduledAt: s.scheduledAt,
+                  durationMins: s.durationMins,
+                  status: s.status,
+                  invoicedAt: s.invoicedAt,
+                  location: s.location,
+                  client: null,
+                  dog: s.dogName ? { name: s.dogName } : null,
+                }}
+                trailing={
+                  <button
+                    onClick={() => setConfirmDelete({ ids: [s.id] })}
+                    aria-label="Delete session"
+                    className="self-stretch px-2 rounded-2xl text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                }
+              />
+            ))
           )}
         </div>
       )}
