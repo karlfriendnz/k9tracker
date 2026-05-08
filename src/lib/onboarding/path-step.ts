@@ -18,6 +18,10 @@ const STEP_PATH_MATCH: Array<{ pattern: RegExp; key: string }> = [
   // Match /clients (the list page) but NOT /clients/<id> (a specific client
   // profile). The list is where the Invite Client button lives.
   { pattern: /^\/clients(?:\?|#|$)/, key: 'invite_client' },
+  // /schedule serves two onboarding steps. The query/hash flag from the
+  // FAB CTA differentiates: ?availability=1 or #availability → the
+  // "block out hours" step; bare /schedule → "create your first session".
+  { pattern: /^\/schedule(\?availability=1|#availability)/, key: 'availability' },
   { pattern: /^\/schedule/, key: 'schedule_session' },
   { pattern: /^\/settings/, key: 'business_profile' },
 ]
@@ -33,6 +37,7 @@ export function stepKeyForLocation(loc: string): string | null {
 // to reach that step. Used by the trainer layout to decide which menu
 // item to highlight in the sidebar when onboarding is in progress.
 export const STEP_TO_MENU: Record<string, string> = {
+  availability: '/schedule',
   business_profile: '/settings',
   intake_form: '/settings',
   session_form: '/settings',

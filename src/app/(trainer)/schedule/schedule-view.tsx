@@ -2373,6 +2373,19 @@ export function ScheduleView({
   const [blackouts, setBlackouts]       = useState<Blackout[]>([])
   const [showAvail, setShowAvail]       = useState(false)
   const [showReport, setShowReport]     = useState(false)
+
+  // The onboarding wizard's "set your hours" step links to /schedule#availability
+  // — open the availability modal automatically when that hash is present so
+  // the trainer lands directly in the right place.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const open = () => {
+      if (window.location.hash === '#availability') setShowAvail(true)
+    }
+    open()
+    window.addEventListener('hashchange', open)
+    return () => window.removeEventListener('hashchange', open)
+  }, [])
   // Free-text search across visible sessions. Non-matching blocks fade to
   // 20% opacity until the search is cleared.
   const [search, setSearch] = useState('')

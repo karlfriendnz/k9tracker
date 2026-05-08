@@ -108,8 +108,28 @@ async function seedOnboarding() {
 
 const ONBOARDING_STEPS = [
   {
-    key: 'business_profile',
+    key: 'availability',
     order: 1,
+    title: 'Block out when you train',
+    body: "Tell PupManager which days and hours you're available — clients can only book inside these. One day is enough to start.",
+    ctaLabel: 'Set your hours',
+    ctaHref: '/schedule#availability',
+    skippable: true,
+    skipWarning: null,
+  },
+  {
+    key: 'schedule_session',
+    order: 2,
+    title: 'Add your first session',
+    body: "Drop a session onto the calendar. It can be a real one or just a placeholder — you can re-assign it to a client later.",
+    ctaLabel: 'Open the schedule',
+    ctaHref: '/schedule',
+    skippable: true,
+    skipWarning: null,
+  },
+  {
+    key: 'business_profile',
+    order: 3,
     title: 'Set up your business profile',
     body: 'Add your business name, phone, and logo. Your clients see this on every screen.',
     ctaLabel: 'Add business details',
@@ -119,7 +139,7 @@ const ONBOARDING_STEPS = [
   },
   {
     key: 'intake_form',
-    order: 2,
+    order: 4,
     title: 'Review your forms',
     body: "Take a look at your contact, intake, and session forms. Make sure each one asks for the info you actually need before clients start submitting them.",
     ctaLabel: 'Review forms',
@@ -129,7 +149,7 @@ const ONBOARDING_STEPS = [
   },
   {
     key: 'program_package',
-    order: 3,
+    order: 5,
     title: 'Add a program or package',
     body: 'Describe one of your training programs so clients know what they\'re signing up for. Optional — you can do this later.',
     ctaLabel: 'Add a package',
@@ -139,7 +159,7 @@ const ONBOARDING_STEPS = [
   },
   {
     key: 'achievements',
-    order: 4,
+    order: 6,
     title: 'Pick your achievements',
     body: 'We\'ve set up some sensible defaults — keep them, edit, or add your own.',
     ctaLabel: 'Review achievements',
@@ -149,7 +169,7 @@ const ONBOARDING_STEPS = [
   },
   {
     key: 'invite_client',
-    order: 5,
+    order: 7,
     title: 'Invite your first client',
     body: 'The moment this all starts paying off. Send your client an invite email and they\'ll get a sign-up link.',
     ctaLabel: 'Invite a client',
@@ -158,18 +178,8 @@ const ONBOARDING_STEPS = [
     skipWarning: 'Without inviting your first client, you won\'t reach the moment PupManager actually starts saving you time. Skip anyway?',
   },
   {
-    key: 'schedule_session',
-    order: 6,
-    title: 'Schedule a session',
-    body: "Book your first training session with a client. They'll get a reminder before it starts and the session shows up on their dashboard.",
-    ctaLabel: 'Open the schedule',
-    ctaHref: '/schedule',
-    skippable: true,
-    skipWarning: null,
-  },
-  {
     key: 'client_view',
-    order: 7,
+    order: 8,
     title: 'See it from your client\'s side',
     body: 'Last stop — pop into the sample client account (Sarah & Bailey) to see exactly what your real clients will experience.',
     ctaLabel: 'Preview as client',

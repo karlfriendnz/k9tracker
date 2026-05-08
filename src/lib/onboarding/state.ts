@@ -107,6 +107,7 @@ async function getOnboardingStateImpl(trainerId: string): Promise<OnboardingStat
             customFields: true,
             achievements: { where: { published: true } },
             trainingSessions: true,
+            availabilitySlots: true,
           },
         },
       },
@@ -121,7 +122,7 @@ async function getOnboardingStateImpl(trainerId: string): Promise<OnboardingStat
     }),
   ])
 
-  const counts = profileWithCounts?._count ?? { embedForms: 0, sessionForms: 0, packages: 0, clients: 0, customFields: 0, achievements: 0, trainingSessions: 0 }
+  const counts = profileWithCounts?._count ?? { embedForms: 0, sessionForms: 0, packages: 0, clients: 0, customFields: 0, achievements: 0, trainingSessions: 0, availabilitySlots: 0 }
 
   // Live-derived completion — a step is "done" if either the underlying state
   // exists OR the trainer explicitly marked it complete.
@@ -131,7 +132,11 @@ async function getOnboardingStateImpl(trainerId: string): Promise<OnboardingStat
   // embed/session form happened to be active (e.g. a default seeded one
   // toggled on), which let them skip past actually reviewing+publishing the
   // intake form. They have to publish their intake form specifically.
+  //
+  // availability completes once the trainer has set even one weekly slot —
+  // the message is "block out *some* time", not "fully fill in your week".
   const liveDerived: Record<string, boolean> = {
+    availability: counts.availabilitySlots > 0,
     business_profile: !!profileWithCounts?.businessName?.trim(),
     intake_form: !!profileWithCounts?.intakeFormPublished,
     program_package: counts.packages > 0,

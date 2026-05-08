@@ -17,6 +17,7 @@ import { stepKeyForLocation } from '@/lib/onboarding/path-step'
 //  pressure". Friendlier mentor tone; mentions that optional steps can be
 //  done later.
 const STEP_HINT: Record<string, string> = {
+  availability: "First up — let PupManager know when you train. Click 'Schedule' on the left, then 'Hours'.",
   business_profile: "Let's set up your business — click 'Settings' on the left to add your name and logo.",
   intake_form: "Click 'Settings' on the left, then the 'Forms' tab, to set up the form new clients fill in.",
   session_form: "Click 'Settings' on the left, then 'Forms', to set up the form for after each session.",
@@ -24,7 +25,7 @@ const STEP_HINT: Record<string, string> = {
   achievements: "Pick the badges your clients can earn. Click 'Achievements' on the left.",
   client_view: "See what your clients see — click 'Clients' on the left, then 'View as client'.",
   invite_client: "Send your first real client a sign-up link. Click 'Clients' on the left.",
-  schedule_session: "Book your first session. Click 'Schedule' on the left.",
+  schedule_session: "Drop your first session onto the calendar. Click 'Schedule' on the left.",
 }
 
 // On-page hints — used when the trainer is already on the step's primary
@@ -32,6 +33,7 @@ const STEP_HINT: Record<string, string> = {
 // to navigate somewhere they already are. Falls back to STEP_HINT if a
 // step has no specific in-page version.
 const STEP_ON_PAGE_HINT: Record<string, string> = {
+  availability: "Pick a day, drag across the hours you can train, then save. Even one day is enough to start.",
   business_profile: "Fill in your business name, phone and logo here. Hit 'Save' when you're happy.",
   intake_form: "Have a look through the questions, then hit 'Publish' to make the form live.",
   session_form: "Have a look through the questions, then hit 'Publish' to make the form live.",
@@ -39,7 +41,7 @@ const STEP_ON_PAGE_HINT: Record<string, string> = {
   achievements: "Pick the achievements you'd like your clients to earn — tap any to publish.",
   client_view: "Click around to see what your clients see. Hit 'Exit preview' when you're done.",
   invite_client: "Click 'Invite client' (top right) to send your first sign-up link.",
-  schedule_session: "Click any open time slot in the calendar to book a session.",
+  schedule_session: "Click any open time slot in the calendar to drop your first session in.",
 }
 
 // Sub-path-specific overrides for pages where the trainer is one step
@@ -61,13 +63,14 @@ function subPathHint(pathname: string): string | null {
 }
 
 const STEP_TRANSITION: Record<string, string> = {
+  availability: "Nice — your hours are blocked out! Now let's drop a first session onto the calendar. Click any open slot in the schedule.",
+  schedule_session: "Booked — your first session is on the calendar! Now let's set up your business profile. Click 'Settings' on the left.",
   business_profile: "Nice work — your business is all set up! Now let's get your intake form ready. Click 'Settings' on the left, then 'Forms'.",
   intake_form: "Awesome — your intake form is ready! You can do the other forms later. Now let's add your first programme — click 'Packages' on the left.",
   session_form: "Sweet — your session form is set! Now let's add your first programme. Click 'Packages' on the left.",
   program_package: "Boom — your first programme is in! Now let's pick some fun achievements. Click 'Achievements' on the left.",
   achievements: "Nice — your achievements are live! Time to invite your first real client. Click 'Clients' on the left.",
-  invite_client: "Done — your first invite is on its way! Now let's book a session. Click 'Schedule' on the left.",
-  schedule_session: "Booked — your first session is on the calendar! Last step: take a quick peek at what your clients will see. Click 'Clients' on the left, then 'View as client'.",
+  invite_client: "Done — your first invite is on its way! Last step: take a quick peek at what your clients will see. Click 'Clients' on the left, then 'View as client'.",
   client_view: "Cool — you've seen what your clients see! That's the basics done. You're all set up 🎉",
 }
 
@@ -143,15 +146,21 @@ export function OnboardingFab({ nextStep, steps, totalSteps }: Props) {
   // next-incomplete step.
   const locationKey = `${pathname}${tab ? `?tab=${tab}` : ''}${hash}`
   const pathStepKey = stepKeyForLocation(locationKey)
-  const pathStep = pathStepKey ? steps.find(s => s.key === pathStepKey) : null
+  const pathStepRaw = pathStepKey ? steps.find(s => s.key === pathStepKey) : null
+  // Don't surface a step the trainer hasn't reached yet — e.g. they're on
+  // /schedule (which maps to schedule_session) but availability is still
+  // pending. Showing schedule_session's hint there would skip ahead. Pick
+  // whichever of {pathStep, nextStep} is earliest in the wizard order.
+  const pathStep = pathStepRaw && pathStepRaw.order > nextStep.order ? null : pathStepRaw
   const leftStep = pathStep ?? nextStep
   const leftCompleted = leftStep.status === 'completed'
   // Hint resolution priority:
   //   1. Sub-path override (e.g. /clients/invite — fills the in-page form)
-  //   2. On-page hint (trainer is on the step's primary page)
+  //   2. On-page hint (trainer is on the focused step's primary page)
   //   3. Navigational hint (off-page; tells them which menu to click)
+  const onPage = !!pathStep && pathStep.key === leftStep.key
   const leftHint = subPathHint(pathname)
-    ?? (pathStep ? STEP_ON_PAGE_HINT[pathStep.key] : null)
+    ?? (onPage ? STEP_ON_PAGE_HINT[leftStep.key] : null)
     ?? STEP_HINT[leftStep.key]
     ?? `Wrap up ${leftStep.title.toLowerCase()}.`
 
