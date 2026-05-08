@@ -4,20 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { AppShell } from '@/components/shared/app-shell'
 import { OnboardingFab } from './onboarding-fab'
 import { getOnboardingFabState } from '@/lib/onboarding/state'
-
-// Maps an onboarding step to the sidebar menu item the trainer should click
-// to do it. The matching menu item gets a pulsing dot beside it so the
-// trainer learns the layout instead of being teleported by FAB clicks.
-const STEP_TO_MENU: Record<string, string> = {
-  business_profile: '/settings',
-  intake_form: '/settings',
-  session_form: '/settings',
-  program_package: '/packages',
-  achievements: '/achievements',
-  client_view: '/clients',
-  invite_client: '/clients',
-  schedule_session: '/schedule',
-}
+import { STEP_TO_MENU } from '@/lib/onboarding/path-step'
 
 export default async function TrainerLayout({ children }: { children: React.ReactNode }) {
   const session = await auth()
@@ -35,10 +22,19 @@ export default async function TrainerLayout({ children }: { children: React.Reac
     : { show: false, nextStep: null, steps: [], totalSteps: 0 }
 
   // Highlight the sidebar menu item that corresponds to the next-incomplete
-  // step. Falls back to null when onboarding is done — no dot.
+  // step — but only after the trainer has completed their current page's
+  // step (the AppShell's path-aware gate decides). Falls back to null when
+  // onboarding is done — no dot.
   const highlightMenuHref = fabState.show && fabState.nextStep
     ? STEP_TO_MENU[fabState.nextStep.key] ?? null
     : null
+
+  // Pass the keys of every completed step so AppShell can ask "is the
+  // trainer's current page step in this list?" before deciding whether
+  // to render the pulsing dot.
+  const completedStepKeys = fabState.steps
+    .filter(s => s.status === 'completed')
+    .map(s => s.key)
 
   return (
     <AppShell
@@ -48,6 +44,7 @@ export default async function TrainerLayout({ children }: { children: React.Reac
       trainerLogo={tp?.logoUrl ?? null}
       businessName={tp?.businessName ?? session.user.businessName}
       highlightMenuHref={highlightMenuHref}
+      completedStepKeys={completedStepKeys}
     >
       {/* FAB sits above the page content so when it's a sticky banner it
           appears at the top of <main> rather than way below at the bottom. */}

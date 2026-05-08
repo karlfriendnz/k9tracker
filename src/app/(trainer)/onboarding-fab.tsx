@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { CheckCircle2 } from 'lucide-react'
+import { stepKeyForLocation } from '@/lib/onboarding/path-step'
 
 // Conversational copy for the LEFT side of the FAB. Two flavours:
 //
@@ -37,32 +38,6 @@ const STEP_TRANSITION: Record<string, string> = {
   schedule_session: "Booked — your first session is on the calendar! That's the basics done. You're all set up 🎉",
 }
 
-// Resolves the trainer's current location to the wizard step that page
-// belongs to. The settings page uses tab markers in two forms — `?tab=foo`
-// query param (set by router.push) and `#foo` hash (set by older links) —
-// so we normalise the location into a single string and pattern-match
-// against that.
-const STEP_PATH_MATCH: Array<{ pattern: RegExp; key: string }> = [
-  { pattern: /^\/settings(\?tab=forms|#forms)/, key: 'intake_form' },
-  { pattern: /^\/settings(\?tab=notifications|#notifications)/, key: 'business_profile' },
-  { pattern: /^\/forms\/intake/, key: 'intake_form' },
-  { pattern: /^\/forms\/embed/, key: 'intake_form' },
-  { pattern: /^\/forms\/session/, key: 'intake_form' },
-  { pattern: /^\/forms/, key: 'intake_form' },
-  { pattern: /^\/packages/, key: 'program_package' },
-  { pattern: /^\/achievements/, key: 'achievements' },
-  { pattern: /^\/preview-as/, key: 'client_view' },
-  { pattern: /^\/clients\/invite/, key: 'invite_client' },
-  { pattern: /^\/schedule/, key: 'schedule_session' },
-  { pattern: /^\/settings/, key: 'business_profile' },
-]
-
-function stepKeyForLocation(loc: string): string | null {
-  for (const m of STEP_PATH_MATCH) {
-    if (m.pattern.test(loc)) return m.key
-  }
-  return null
-}
 
 export interface FabStep {
   key: string

@@ -11,6 +11,7 @@ import {
   Home, LogOut, ShoppingBag, ChevronsLeft, ChevronsRight,
   MoreHorizontal, X, Inbox,
 } from 'lucide-react'
+import { stepKeyForLocation } from '@/lib/onboarding/path-step'
 
 const SIDEBAR_COLLAPSED_KEY = 'k9.trainerSidebarCollapsed'
 
@@ -54,9 +55,18 @@ interface AppShellProps {
   /**
    * If set to a TRAINER_NAV href, that menu item gets a small pulsing dot
    * pinned beside its label/icon — used during onboarding to point at the
-   * page the trainer should click next.
+   * page the trainer should click next. The dot only renders when the
+   * trainer's current page step is itself completed (so the cue fires
+   * AFTER they've finished a step, not while they're still working on
+   * it). See `completedStepKeys` below.
    */
   highlightMenuHref?: string | null
+  /**
+   * Keys of every onboarding step the trainer has completed. AppShell
+   * resolves the trainer's current pathname to a step and only shows the
+   * highlight dot when that step is in this list.
+   */
+  completedStepKeys?: string[]
 }
 
 export function AppShell(props: AppShellProps) {
@@ -178,6 +188,7 @@ function TrainerShell({
   trainerLogo,
   businessName,
   highlightMenuHref,
+  completedStepKeys = [],
 }: AppShellProps) {
   const pathname = usePathname()
   const [showEmail, setShowEmail] = useState(false)
@@ -238,16 +249,25 @@ function TrainerShell({
           )}
         </div>
 
-        {/* The pulsing dot below only renders when the trainer needs to
-            navigate elsewhere — i.e. the highlighted menu isn't the page
-            they're already on. Otherwise the dot would fire while they're
-            still working on the current step, before they've actually
-            finished it. */}
         <nav className={cn('flex-1 overflow-y-auto py-4 space-y-1', collapsed ? 'px-2' : 'px-3')}>
           {TRAINER_NAV.map((item) => {
             const active = pathname === item.href || pathname.startsWith(item.href + '/')
-            const onHighlightedPage = !!highlightMenuHref && (pathname === highlightMenuHref || pathname.startsWith(highlightMenuHref + '/'))
-            const highlighted = !!highlightMenuHref && !onHighlightedPage && item.href === highlightMenuHref
+            // The pulsing dot guides the trainer to their next step, but it
+            // should NOT fire while they're mid-step on the page they're on.
+            // Two cases hide the dot:
+            //   • current page = a step page AND that step is still pending
+            //     (trainer is working on it; don't distract)
+            //   • current page IS the highlighted menu (already there)
+            // On non-step pages (e.g. /dashboard, /messages) the dot still
+            // shows so it can pull the trainer into their next task.
+            const currentStepKey = stepKeyForLocation(pathname)
+            const onIncompleteStepPage = !!currentStepKey && !completedStepKeys.includes(currentStepKey)
+            const onHighlightedMenu = !!highlightMenuHref && (pathname === highlightMenuHref || pathname.startsWith(highlightMenuHref + '/'))
+            const highlighted =
+              !!highlightMenuHref &&
+              !onIncompleteStepPage &&
+              !onHighlightedMenu &&
+              item.href === highlightMenuHref
             const Icon = item.icon
             return (
               <Link

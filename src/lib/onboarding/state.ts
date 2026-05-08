@@ -51,15 +51,15 @@ export async function getOnboardingFabState(trainerId: string): Promise<{
     return { show: false, nextStep: null, steps: allSteps, totalSteps }
   }
 
-  // Priority order for "what's next up": fresh pending > skipped > in-progress.
-  // The trainer is actively *working on* in-progress steps (they clicked the
-  // CTA), so the FAB should point past those to whatever they haven't touched
-  // or have decided to defer. If everything is started, fall back to skipped
-  // first (re-engage their decisions), then in-progress (last resort).
+  // Priority for "what's next up": first incomplete step in order, where
+  // "incomplete" includes both pending and in-progress. A step that the
+  // trainer started but didn't finish still needs finishing — the previous
+  // logic skipped past in-progress steps which made the FAB point at
+  // step 4 while step 3 was demonstrably half-done. Skipped steps are
+  // tried last (the trainer chose to defer them).
   const next =
-    allSteps.find(s => s.status === 'pending') ??
-    allSteps.find(s => s.status === 'skipped') ??
-    allSteps.find(s => s.status === 'in_progress')
+    allSteps.find(s => s.status === 'pending' || s.status === 'in_progress') ??
+    allSteps.find(s => s.status === 'skipped')
   if (!next) {
     return { show: false, nextStep: null, steps: allSteps, totalSteps }
   }
