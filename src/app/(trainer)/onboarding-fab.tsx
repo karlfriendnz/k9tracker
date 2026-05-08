@@ -30,30 +30,6 @@ const STEP_HINT: Record<string, string> = {
   schedule_session: 'Pop a session in the calendar for your client.',
 }
 
-// Maps the trainer's current URL to the wizard step that page belongs to,
-// so the LEFT-column instruction stays relevant to where the trainer
-// actually is. First match wins; most specific patterns first. Falls back
-// to the next-incomplete step when no path matches.
-const STEP_PATH_MATCH: Array<{ pattern: RegExp; key: string }> = [
-  { pattern: /^\/forms\/intake/, key: 'intake_form' },
-  { pattern: /^\/forms\/embed/, key: 'intake_form' },
-  { pattern: /^\/forms\/session/, key: 'session_form' },
-  { pattern: /^\/forms/, key: 'intake_form' },
-  { pattern: /^\/packages/, key: 'program_package' },
-  { pattern: /^\/achievements/, key: 'achievements' },
-  { pattern: /^\/preview-as/, key: 'client_view' },
-  { pattern: /^\/clients\/invite/, key: 'invite_client' },
-  { pattern: /^\/schedule/, key: 'schedule_session' },
-  { pattern: /^\/settings/, key: 'business_profile' },
-]
-
-function stepKeyForPath(pathname: string): string | null {
-  for (const m of STEP_PATH_MATCH) {
-    if (m.pattern.test(pathname)) return m.key
-  }
-  return null
-}
-
 interface Props {
   nextStep: { key: string; title: string; order: number }
   totalSteps: number
@@ -92,13 +68,12 @@ export function OnboardingFab({ nextStep, totalSteps }: Props) {
   if (!mounted) return null
   if (pathname === '/dashboard') return null
 
-  // Right column = the next-incomplete step (where the trainer is heading).
-  // Left column = the step matching the current page (what they should be
-  // doing right now); falls back to the right-side step when the path
-  // doesn't map to anything.
-  const currentKey = stepKeyForPath(pathname) ?? nextStep.key
+  // Both sides describe the same step — the next-incomplete one. LEFT is
+  // the action hint, RIGHT is the breadcrumb (icon + "Step N of M" + title).
+  // Path-aware variants caused confusing splits when the trainer was on a
+  // page that matched a step they'd already completed.
   const Icon = STEP_ICON[nextStep.key] ?? PawPrint
-  const hint = STEP_HINT[currentKey] ?? STEP_HINT[nextStep.key]
+  const hint = STEP_HINT[nextStep.key]
 
   return (
     <Link
