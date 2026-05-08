@@ -16,6 +16,20 @@ const STEP_ICON: Record<string, LucideIcon> = {
   schedule_session: Calendar,
 }
 
+// One-line nudge under the step title so the trainer knows exactly what
+// "complete" means without having to open the wizard. Keep these short and
+// action-first; the panel/modal carries the longer copy.
+const STEP_HINT: Record<string, string> = {
+  business_profile: 'Drop your business name, contact details and logo into Settings.',
+  intake_form: 'Check the intake form and publish it when you\'re happy.',
+  session_form: 'Set up the form your clients see after each session.',
+  program_package: 'Create your first programme so you can assign sessions.',
+  achievements: 'Tweak the starter achievements and publish the ones you like.',
+  client_view: 'Take a quick walk through what your clients will see.',
+  invite_client: 'Invite your first real client to get the ball rolling.',
+  schedule_session: 'Pop a session in the calendar for your client.',
+}
+
 interface Props {
   nextStep: { key: string; title: string; order: number }
   totalSteps: number
@@ -56,12 +70,13 @@ export function OnboardingFab({ nextStep, totalSteps }: Props) {
   if (pathname === '/dashboard') return null
 
   const Icon = STEP_ICON[nextStep.key] ?? PawPrint
+  const hint = STEP_HINT[nextStep.key]
 
   return (
     <Link
       href="/dashboard?wizard=1"
       aria-label={`Continue setup: ${nextStep.title}`}
-      className={`group fixed top-4 right-4 sm:top-6 sm:right-6 z-40 flex items-center gap-3 max-w-[320px] bg-white rounded-2xl pl-2 pr-4 py-2 shadow-[0_10px_30px_-8px_rgba(37,99,235,0.45)] ring-1 ring-slate-200/70 hover:shadow-[0_16px_40px_-8px_rgba(37,99,235,0.55)] hover:-translate-y-0.5 transition-all ${celebrating ? 'animate-pm-fab-bounce' : ''}`}
+      className={`group fixed top-4 right-4 sm:top-6 sm:right-6 z-40 flex items-start gap-3 max-w-[340px] bg-white rounded-2xl pl-2 pr-4 py-2.5 shadow-[0_10px_30px_-8px_rgba(37,99,235,0.45)] ring-1 ring-slate-200/70 hover:shadow-[0_16px_40px_-8px_rgba(37,99,235,0.55)] hover:-translate-y-0.5 transition-all ${celebrating ? 'animate-pm-fab-bounce' : ''}`}
     >
       <span
         aria-hidden
@@ -77,11 +92,16 @@ export function OnboardingFab({ nextStep, totalSteps }: Props) {
         <span className="block text-[10px] font-bold uppercase tracking-[0.12em] text-blue-600">
           Next up · {nextStep.order} of {totalSteps}
         </span>
-        <span className="block text-sm font-semibold text-slate-900 truncate leading-tight mt-0.5">
+        <span className="block text-sm font-semibold text-slate-900 leading-tight mt-0.5">
           {nextStep.title}
         </span>
+        {hint && (
+          <span className="block text-[11px] text-slate-500 leading-snug mt-1 line-clamp-2">
+            {hint}
+          </span>
+        )}
       </span>
-      <ArrowRight className="h-4 w-4 text-slate-400 shrink-0 transition-transform group-hover:translate-x-0.5 group-hover:text-blue-600" />
+      <ArrowRight className="h-4 w-4 text-slate-400 shrink-0 mt-1 transition-transform group-hover:translate-x-0.5 group-hover:text-blue-600" />
     </Link>
   )
 }
