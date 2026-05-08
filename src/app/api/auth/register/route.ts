@@ -59,13 +59,20 @@ export async function POST(req: Request) {
   // Welcome email — best-effort; a Resend hiccup shouldn't fail the signup.
   // Account is already auto-verified (emailVerified set above), so the
   // email is informational + login link, not a verification gate.
-  if (process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL) {
+  const hasResendKey = !!process.env.RESEND_API_KEY
+  const fromAddress = process.env.RESEND_FROM_EMAIL
+  console.log('[register] welcome email gate', {
+    email,
+    hasResendKey,
+    fromAddress: fromAddress ?? null,
+  })
+  if (hasResendKey && fromAddress) {
     try {
       const resend = new Resend(process.env.RESEND_API_KEY)
       const loginUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.pupmanager.com'}/login`
       const firstName = name.split(' ')[0] || name
-      await resend.emails.send({
-        from: process.env.RESEND_FROM_EMAIL,
+      const result = await resend.emails.send({
+        from: fromAddress,
         to: email,
         subject: 'Welcome to PupManager 🐾',
         html: `
@@ -86,9 +93,19 @@ export async function POST(req: Request) {
           </div>
         `,
       })
+      if (result.error) {
+        console.error('[register] Resend returned error', { email, error: result.error })
+      } else {
+        console.log('[register] welcome email sent', { email, resendId: result.data?.id })
+      }
     } catch (err) {
-      console.error('[register] Welcome email failed:', err)
+      console.error('[register] Welcome email threw:', err)
     }
+  } else {
+    console.warn('[register] welcome email skipped — Resend env not configured', {
+      hasResendKey,
+      hasFromAddress: !!fromAddress,
+    })
   }
 
   return NextResponse.json({ ok: true }, { status: 201 })
