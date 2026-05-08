@@ -35,24 +35,23 @@ interface Props {
   totalSteps: number
 }
 
-// Floating "Next up" card shown across trainer pages while onboarding is in
-// progress. Hidden on /dashboard since the persistent checklist + modal already
-// live there. Click → /dashboard?wizard=1 which the panel honours by auto-
-// opening the modal at the next incomplete step.
 const FAB_LAST_STEP_KEY = 'pm-fab-last-step'
 
+// "Continue setup" banner pinned to the top of the trainer content area.
+// Hidden on /dashboard since the persistent checklist + modal already live
+// there. Click → /dashboard?wizard=1 which the panel honours by auto-
+// opening the modal at the next incomplete step.
 export function OnboardingFab({ nextStep, totalSteps }: Props) {
   const pathname = usePathname()
   const [mounted, setMounted] = useState(false)
-  // Briefly true after nextStep.key changes — drives the celebration animation
-  // so the trainer's eye is drawn here when a step just completed.
   const [celebrating, setCelebrating] = useState(false)
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setMounted(true) }, [])
 
   // Detect changes in nextStep.key vs the last value we displayed (stored in
-  // sessionStorage so it survives navigation between pages).
+  // sessionStorage so it survives navigation between pages). Drives the
+  // celebration animation when a step just completed.
   useEffect(() => {
     if (typeof window === 'undefined') return
     const last = sessionStorage.getItem(FAB_LAST_STEP_KEY)
@@ -76,24 +75,24 @@ export function OnboardingFab({ nextStep, totalSteps }: Props) {
     <Link
       href="/dashboard?wizard=1"
       aria-label={`Continue setup: ${nextStep.title}`}
-      className={`group fixed top-4 right-4 sm:top-6 sm:right-6 z-40 block w-[300px] max-w-[calc(100vw-2rem)] bg-white rounded-2xl shadow-[0_10px_30px_-8px_rgba(37,99,235,0.45)] ring-1 ring-slate-200/70 hover:shadow-[0_16px_40px_-8px_rgba(37,99,235,0.55)] hover:-translate-y-0.5 transition-all overflow-hidden ${celebrating ? 'animate-pm-fab-bounce' : ''}`}
+      className={`group sticky top-0 z-30 flex items-center gap-4 px-4 sm:px-6 py-3 bg-white/95 backdrop-blur border-b border-slate-200 shadow-[0_4px_12px_-6px_rgba(15,23,42,0.18)] hover:bg-white transition-colors ${celebrating ? 'animate-pm-fab-bounce' : ''}`}
     >
-      {/* Instruction lives at the top — that's the bit the trainer needs to
-          read to know what to do next. */}
-      {hint && (
-        <div className="px-4 pt-3 pb-2.5">
-          <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-blue-600 mb-1">
-            What to do
-          </p>
-          <p className="text-[13px] text-slate-700 leading-snug">
-            {hint}
-          </p>
-        </div>
-      )}
+      {/* Left: instruction — what the trainer needs to do to clear this step. */}
+      <div className="flex-1 min-w-0">
+        <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-blue-600 leading-none">
+          What to do
+        </p>
+        <p className="text-sm text-slate-700 leading-snug mt-1.5 line-clamp-2">
+          {hint ?? `Open the wizard to wrap up ${nextStep.title.toLowerCase()}.`}
+        </p>
+      </div>
 
-      {/* Divider + step row — keeps the navigational affordance (icon, step
-          number, arrow) below the instruction. */}
-      <div className={`flex items-center gap-3 px-3 py-2.5 ${hint ? 'border-t border-slate-100 bg-slate-50/60' : ''}`}>
+      {/* Vertical divider on tablet+desktop only — collapses to nothing on
+          phones where the layout stacks tighter. */}
+      <span className="hidden sm:block self-stretch w-px bg-slate-200" aria-hidden />
+
+      {/* Right: which step + arrow affordance. */}
+      <div className="flex items-center gap-2.5 sm:gap-3 flex-shrink-0">
         <span
           aria-hidden
           className={`grid place-items-center h-9 w-9 shrink-0 rounded-xl text-white shadow-md ${
@@ -104,15 +103,15 @@ export function OnboardingFab({ nextStep, totalSteps }: Props) {
         >
           <Icon className="h-4 w-4" strokeWidth={2} />
         </span>
-        <span className="flex-1 min-w-0">
-          <span className="block text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
+        <div className="hidden xs:flex flex-col min-w-0 max-w-[180px] sm:max-w-[220px]">
+          <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400 leading-none">
             Step {nextStep.order} of {totalSteps}
           </span>
-          <span className="block text-sm font-semibold text-slate-900 truncate leading-tight mt-0.5">
+          <span className="text-sm font-semibold text-slate-900 truncate leading-tight mt-0.5">
             {nextStep.title}
           </span>
-        </span>
-        <ArrowRight className="h-4 w-4 text-slate-400 shrink-0 transition-transform group-hover:translate-x-0.5 group-hover:text-blue-600" />
+        </div>
+        <ArrowRight className="h-4 w-4 text-slate-400 transition-transform group-hover:translate-x-0.5 group-hover:text-blue-600" />
       </div>
     </Link>
   )

@@ -28,10 +28,12 @@ export default async function TrainerLayout({ children }: { children: React.Reac
       trainerLogo={tp?.logoUrl ?? null}
       businessName={tp?.businessName ?? session.user.businessName}
     >
-      {children}
+      {/* FAB sits above the page content so when it's a sticky banner it
+          appears at the top of <main> rather than way below at the bottom. */}
       {fabState.show && fabState.nextStep && (
         <OnboardingFab nextStep={fabState.nextStep} totalSteps={fabState.totalSteps} />
       )}
+      {children}
     </AppShell>
   )
 }
