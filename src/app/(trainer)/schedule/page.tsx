@@ -100,6 +100,10 @@ export default async function SchedulePage({
       where: {
         trainerId: trainerProfile.id,
         scheduledAt: { gte: weekStart, lte: weekEnd },
+        // Skip sessions orphaned by client deletion — clientId is SetNull
+        // when the client is removed, so the session row sticks around but
+        // has nobody to attribute it to.
+        clientId: { not: null },
       },
       include: {
         dog: {

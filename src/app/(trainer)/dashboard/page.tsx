@@ -66,7 +66,14 @@ export default async function DashboardPage({
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
 
   const todaysSessionsRaw = await prisma.trainingSession.findMany({
-    where: { trainerId, scheduledAt: { gte: focusStart, lte: focusEnd } },
+    where: {
+      trainerId,
+      scheduledAt: { gte: focusStart, lte: focusEnd },
+      // Hide sessions whose client was deleted. clientId is `onDelete: SetNull`,
+      // so a deleted client leaves orphan rows; we treat them as gone here
+      // rather than auto-removing them so trainers don't lose past records.
+      clientId: { not: null },
+    },
     include: {
       client: { select: { user: { select: { name: true, email: true } } } },
       dog: {
@@ -178,6 +185,7 @@ export default async function DashboardPage({
       scheduledAt: { lt: new Date() },
       status: { in: ['UPCOMING', 'COMPLETED', 'COMMENTED'] },
       formResponses: { none: {} },
+      clientId: { not: null },
     },
   })
 

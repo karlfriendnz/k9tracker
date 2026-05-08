@@ -19,6 +19,9 @@ async function loadPendingSessions(trainerId: string) {
       scheduledAt: { lt: now },
       status: { in: ['UPCOMING', 'COMPLETED', 'COMMENTED'] },
       formResponses: { none: {} },
+      // Hide orphans whose client was deleted — same reason as the dashboard
+      // and schedule queries.
+      clientId: { not: null },
     },
     // Oldest first — this is a backlog queue, not a feed. The next session
     // the trainer needs to work on is the one that's been waiting longest.

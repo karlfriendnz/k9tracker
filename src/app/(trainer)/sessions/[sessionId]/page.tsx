@@ -28,7 +28,14 @@ export default async function SessionPage({
   const { sessionId } = await params
 
   const trainingSession = await prisma.trainingSession.findFirst({
-    where: { id: sessionId, trainerId },
+    where: {
+      id: sessionId,
+      trainerId,
+      // Orphan sessions (client deleted, clientId set null) are hidden
+      // everywhere else — 404 the detail page too so a stale link can't
+      // surface them.
+      clientId: { not: null },
+    },
     include: {
       client: { select: { id: true, user: { select: { name: true, email: true } } } },
       dog: {
