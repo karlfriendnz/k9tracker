@@ -2,10 +2,10 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import { Mail, CheckCircle2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardBody } from '@/components/ui/card'
@@ -28,8 +28,10 @@ const schema = z
 type FormData = z.infer<typeof schema>
 
 export function RegisterForm({ enabledOAuth }: { enabledOAuth: EnabledOAuth }) {
-  const router = useRouter()
   const [serverError, setServerError] = useState<string | null>(null)
+  // Once signup succeeds the form swaps to a "check your email" success state
+  // rather than redirecting. Trainer sees confirmation + login CTA inline.
+  const [registeredEmail, setRegisteredEmail] = useState<string | null>(null)
 
   const {
     register,
@@ -56,7 +58,35 @@ export function RegisterForm({ enabledOAuth }: { enabledOAuth: EnabledOAuth }) {
       return
     }
 
-    router.push('/login?registered=1')
+    setRegisteredEmail(data.email)
+  }
+
+  if (registeredEmail) {
+    return (
+      <Card>
+        <CardBody className="pt-8 pb-8 text-center flex flex-col items-center gap-3">
+          <div className="h-14 w-14 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center">
+            <CheckCircle2 className="h-7 w-7" />
+          </div>
+          <h2 className="text-xl font-semibold text-slate-900">You&apos;re all set 🎉</h2>
+          <p className="text-sm text-slate-600 max-w-sm">
+            We&apos;ve sent a welcome email to{' '}
+            <span className="font-medium text-slate-900">{registeredEmail}</span>.
+            Check your inbox for a quick-start link.
+          </p>
+          <p className="text-xs text-slate-400 inline-flex items-center gap-1.5 mt-1">
+            <Mail className="h-3.5 w-3.5" />
+            Email not arrived? Check spam, or just sign in below.
+          </p>
+          <Link
+            href="/login"
+            className="mt-4 inline-flex items-center justify-center w-full max-w-xs rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-3 transition-colors"
+          >
+            Sign in to PupManager
+          </Link>
+        </CardBody>
+      </Card>
+    )
   }
 
   return (
