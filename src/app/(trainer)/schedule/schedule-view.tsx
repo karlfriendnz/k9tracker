@@ -528,19 +528,29 @@ function WeekGrid({
   // Stretch the visible-hours range to fill the available height so 7pm sits
   // at the bottom of the view; clamp at 48px/hr so blocks stay readable on
   // very short viewports (it'll start scrolling instead).
+  //
+  // Reference the WINDOW's innerHeight (minus a chrome estimate), not the
+  // scroll container's own clientHeight. The inner grid's height is derived
+  // from pxPerHour, and when the layout above the schedule grows (e.g. the
+  // onboarding FAB pushes the page down) the container's clientHeight grows
+  // too — keying off it makes a feedback loop where every cycle pumps
+  // pxPerHour up and the calendar grows forever.
   const [pxPerHour, setPxPerHour] = useState(PX_PER_HOUR)
   const totalHours = Math.max(1, endHour - startHour)
   useLayoutEffect(() => {
-    const el = scrollRef.current
-    if (!el) return
+    if (typeof window === 'undefined') return
+    // Approximate chrome height above the schedule grid (page header, FAB,
+    // schedule's own toolbar). Sized to feel right rather than measured —
+    // worst case the grid scrolls a few pixels.
+    const CHROME_PX = 240
     const update = () => {
-      const fitted = Math.max(48, Math.floor(el.clientHeight / totalHours))
+      const available = Math.max(window.innerHeight - CHROME_PX, totalHours * 48)
+      const fitted = Math.max(48, Math.floor(available / totalHours))
       setPxPerHour(fitted)
     }
     update()
-    const ro = new ResizeObserver(update)
-    ro.observe(el)
-    return () => ro.disconnect()
+    window.addEventListener('resize', update)
+    return () => window.removeEventListener('resize', update)
   }, [totalHours])
 
   // ── Drag state ──────────────────────────────────────────────────────────────
