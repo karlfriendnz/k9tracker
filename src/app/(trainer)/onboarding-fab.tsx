@@ -32,10 +32,10 @@ const STEP_TRANSITION: Record<string, string> = {
   intake_form: "Awesome — your intake form is ready! You can do the other forms later. Now let's add your first programme — click 'Packages' on the left.",
   session_form: "Sweet — your session form is set! Now let's add your first programme. Click 'Packages' on the left.",
   program_package: "Boom — your first programme is in! Now let's pick some fun achievements. Click 'Achievements' on the left.",
-  achievements: "Nice — your achievements are live! Want to see what your clients see? Click 'Clients' on the left, then 'View as client'.",
-  client_view: "Cool — you've seen the client view! Time to invite a real client. Click 'Clients' on the left.",
+  achievements: "Nice — your achievements are live! Time to invite your first real client. Click 'Clients' on the left.",
   invite_client: "Done — your first invite is on its way! Now let's book a session. Click 'Schedule' on the left.",
-  schedule_session: "Booked — your first session is on the calendar! That's the basics done. You're all set up 🎉",
+  schedule_session: "Booked — your first session is on the calendar! Last step: take a quick peek at what your clients will see. Click 'Clients' on the left, then 'View as client'.",
+  client_view: "Cool — you've seen what your clients see! That's the basics done. You're all set up 🎉",
 }
 
 
