@@ -257,6 +257,10 @@ model TrainerProfile {
   // Subscription
   subscriptionPlanId String?
   subscriptionStatus SubscriptionStatus @default(TRIALING)
+  // When the free trial expires. Stamped on signup (now + 14 days). Null
+  // for paid plans that don't have a trial window or trainers who never
+  // had one (legacy accounts).
+  trialEndsAt        DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -13,6 +13,7 @@ const PUBLIC_ROUTES = [
   '/register',
   '/forgot-password',
   '/verify-email',
+  '/verify-account',
   '/invite',
 ]
 

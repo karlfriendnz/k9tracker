@@ -176,6 +176,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const valid = await bcrypt.compare(parsed.data.password, credAccount.providerAccountId)
         if (!valid) return null
 
+        // Block unverified trainer signups — they get a 6-digit code emailed
+        // at register time and need to enter it before login. Existing users
+        // (verified pre-2FA-rollout) keep their date so they're unaffected.
+        if (user.role === 'TRAINER' && !user.emailVerified) {
+          throw new Error('email_not_verified')
+        }
+
         return { id: user.id, email: user.email, name: user.name, role: user.role }
       },
     }),

@@ -14,7 +14,7 @@ set -euo pipefail
 BASE="${1:-https://app.pupmanager.com}"
 
 PUBLIC_ROUTES=(
-  /login /register /forgot-password /verify-email /invite
+  /login /register /forgot-password /verify-email /verify-account /invite
 )
 
 # These all redirect to /login when unauth (307) — what we're guarding against

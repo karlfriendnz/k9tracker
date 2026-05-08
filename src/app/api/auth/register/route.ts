@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { Resend } from 'resend'
+import { sendVerificationEmail } from '@/lib/auth-emails'
+import crypto from 'crypto'
 
 const schema = z.object({
   name: z.string().min(2),
@@ -11,12 +12,24 @@ const schema = z.object({
   password: z.string().min(8),
 })
 
+const TRIAL_DAYS = 14
+
+function generateCode(): string {
+  // Cryptographically random 6-digit code. Padded so leading-zero codes still
+  // come out as 6 chars (otherwise "000123" would render as "123").
+  const n = crypto.randomInt(0, 1_000_000)
+  return n.toString().padStart(6, '0')
+}
+
 export async function POST(req: Request) {
   const body = await req.json()
   const parsed = schema.safeParse(body)
 
   if (!parsed.success) {
-    return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
+    const flat = parsed.error.flatten()
+    const firstField = Object.entries(flat.fieldErrors)[0]
+    const message = firstField?.[1]?.[0] ?? flat.formErrors[0] ?? 'Invalid input'
+    return NextResponse.json({ error: message, details: flat }, { status: 400 })
   }
 
   const { name, businessName, email, password } = parsed.data
@@ -27,6 +40,7 @@ export async function POST(req: Request) {
   }
 
   const passwordHash = await bcrypt.hash(password, 12)
+  const trialEndsAt = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000)
 
   await prisma.$transaction(async (tx) => {
     const user = await tx.user.create({
@@ -34,11 +48,12 @@ export async function POST(req: Request) {
         name,
         email,
         role: 'TRAINER',
-        emailVerified: new Date(),
+        // Null until they enter the 6-digit code we email them. Login is
+        // blocked while this is null (see lib/auth.ts authorize).
+        emailVerified: null,
       },
     })
 
-    // Store hashed password in the Account model using provider "credentials"
     await tx.account.create({
       data: {
         userId: user.id,
@@ -52,70 +67,27 @@ export async function POST(req: Request) {
       data: {
         userId: user.id,
         businessName,
+        // subscriptionStatus defaults to TRIALING; stamp the end date.
+        trialEndsAt,
       },
     })
   })
 
-  // Welcome email — best-effort; a Resend hiccup shouldn't fail the signup.
-  // Account is already auto-verified (emailVerified set above), so the
-  // email is informational + login link, not a verification gate.
-  const hasResendKey = !!process.env.RESEND_API_KEY
-  const fromAddress = process.env.RESEND_FROM_EMAIL
-  console.log('[register] welcome email gate', {
-    email,
-    hasResendKey,
-    fromAddress: fromAddress ?? null,
+  // Generate + persist a 6-digit verification code. 10-minute expiry.
+  const code = generateCode()
+  const expires = new Date(Date.now() + 10 * 60 * 1000)
+  await prisma.verificationToken.create({
+    data: { identifier: email, token: code, expires },
   })
-  if (hasResendKey && fromAddress) {
-    try {
-      const resend = new Resend(process.env.RESEND_API_KEY)
-      const loginUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.pupmanager.com'}/login`
-      const firstName = name.split(' ')[0] || name
-      const result = await resend.emails.send({
-        from: fromAddress,
-        to: email,
-        subject: 'Welcome to PupManager 🐾',
-        html: `
-          <div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#0f172a;">
-            <h1 style="font-size:24px;margin:0 0 12px;">Welcome aboard, ${escapeHtml(firstName)}!</h1>
-            <p style="font-size:15px;line-height:1.5;color:#475569;margin:0 0 16px;">
-              Your <strong>${escapeHtml(businessName)}</strong> account is ready. Sign in and we'll walk you through
-              inviting your first client and setting up your first programme.
-            </p>
-            <p style="margin:24px 0;">
-              <a href="${loginUrl}" style="background:#2563eb;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;font-weight:600;">
-                Sign in to PupManager
-              </a>
-            </p>
-            <p style="font-size:13px;color:#94a3b8;margin:24px 0 0;">
-              Need a hand? Just reply to this email and we'll help you out.
-            </p>
-          </div>
-        `,
-      })
-      if (result.error) {
-        console.error('[register] Resend returned error', { email, error: result.error })
-      } else {
-        console.log('[register] welcome email sent', { email, resendId: result.data?.id })
-      }
-    } catch (err) {
-      console.error('[register] Welcome email threw:', err)
-    }
-  } else {
-    console.warn('[register] welcome email skipped — Resend env not configured', {
-      hasResendKey,
-      hasFromAddress: !!fromAddress,
-    })
-  }
 
-  return NextResponse.json({ ok: true }, { status: 201 })
-}
+  await sendVerificationEmail({
+    to: email,
+    name,
+    businessName,
+    code,
+  }).catch(err => {
+    console.error('[register] verification email failed:', err)
+  })
 
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#x27;')
+  return NextResponse.json({ ok: true, email }, { status: 201 })
 }
