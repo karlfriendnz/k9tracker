@@ -11,8 +11,6 @@ import { DeleteClientButton } from './delete-client-button'
 import { ClientProfileTabs } from './client-profile-tabs'
 import { StatusToggle } from './status-toggle'
 import { AssignPackageButton } from './assign-package-modal'
-import { OnboardingClientGuide, OnboardingDot } from './onboarding-client-guide'
-import { getOnboardingFabState } from '@/lib/onboarding/state'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Client profile' }
@@ -108,13 +106,6 @@ export default async function ClientDetailPage({
     v.value,
   ]))
 
-  // Onboarding hints (banner + dot markers on the action buttons / tabs)
-  // only fire while the trainer is still in the wizard. canEdit gates the
-  // hints alongside the controls they're pointing at — co-managers viewing
-  // someone else's client never see them.
-  const onboardingFab = canEdit ? await getOnboardingFabState(access.trainerId) : { show: false }
-  const showHints = canEdit && onboardingFab.show
-
   const completedTasks = client.diaryEntries.filter(t => t.completion).length
   const complianceRate = client.diaryEntries.length > 0
     ? Math.round((completedTasks / client.diaryEntries.length) * 100)
@@ -132,8 +123,6 @@ export default async function ClientDetailPage({
         <ArrowLeft className="h-4 w-4" />
         Back to clients
       </Link>
-
-      {showHints && <OnboardingClientGuide />}
 
       {/* Header */}
       <div className="flex items-start justify-between mb-8 gap-4">
@@ -157,44 +146,38 @@ export default async function ClientDetailPage({
         <div className="flex gap-2 flex-shrink-0 flex-wrap justify-end">
           {canEdit && (
             <>
-              <span className="relative inline-flex" title="Hand a programme to this client and auto-book the sessions">
-                <AssignPackageButton
-                  clientId={client.id}
-                  dogs={allDogs.map(d => ({ id: d.id, name: d.name }))}
-                  packages={packages.map(p => ({
-                    id: p.id,
-                    name: p.name,
-                    description: p.description,
-                    sessionCount: p.sessionCount,
-                    weeksBetween: p.weeksBetween,
-                    durationMins: p.durationMins,
-                    sessionType: p.sessionType,
-                  }))}
-                  availability={availabilitySlots.map(s => ({
-                    id: s.id,
-                    dayOfWeek: s.dayOfWeek,
-                    date: s.date ? s.date.toISOString().split('T')[0] : null,
-                    startTime: s.startTime,
-                    endTime: s.endTime,
-                  }))}
-                />
-                {showHints && <OnboardingDot />}
-              </span>
+              <AssignPackageButton
+                clientId={client.id}
+                dogs={allDogs.map(d => ({ id: d.id, name: d.name }))}
+                packages={packages.map(p => ({
+                  id: p.id,
+                  name: p.name,
+                  description: p.description,
+                  sessionCount: p.sessionCount,
+                  weeksBetween: p.weeksBetween,
+                  durationMins: p.durationMins,
+                  sessionType: p.sessionType,
+                }))}
+                availability={availabilitySlots.map(s => ({
+                  id: s.id,
+                  dayOfWeek: s.dayOfWeek,
+                  date: s.date ? s.date.toISOString().split('T')[0] : null,
+                  startTime: s.startTime,
+                  endTime: s.endTime,
+                }))}
+              />
               <Link href={`/clients/${client.id}/edit`}>
                 <Button variant="secondary" size="sm">
                   <Pencil className="h-4 w-4" />
                   Edit
                 </Button>
               </Link>
-              <span className="relative inline-flex">
-                <Link href={`/preview-as/${client.id}`} target="_blank" rel="noopener">
-                  <Button variant="secondary" size="sm" title="See what this client sees when they log in">
-                    <Eye className="h-4 w-4" />
-                    View as client
-                  </Button>
-                </Link>
-                {showHints && <OnboardingDot />}
-              </span>
+              <Link href={`/preview-as/${client.id}`} target="_blank" rel="noopener">
+                <Button variant="secondary" size="sm" title="See what this client sees when they log in">
+                  <Eye className="h-4 w-4" />
+                  View as client
+                </Button>
+              </Link>
             </>
           )}
 
@@ -211,7 +194,6 @@ export default async function ClientDetailPage({
       <ClientProfileTabs
         clientId={client.id}
         canEdit={canEdit}
-        showHints={showHints}
         stats={{
           complianceRate,
           completedTasks,

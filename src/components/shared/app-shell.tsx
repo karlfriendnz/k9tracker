@@ -62,6 +62,13 @@ interface AppShellProps {
    */
   highlightMenuHref?: string | null
   /**
+   * Client-side equivalent: when true, every CLIENT_NAV item (sidebar +
+   * mobile bottom bar) gets an indigo pulsing dot. Used by the trainer's
+   * /preview-as flow during onboarding so the trainer can see at a glance
+   * which sections their client has access to.
+   */
+  clientNavHints?: boolean
+  /**
    * Keys of every onboarding step the trainer has completed. AppShell
    * resolves the trainer's current pathname to a step and only shows the
    * highlight dot when that step is in this list.
@@ -78,7 +85,7 @@ export function AppShell(props: AppShellProps) {
 // Mobile-app-style layout: no sidebar on any viewport. Sticky brand header
 // on top, sticky bottom tab nav, centered narrow column on desktop.
 
-function ClientShell({ children, trainerLogo, businessName }: AppShellProps) {
+function ClientShell({ children, trainerLogo, businessName, clientNavHints }: AppShellProps) {
   const pathname = usePathname()
 
   return (
@@ -116,7 +123,7 @@ function ClientShell({ children, trainerLogo, businessName }: AppShellProps) {
                     key={item.href}
                     href={item.href}
                     className={cn(
-                      'flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-[11px] font-medium transition-colors',
+                      'relative flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-[11px] font-medium transition-colors',
                       active
                         ? 'bg-blue-50 text-blue-700'
                         : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
@@ -124,6 +131,12 @@ function ClientShell({ children, trainerLogo, businessName }: AppShellProps) {
                   >
                     <Icon className="h-5 w-5" />
                     {item.label}
+                    {clientNavHints && !active && (
+                      <span
+                        aria-hidden
+                        className="pointer-events-none absolute top-0.5 right-0.5 h-2 w-2 rounded-full bg-indigo-500 animate-pm-menu-dot ring-2 ring-white"
+                      />
+                    )}
                   </Link>
                 )
               })}
@@ -161,12 +174,18 @@ function ClientShell({ children, trainerLogo, businessName }: AppShellProps) {
                   key={item.href}
                   href={item.href}
                   className={cn(
-                    'flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 transition-colors',
+                    'relative flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 transition-colors',
                     active ? 'text-blue-600' : 'text-slate-400 hover:text-slate-600'
                   )}
                 >
                   <Icon className={cn('h-5 w-5 transition-transform', active && 'scale-110')} />
                   <span className="text-[10px] font-medium">{item.label}</span>
+                  {clientNavHints && !active && (
+                    <span
+                      aria-hidden
+                      className="pointer-events-none absolute top-1.5 right-[18%] h-2 w-2 rounded-full bg-indigo-500 animate-pm-menu-dot ring-2 ring-white"
+                    />
+                  )}
                 </Link>
               )
             })}

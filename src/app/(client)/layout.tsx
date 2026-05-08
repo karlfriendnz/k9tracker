@@ -1,9 +1,12 @@
 import { redirect } from 'next/navigation'
+import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { getActiveClient } from '@/lib/client-context'
 import { AppShell } from '@/components/shared/app-shell'
+import { getOnboardingFabState } from '@/lib/onboarding/state'
 import { IntakeGate } from './intake-gate'
 import { PreviewBanner } from './preview-banner'
+import { PreviewOnboardingGuide } from './preview-onboarding-guide'
 
 export default async function ClientLayout({ children }: { children: React.ReactNode }) {
   const active = await getActiveClient()
@@ -62,8 +65,25 @@ export default async function ClientLayout({ children }: { children: React.React
   // write as the client. The banner already telegraphs that this is a view.
   const showIntakeGate = !active.isPreview && hasMissingRequired && customFields.length > 0
 
+  // Trainer-in-preview gets the onboarding guide + indigo nav-dot
+  // highlighting only while their wizard is incomplete. Real clients (no
+  // preview cookie) never see any of this.
+  let showPreviewOnboarding = false
+  if (active.isPreview) {
+    const session = await auth()
+    if (session?.user?.role === 'TRAINER' && session.user.trainerId) {
+      const fab = await getOnboardingFabState(session.user.trainerId)
+      showPreviewOnboarding = fab.show
+    }
+  }
+
   const banner = active.isPreview
-    ? <PreviewBanner clientName={clientDisplayName} />
+    ? (
+      <>
+        <PreviewBanner clientName={clientDisplayName} />
+        {showPreviewOnboarding && <PreviewOnboardingGuide />}
+      </>
+    )
     : null
 
   if (showIntakeGate) {
@@ -114,6 +134,7 @@ export default async function ClientLayout({ children }: { children: React.React
         userEmail={clientProfile.user.email ?? ''}
         trainerLogo={clientProfile.trainer.logoUrl}
         businessName={clientProfile.trainer.businessName}
+        clientNavHints={showPreviewOnboarding}
       >
         {children}
       </AppShell>
