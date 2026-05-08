@@ -104,42 +104,45 @@ export function OnboardingFab({ nextStep, totalSteps }: Props) {
     <Link
       href="/dashboard?wizard=1"
       aria-label={`Continue setup: ${nextStep.title}`}
-      className="group sticky top-0 z-30 flex items-center gap-4 px-4 sm:px-6 py-3 bg-white/95 backdrop-blur border-b border-slate-200 shadow-[0_4px_12px_-6px_rgba(15,23,42,0.18)] hover:bg-white transition-colors animate-pm-fab-slide"
+      // Sticky-top with a 10px inset on every side, rounded card, full
+      // gradient background — matches the wizard modal hero so the FAB
+      // visually belongs to the same family of "onboarding chrome".
+      className="group sticky top-2.5 z-30 mx-2.5 mt-2.5 mb-2 flex items-center gap-4 px-4 sm:px-6 py-3 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 text-white rounded-2xl shadow-[0_10px_30px_-8px_rgba(99,102,241,0.55)] hover:shadow-[0_16px_40px_-8px_rgba(99,102,241,0.7)] transition-shadow animate-pm-fab-slide"
     >
       {/* Left: instruction for the page the trainer is on. */}
       <div className="flex-1 min-w-0">
-        <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-blue-600 leading-none">
+        <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-white/70 leading-none">
           What to do
         </p>
-        <p className="text-sm text-slate-700 leading-snug mt-1.5 line-clamp-2">
+        <p className="text-sm text-white leading-snug mt-1.5 line-clamp-2">
           {hint ?? `Open the wizard to wrap up ${nextStep.title.toLowerCase()}.`}
         </p>
       </div>
 
       {/* Vertical divider on tablet+desktop only — collapses on phones. */}
-      <span className="hidden sm:block self-stretch w-px bg-slate-200" aria-hidden />
+      <span className="hidden sm:block self-stretch w-px bg-white/25" aria-hidden />
 
       {/* Right: where the trainer is heading next + arrow affordance. */}
       <div className="flex items-center gap-2.5 sm:gap-3 flex-shrink-0">
         <span
           aria-hidden
-          className={`grid place-items-center h-9 w-9 shrink-0 rounded-xl text-white shadow-md ${
+          className={`grid place-items-center h-9 w-9 shrink-0 rounded-xl text-white ${
             celebrating
-              ? 'bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-emerald-500/40 animate-pm-fab-flash'
-              : 'bg-gradient-to-br from-blue-500 via-indigo-500 to-violet-500 shadow-blue-600/30'
+              ? 'bg-emerald-500 shadow-emerald-500/40 animate-pm-fab-flash'
+              : 'bg-white/15 backdrop-blur-sm ring-1 ring-white/20'
           }`}
         >
           <Icon className="h-4 w-4" strokeWidth={2} />
         </span>
         <div className="hidden sm:flex flex-col min-w-0 max-w-[180px] md:max-w-[220px]">
-          <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400 leading-none">
+          <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-white/70 leading-none">
             Step {nextStep.order} of {totalSteps}
           </span>
-          <span className="text-sm font-semibold text-slate-900 truncate leading-tight mt-0.5">
+          <span className="text-sm font-semibold text-white truncate leading-tight mt-0.5">
             {nextStep.title}
           </span>
         </div>
-        <ArrowRight className="h-4 w-4 text-slate-400 transition-transform group-hover:translate-x-0.5 group-hover:text-blue-600" />
+        <ArrowRight className="h-4 w-4 text-white/80 transition-transform group-hover:translate-x-0.5 group-hover:text-white" />
       </div>
     </Link>
   )

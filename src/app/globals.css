@@ -84,12 +84,13 @@ button, a, [role="button"] {
 
 /* Slide the FAB down from off-screen on mount so the trainer's eye is
    drawn to it. Single ~280ms ease-out — no bounce or wobble; just a clean
-   "this is new info" entrance. */
+   "this is new info" entrance. The 2s delay lets the page settle first
+   so the bar arrives as an attention beat rather than a layout shift. */
 @keyframes pm-fab-slide-down {
   from { transform: translateY(-110%); opacity: 0; }
   to   { transform: translateY(0);     opacity: 1; }
 }
-.animate-pm-fab-slide { animation: pm-fab-slide-down 280ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+.animate-pm-fab-slide { animation: pm-fab-slide-down 320ms cubic-bezier(0.16, 1, 0.3, 1) 2s both; }
 
 @keyframes pm-fab-flash {
   0%   { box-shadow: 0 0 0 0    rgba(16, 185, 129, 0.7),
