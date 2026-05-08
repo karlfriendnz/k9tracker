@@ -151,7 +151,7 @@ const ONBOARDING_STEPS = [
     key: 'invite_client',
     order: 5,
     title: 'Invite your first client',
-    body: 'The moment this all starts paying off. Send an invite by email, SMS, or QR code.',
+    body: 'The moment this all starts paying off. Send your client an invite email and they\'ll get a sign-up link.',
     ctaLabel: 'Invite a client',
     ctaHref: '/clients',
     skippable: true,
