@@ -132,6 +132,10 @@ export async function POST(
         scheduledAt: d,
         durationMins: pkg.durationMins,
         sessionType: pkg.sessionType,
+        // If the trainer ticked "already invoiced" on the package, each
+        // child session inherits the INVOICED status so they don't have
+        // to mark them individually after the fact.
+        status: parsed.data.markInvoiced ? 'INVOICED' : 'UPCOMING',
       })),
     })
     return assignment
