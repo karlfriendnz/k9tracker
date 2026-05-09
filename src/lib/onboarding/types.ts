@@ -29,6 +29,11 @@ export interface OnboardingState {
   // Set when the trainer dismissed the first-visit welcome modal (Start or
   // Skip). Null = haven't seen it yet → show welcome modal first.
   welcomeShownAt: string | null
+  // Set ONLY when the trainer explicitly opted into the tour ("Start the
+  // quick setup" on welcome modal, or "Take the tour" on the backfill
+  // banner). Skip / No thanks do NOT set this. The trainer chrome
+  // (FAB, pulse dots) reads this flag and stays hidden until set.
+  tourStartedAt: string | null
   // Whichever client is most likely "the one we're waiting on" — most recent
   // ClientProfile when ahaReachedAt is null. Null otherwise.
   limboClient: LimboClient | null

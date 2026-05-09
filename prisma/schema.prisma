@@ -1136,6 +1136,12 @@ model TrainerOnboardingProgress {
   // clicking "Start the quick setup" or "Skip". Once set, the welcome never
   // shows again (the wizard / checklist take over).
   welcomeShownAt       DateTime?
+  // Set ONLY when the trainer explicitly opts into the tour — either by
+  // clicking "Start the quick setup" on the welcome modal or "Take the
+  // tour" on the backfill banner. Skip / No thanks do NOT set this.
+  // Gates the floating onboarding FAB and the pulsing menu/in-page dots
+  // — those are tour-only nudges, so before opt-in nothing should fire.
+  tourStartedAt        DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

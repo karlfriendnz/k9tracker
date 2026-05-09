@@ -96,12 +96,20 @@ export function OnboardingPanel({ state }: { state: OnboardingState }) {
       <WelcomeModal
         onStart={async () => {
           setWelcomeDismissedLocal(true)
-          await fetch('/api/onboarding/welcome/dismiss', { method: 'POST' })
+          // Order matters: tour/start FIRST so the FAB has its opt-in
+          // signal by the time router.refresh() re-renders the layout.
+          await Promise.all([
+            fetch('/api/onboarding/tour/start', { method: 'POST' }),
+            fetch('/api/onboarding/welcome/dismiss', { method: 'POST' }),
+          ])
           if (nextStep) setModalStepKey(nextStep.key)
           router.refresh()
         }}
         onSkip={async () => {
           setWelcomeDismissedLocal(true)
+          // Skip = "I see the welcome, get out of my way" — don't opt
+          // them into the tour. The dashboard checklist is still
+          // available; the FAB stays hidden until they explicitly opt in.
           await fetch('/api/onboarding/welcome/dismiss', { method: 'POST' })
           router.refresh()
         }}
@@ -112,9 +120,13 @@ export function OnboardingPanel({ state }: { state: OnboardingState }) {
   if (isBackfill && !optedInToTour) {
     return (
       <BackfillBanner
-        onTakeTour={() => {
+        onTakeTour={async () => {
           setOptedInToTour(true)
+          // Persist the opt-in so the FAB / pulsing dots are allowed
+          // to surface on subsequent navigations.
+          await fetch('/api/onboarding/tour/start', { method: 'POST' })
           if (nextStep) setModalStepKey(nextStep.key)
+          router.refresh()
         }}
         onDismiss={async () => {
           await fetch('/api/onboarding/checklist/dismiss', { method: 'POST' })

@@ -60,6 +60,15 @@ export async function getOnboardingFabState(trainerId: string): Promise<{
     return { show: false, nextStep: null, steps: allSteps, totalSteps, allComplete }
   }
 
+  // Hard gate: the tour-driven nudges (FAB, sidebar pulse dot, in-page
+  // hints) only fire after the trainer has explicitly opted IN. Before
+  // that they're either looking at the welcome modal (fresh signup)
+  // or the backfill banner (existing trainer) and the tour chrome
+  // would be jumping ahead of their decision.
+  if (!state.tourStartedAt) {
+    return { show: false, nextStep: null, steps: allSteps, totalSteps, allComplete }
+  }
+
   // Priority for "what's next up": first incomplete step in order, where
   // "incomplete" includes both pending and in-progress. A step that the
   // trainer started but didn't finish still needs finishing — the previous
@@ -98,6 +107,7 @@ async function getOnboardingStateImpl(trainerId: string): Promise<OnboardingStat
         backfilledAt: true,
         checklistDismissedAt: true,
         welcomeShownAt: true,
+        tourStartedAt: true,
         steps: { select: { stepKey: true, completedAt: true, skippedAt: true, startedAt: true } },
       },
     }),
@@ -200,6 +210,7 @@ async function getOnboardingStateImpl(trainerId: string): Promise<OnboardingStat
     backfilledAt: progress?.backfilledAt?.toISOString() ?? null,
     checklistDismissedAt: progress?.checklistDismissedAt?.toISOString() ?? null,
     welcomeShownAt: progress?.welcomeShownAt?.toISOString() ?? null,
+    tourStartedAt: progress?.tourStartedAt?.toISOString() ?? null,
     limboClient,
     explicitOnlyStepKeys: Array.from(EXPLICIT_ONLY_KEYS),
   }
