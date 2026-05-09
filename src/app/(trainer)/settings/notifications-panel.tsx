@@ -281,7 +281,7 @@ function PrefRowEditor({
 
       {row.enabled && (
         <>
-          {meta.trigger === 'time-before-event' && (
+          {meta.customisable !== false && meta.trigger === 'time-before-event' && (
             <label className="flex items-center justify-between gap-3">
               <span className="text-xs text-slate-600">Minutes before</span>
               <select
@@ -293,7 +293,7 @@ function PrefRowEditor({
               </select>
             </label>
           )}
-          {meta.trigger === 'time-of-day' && (
+          {meta.customisable !== false && meta.trigger === 'time-of-day' && (
             <label className="flex items-center justify-between gap-3">
               <span className="text-xs text-slate-600">Send at</span>
               <select
@@ -306,32 +306,39 @@ function PrefRowEditor({
             </label>
           )}
 
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-slate-600">Title</label>
-            <input
-              type="text"
-              className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm"
-              placeholder={meta.defaults.title}
-              value={row.customTitle ?? ''}
-              onChange={(e) => onLocalChange({ customTitle: e.target.value || null })}
-              onBlur={(e) => save({ customTitle: e.target.value.trim() || null })}
-            />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-slate-600">Body</label>
-            <textarea
-              rows={2}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm resize-y"
-              placeholder={meta.defaults.body}
-              value={row.customBody ?? ''}
-              onChange={(e) => onLocalChange({ customBody: e.target.value || null })}
-              onBlur={(e) => save({ customBody: e.target.value.trim() || null })}
-            />
-          </div>
-
-          <p className="text-[11px] text-slate-400">
-            Placeholders: {meta.placeholders.map(p => <code key={p} className="ml-1 px-1 rounded bg-slate-200/60">{`{{${p}}}`}</code>)}
-          </p>
+          {meta.customisable !== false ? (
+            <>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-slate-600">Title</label>
+                <input
+                  type="text"
+                  className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                  placeholder={meta.defaults.title}
+                  value={row.customTitle ?? ''}
+                  onChange={(e) => onLocalChange({ customTitle: e.target.value || null })}
+                  onBlur={(e) => save({ customTitle: e.target.value.trim() || null })}
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-slate-600">Body</label>
+                <textarea
+                  rows={2}
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm resize-y"
+                  placeholder={meta.defaults.body}
+                  value={row.customBody ?? ''}
+                  onChange={(e) => onLocalChange({ customBody: e.target.value || null })}
+                  onBlur={(e) => save({ customBody: e.target.value.trim() || null })}
+                />
+              </div>
+              <p className="text-[11px] text-slate-400">
+                Placeholders: {meta.placeholders.map(p => <code key={p} className="ml-1 px-1 rounded bg-slate-200/60">{`{{${p}}}`}</code>)}
+              </p>
+            </>
+          ) : (
+            <p className="text-[11px] text-slate-500 italic">
+              Auto-curated — we look after the timing and copy. Toggle the channel above to control whether you receive it.
+            </p>
+          )}
 
           <div className="flex items-center justify-between gap-3 pt-1">
             <div className="flex items-center gap-2 min-h-[20px] text-xs">

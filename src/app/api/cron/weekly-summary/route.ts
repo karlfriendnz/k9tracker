@@ -30,7 +30,10 @@ export async function GET(req: Request) {
   }
 
   const meta = NOTIFICATION_TYPES.WEEKLY_SUMMARY
-  const defaultHour = meta.defaults.dailyAtHour!
+  // Locked to the default hour — WEEKLY_SUMMARY is non-customisable,
+  // so any per-trainer dailyAtHour stored on a NotificationPreference
+  // row is ignored. See `customisable: false` on the type meta.
+  const SEND_HOUR = meta.defaults.dailyAtHour!
 
   // Pull every trainer; filter per-channel below. We used to OR in the
   // where clause but Prisma's select-inference dropped the explicit
@@ -58,16 +61,14 @@ export async function GET(req: Request) {
   for (const u of candidates) {
     const pushPref = u.notificationPreferences.find(p => p.channel === 'PUSH')
     const emailPref = u.notificationPreferences.find(p => p.channel === 'EMAIL')
-    const pushHour = pushPref?.dailyAtHour ?? defaultHour
-    const emailHour = emailPref?.dailyAtHour ?? defaultHour
     const parts = new Intl.DateTimeFormat('en-US', {
       hour: 'numeric', hour12: false, weekday: 'short', timeZone: u.timezone,
     }).formatToParts(new Date())
     const weekday = parts.find(p => p.type === 'weekday')?.value
     const localHour = Number(parts.find(p => p.type === 'hour')?.value)
-    if (weekday !== 'Sun') continue
-    const pushDue = u.notifyPush && (!pushPref || pushPref.enabled) && u.deviceTokens.length > 0 && localHour === pushHour
-    const emailDue = u.notifyEmail && (!emailPref || emailPref.enabled) && !!u.email && localHour === emailHour
+    if (weekday !== 'Sun' || localHour !== SEND_HOUR) continue
+    const pushDue = u.notifyPush && (!pushPref || pushPref.enabled) && u.deviceTokens.length > 0
+    const emailDue = u.notifyEmail && (!emailPref || emailPref.enabled) && !!u.email
     if (pushDue || emailDue) due.push(u)
   }
 
@@ -153,16 +154,13 @@ export async function GET(req: Request) {
     }, 0)
 
     // ─── Push ────────────────────────────────────────────────────────
+    // Both channels share the locked SEND_HOUR check from earlier, and
+    // the type is non-customisable, so we ignore any per-trainer
+    // customTitle / customBody / dailyAtHour and use defaults.
     const pushPref = u.notificationPreferences.find(p => p.channel === 'PUSH')
-    const pushHour = pushPref?.dailyAtHour ?? defaultHour
-    const localHour = Number(new Intl.DateTimeFormat('en-US', {
-      hour: 'numeric', hour12: false, timeZone: u.timezone,
-    }).format(new Date()))
-    const pushDue = u.notifyPush && (!pushPref || pushPref.enabled) && u.deviceTokens.length > 0 && localHour === pushHour
+    const pushDue = u.notifyPush && (!pushPref || pushPref.enabled) && u.deviceTokens.length > 0
 
     if (pushDue) {
-      const title = pushPref?.customTitle ?? meta.defaults.title
-      const body = pushPref?.customBody ?? meta.defaults.body
       const subs = {
         sessionsCompleted: String(sessionsCompleted.length),
         revenue: revenueCents > 0 ? formatCents(revenueCents) : '—',
@@ -172,7 +170,10 @@ export async function GET(req: Request) {
       const results = await sendApns(
         u.deviceTokens.map(d => d.token),
         {
-          alert: { title: renderTemplate(title, subs), body: renderTemplate(body, subs) },
+          alert: {
+            title: renderTemplate(meta.defaults.title, subs),
+            body: renderTemplate(meta.defaults.body, subs),
+          },
           customData: { type: 'weekly-summary' },
         },
       )
@@ -184,8 +185,7 @@ export async function GET(req: Request) {
 
     // ─── Email ───────────────────────────────────────────────────────
     const emailPref = u.notificationPreferences.find(p => p.channel === 'EMAIL')
-    const emailHour = emailPref?.dailyAtHour ?? defaultHour
-    const emailDue = u.notifyEmail && (!emailPref || emailPref.enabled) && !!u.email && localHour === emailHour
+    const emailDue = u.notifyEmail && (!emailPref || emailPref.enabled) && !!u.email
 
     if (emailDue && u.email) {
       const trainerFirstName = (u.name?.split(' ')[0] ?? 'there').trim() || 'there'

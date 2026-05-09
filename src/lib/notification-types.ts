@@ -27,6 +27,12 @@ export interface NotificationTypeMeta {
   // Sample values used by the "send test" button so the test push reads
   // realistically instead of with literal {{placeholders}}.
   sampleValues: Record<string, string>
+  // When false, the settings panel hides the time-of-day, title, body
+  // and placeholder controls — the trainer can only flip channels on
+  // or off. The cron skips reading any of those preference fields for
+  // these types and always uses the defaults at the canonical time.
+  // Defaults to true (everything customisable) for backwards compat.
+  customisable?: boolean
 }
 
 export const NOTIFICATION_TYPES: Record<NotificationType, NotificationTypeMeta> = {
@@ -96,9 +102,14 @@ export const NOTIFICATION_TYPES: Record<NotificationType, NotificationTypeMeta> 
   WEEKLY_SUMMARY: {
     type: 'WEEKLY_SUMMARY',
     label: 'Sunday wrap-up',
-    description: 'A weekly recap on Sunday evening — sessions you ran, money earned, and a glance at the week ahead.',
+    description: "A weekly recap on Sunday evening — sessions you ran, money earned, and a glance at the week ahead. Always 7pm Sunday in your timezone, with copy we look after on your behalf.",
     trigger: 'time-of-day',
     channels: ['PUSH', 'EMAIL'],
+    // Locked: trainers don't tweak the time, title, or body. The
+    // email's tables + intro/outro are too rich to expose as a
+    // template, and the push is one line we curate centrally so it
+    // stays warm and consistent.
+    customisable: false,
     defaults: {
       enabled: true,
       // 19 = 7pm in the trainer's local timezone. Cron only fires this
