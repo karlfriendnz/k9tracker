@@ -6,7 +6,7 @@ interface Props {
   trialEndsAt: Date | null
 }
 
-type Tone = 'indigo' | 'amber' | 'red'
+type Tone = 'indigo' | 'rose' | 'red'
 
 interface BannerCopy {
   headline: string
@@ -31,7 +31,7 @@ function resolveCopy(status: Props['status'], trialEndsAt: Date | null): BannerC
       headline: `${daysLeft} day${daysLeft === 1 ? '' : 's'} left`,
       subtext: 'Free trial — pick a plan to keep going',
       cta: 'Start plan',
-      tone: daysLeft <= 3 ? 'amber' : 'indigo',
+      tone: daysLeft <= 3 ? 'rose' : 'indigo',
       daysLeft,
     }
   }
@@ -40,7 +40,7 @@ function resolveCopy(status: Props['status'], trialEndsAt: Date | null): BannerC
       headline: 'Trial finished',
       subtext: 'Pick a plan to keep using PupManager',
       cta: 'Pick a plan',
-      tone: 'amber',
+      tone: 'rose',
       daysLeft: 0,
     }
   }
@@ -49,7 +49,7 @@ function resolveCopy(status: Props['status'], trialEndsAt: Date | null): BannerC
       headline: 'Payment failed',
       subtext: 'Last charge didn\'t go through',
       cta: 'Fix it up',
-      tone: 'amber',
+      tone: 'rose',
       daysLeft: null,
     }
   }
@@ -83,28 +83,32 @@ export function TrialBanner({ status, trialEndsAt }: Props) {
   const copy = resolveCopy(status, trialEndsAt)
   if (!copy) return null
 
+  // Three tones — indigo (relaxed heads-up), rose (warmer urgency,
+  // deliberately NOT yellow/amber), red (hard cancellation). Rose
+  // gives us a distinct "running out" signal without sliding into
+  // the cliché warning-yellow we don't love.
   const toneShell: Record<Tone, string> = {
     indigo: 'bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600 text-white animate-pm-trial-shimmer',
-    amber:  'bg-gradient-to-br from-amber-50 to-amber-100 text-amber-900 border border-amber-200/80',
-    red:    'bg-gradient-to-br from-red-50 to-red-100 text-red-900 border border-red-200/80',
+    rose:   'bg-gradient-to-br from-rose-500 via-pink-500 to-fuchsia-500 text-white animate-pm-trial-shimmer',
+    red:    'bg-gradient-to-br from-red-600 via-rose-600 to-rose-700 text-white animate-pm-trial-shimmer',
   }
 
   const toneAvatar: Record<Tone, string> = {
     indigo: 'bg-white/15 text-white ring-1 ring-white/30 backdrop-blur-sm',
-    amber:  'bg-amber-200/80 text-amber-900 ring-1 ring-amber-300/60',
-    red:    'bg-red-200/80 text-red-900 ring-1 ring-red-300/60',
+    rose:   'bg-white/15 text-white ring-1 ring-white/30 backdrop-blur-sm',
+    red:    'bg-white/15 text-white ring-1 ring-white/30 backdrop-blur-sm',
   }
 
   const toneCta: Record<Tone, string> = {
     indigo: 'bg-white text-indigo-700 hover:bg-white/95 shadow-sm',
-    amber:  'bg-amber-700 text-white hover:bg-amber-800',
-    red:    'bg-red-700 text-white hover:bg-red-800',
+    rose:   'bg-white text-rose-700 hover:bg-white/95 shadow-sm',
+    red:    'bg-white text-red-700 hover:bg-white/95 shadow-sm',
   }
 
   const toneSubtext: Record<Tone, string> = {
     indigo: 'text-white/80',
-    amber:  'text-amber-700',
-    red:    'text-red-700',
+    rose:   'text-white/85',
+    red:    'text-white/85',
   }
 
   // Choose the leading visual: a day-count circle for an in-progress

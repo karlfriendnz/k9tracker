@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { signOut } from 'next-auth/react'
 import { cn } from '@/lib/utils'
@@ -210,9 +210,35 @@ function TrainerShell({
   completedStepKeys = [],
 }: AppShellProps) {
   const pathname = usePathname()
-  const [showEmail, setShowEmail] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const userMenuRef = useRef<HTMLDivElement | null>(null)
+
+  // Close the popout menu when the trainer clicks elsewhere or hits Escape —
+  // standard dropdown ergonomics. The ref wraps both the trigger and the
+  // floating panel, so clicks inside either count as "in the menu".
+  useEffect(() => {
+    if (!userMenuOpen) return
+    function onPointer(ev: MouseEvent | TouchEvent) {
+      if (!userMenuRef.current) return
+      if (!userMenuRef.current.contains(ev.target as Node)) setUserMenuOpen(false)
+    }
+    function onKey(ev: KeyboardEvent) {
+      if (ev.key === 'Escape') setUserMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onPointer)
+    document.addEventListener('touchstart', onPointer)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onPointer)
+      document.removeEventListener('touchstart', onPointer)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [userMenuOpen])
+
+  // Close on route change so the menu doesn't survive a navigation.
+  useEffect(() => { setUserMenuOpen(false) }, [pathname])
 
   useEffect(() => {
     const stored = typeof window !== 'undefined' ? window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) : null
@@ -314,69 +340,86 @@ function TrainerShell({
           })}
         </nav>
 
-        <div className={cn('border-t border-slate-100', collapsed ? 'p-2 flex flex-col items-center gap-2' : 'p-4')}>
-          {collapsed ? (
-            <>
-              <div
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600"
-                title={userName ?? undefined}
-              >
-                {userName?.[0]?.toUpperCase() ?? '?'}
-              </div>
-              <button
-                onClick={() => signOut({ callbackUrl: '/login' })}
-                className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100"
-                title="Sign out"
-                aria-label="Sign out"
-              >
-                <LogOut className="h-4 w-4" />
-              </button>
-              <button
-                onClick={toggleCollapsed}
-                className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100"
-                title="Expand sidebar"
-                aria-label="Expand sidebar"
-              >
-                <ChevronsRight className="h-4 w-4" />
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                type="button"
-                onClick={() => setShowEmail(v => !v)}
-                className="flex items-center gap-3 w-full text-left mb-2 rounded-lg hover:bg-slate-50 px-1 py-1 -mx-1 transition-colors"
-                aria-expanded={showEmail}
-                aria-label={showEmail ? 'Hide email address' : 'Show email address'}
-              >
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600 flex-shrink-0">
-                  {userName?.[0]?.toUpperCase() ?? '?'}
-                </div>
-                <span className="text-sm font-medium text-slate-700 truncate">{userName}</span>
-              </button>
-              {showEmail && userEmail && (
-                <p className="text-xs text-slate-500 truncate mb-2 px-1" title={userEmail}>
-                  {userEmail}
-                </p>
+        <div className={cn('border-t border-slate-100 relative', collapsed ? 'p-2 flex flex-col items-center gap-2' : 'p-4')}>
+          {/* User menu trigger — clicking the avatar/name pops a small
+              floating panel out to the right of the sidebar with email
+              + sign-out. Same component for collapsed and expanded; the
+              trigger just shows more or less in each mode. */}
+          <div ref={userMenuRef} className={cn('relative', collapsed ? '' : 'w-full mb-2')}>
+            <button
+              type="button"
+              onClick={() => setUserMenuOpen(v => !v)}
+              className={cn(
+                'flex items-center rounded-lg transition-colors',
+                collapsed
+                  ? 'h-9 w-9 justify-center bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-600'
+                  : 'gap-3 w-full text-left px-1 py-1 -mx-1 hover:bg-slate-50'
               )}
-              <div className="flex items-center justify-between">
+              aria-haspopup="menu"
+              aria-expanded={userMenuOpen}
+              title={collapsed ? userName ?? undefined : undefined}
+            >
+              {collapsed ? (
+                userName?.[0]?.toUpperCase() ?? '?'
+              ) : (
+                <>
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600 flex-shrink-0">
+                    {userName?.[0]?.toUpperCase() ?? '?'}
+                  </div>
+                  <span className="text-sm font-medium text-slate-700 truncate">{userName}</span>
+                </>
+              )}
+            </button>
+
+            {userMenuOpen && (
+              <div
+                role="menu"
+                className={cn(
+                  'absolute z-50 w-64 rounded-2xl bg-white shadow-[0_18px_45px_-12px_rgba(15,23,42,0.25)] border border-slate-100 overflow-hidden',
+                  // Pop to the right of the sidebar, pinned to the bottom
+                  // of the trigger so the corners line up with the avatar.
+                  collapsed
+                    ? 'left-full ml-2 bottom-0'
+                    : 'left-full ml-3 bottom-0'
+                )}
+              >
+                <div className="px-4 py-3 bg-gradient-to-br from-slate-50 to-white border-b border-slate-100">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 via-indigo-500 to-violet-500 text-white text-sm font-semibold flex-shrink-0">
+                      {userName?.[0]?.toUpperCase() ?? '?'}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-slate-900 truncate">{userName ?? 'You'}</p>
+                      {userEmail && <p className="text-xs text-slate-500 truncate">{userEmail}</p>}
+                    </div>
+                  </div>
+                </div>
                 <button
+                  type="button"
                   onClick={() => signOut({ callbackUrl: '/login' })}
-                  className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+                  className="flex items-center gap-2 w-full px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                  role="menuitem"
                 >
+                  <LogOut className="h-4 w-4 text-slate-400" />
                   Sign out
                 </button>
-                <button
-                  onClick={toggleCollapsed}
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100"
-                  title="Collapse sidebar"
-                  aria-label="Collapse sidebar"
-                >
-                  <ChevronsLeft className="h-4 w-4" />
-                </button>
               </div>
-            </>
-          )}
+            )}
+          </div>
+
+          {/* Collapse / expand chevron — its own button row so the
+              user-menu popout doesn't fight for the same click target. */}
+          <button
+            onClick={toggleCollapsed}
+            className={cn(
+              'rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100',
+              collapsed ? 'p-2' : 'ml-auto block p-1.5'
+            )}
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            {collapsed ? <ChevronsRight className="h-4 w-4" /> : <ChevronsLeft className="h-4 w-4" />}
+          </button>
         </div>
       </aside>
 
