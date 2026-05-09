@@ -126,6 +126,19 @@ button, a, [role="button"] {
 }
 .animate-pm-firework-particle { animation: pm-firework-particle 1400ms cubic-bezier(0.16, 1, 0.3, 1) both; }
 
+/* Slow drifting gradient for the indigo trial banner — adds a subtle
+   sense of life without being distracting. background-size > 100%
+   plus a long-cycle shift gives the colours something to do. */
+@keyframes pm-trial-shimmer {
+  0%   { background-position:   0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position:   0% 50%; }
+}
+.animate-pm-trial-shimmer {
+  background-size: 220% 220%;
+  animation: pm-trial-shimmer 8s ease-in-out infinite;
+}
+
 /* Pulsing dot rendered beside a sidebar menu item to point the trainer at
    the page they should click next. Slow inhale-exhale, gentle outer ring
    pulse — distinct enough to draw the eye without being twitchy. */
