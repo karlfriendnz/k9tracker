@@ -148,6 +148,10 @@ export function OnboardingFab({ nextStep, steps, totalSteps }: Props) {
 
   if (!mounted) return null
   if (pathname === '/dashboard') return null
+  // Hide on the billing surfaces — the trainer's there to deal with
+  // payment, not to be nudged into onboarding chores. The trial-status
+  // chip + the page itself are already telegraphing what to do here.
+  if (pathname?.startsWith('/billing')) return null
 
   // Resolve the focused step from the trainer's current URL — the FAB
   // describes that step's status. When no path matches, fall back to the

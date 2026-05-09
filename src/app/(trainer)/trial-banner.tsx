@@ -1,9 +1,14 @@
+'use client'
+
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { ArrowRight, AlertTriangle, XCircle } from 'lucide-react'
 
 interface Props {
   status: 'ACTIVE' | 'INACTIVE' | 'TRIALING' | 'PAST_DUE' | 'CANCELLED'
-  trialEndsAt: Date | null
+  // Server passes a Date; serialised to client as a string. Accept both so
+  // the layout can keep its select { trialEndsAt: true } as-is.
+  trialEndsAt: Date | string | null
 }
 
 type Tone = 'indigo' | 'rose' | 'red'
@@ -19,11 +24,14 @@ interface BannerCopy {
 // Resolves the trainer's billing state into the floating chip's content.
 // Single source of truth — keeps the JSX below dumb. Returns null when
 // nothing needs nagging (the trainer is on an active paid plan).
-function resolveCopy(status: Props['status'], trialEndsAt: Date | null): BannerCopy | null {
+function resolveCopy(status: Props['status'], trialEndsAt: Props['trialEndsAt']): BannerCopy | null {
   if (status === 'ACTIVE') return null
 
-  const daysLeft = trialEndsAt
-    ? Math.max(0, Math.ceil((trialEndsAt.getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
+  // Normalise — server-rendered layout passes a Date; once the component
+  // boots on the client the prop arrives as an ISO string.
+  const endsAt = trialEndsAt ? new Date(trialEndsAt) : null
+  const daysLeft = endsAt
+    ? Math.max(0, Math.ceil((endsAt.getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
     : null
 
   if (status === 'TRIALING' && daysLeft !== null && daysLeft > 0) {
@@ -80,6 +88,12 @@ function resolveCopy(status: Props['status'], trialEndsAt: Date | null): BannerC
 // indigo variant + a hover lift make it feel less like a nag and more
 // like a living surface.
 export function TrialBanner({ status, trialEndsAt }: Props) {
+  const pathname = usePathname()
+  // The banner exists to nudge the trainer toward /billing/plans. When
+  // they're already there (or on the success/cancel landings) the chip
+  // becomes a redundant link to the page they're standing on, so hide it.
+  if (pathname?.startsWith('/billing')) return null
+
   const copy = resolveCopy(status, trialEndsAt)
   if (!copy) return null
 
