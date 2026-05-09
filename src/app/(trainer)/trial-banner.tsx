@@ -45,8 +45,8 @@ export function TrialBanner({ status, trialEndsAt }: Props) {
 
   const toneClasses = {
     indigo: 'bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 text-white',
-    amber:  'bg-amber-100 text-amber-900 border-b border-amber-200',
-    red:    'bg-red-100 text-red-900 border-b border-red-200',
+    amber:  'bg-amber-100 text-amber-900 border border-amber-200',
+    red:    'bg-red-100 text-red-900 border border-red-200',
   }[copy.tone]
 
   const ctaClasses = copy.tone === 'indigo'
@@ -56,12 +56,12 @@ export function TrialBanner({ status, trialEndsAt }: Props) {
       : 'bg-red-700 hover:bg-red-800 text-white'
 
   return (
-    // Pinned to the bottom of the viewport. On mobile the trainer's
-    // bottom tab bar lives at bottom-0 z-40, so we sit at bottom-20
-    // (5rem) above it; on desktop the tab bar is gone so we sit
-    // flush with the bottom edge. z-30 so app modals at z-50 still
-    // come over the top.
-    <div className={`fixed inset-x-0 bottom-20 md:bottom-0 z-30 flex items-center justify-between gap-3 px-4 py-2 text-sm shadow-[0_-6px_20px_-12px_rgba(15,23,42,0.25)] ${toneClasses}`}>
+    // Floating chip pinned to the bottom-right with a 10px (2.5 in
+    // Tailwind) margin all the way around. On mobile the trainer's
+    // bottom tab bar lives at bottom-0 z-40 (5rem tall), so we lift
+    // ourselves to bottom-[5.625rem] (5rem + 10px) to keep the same
+    // gap as the right-edge margin. z-30 leaves modals (z-50) above.
+    <div className={`fixed right-2.5 bottom-[5.625rem] md:bottom-2.5 z-30 flex items-center gap-3 px-4 py-2 rounded-2xl shadow-[0_10px_30px_-8px_rgba(15,23,42,0.35)] text-sm max-w-[calc(100%-1.25rem)] ${toneClasses}`}>
       <div className="flex items-center gap-2 min-w-0">
         {copy.tone === 'indigo' && <Sparkles className="h-4 w-4 shrink-0" />}
         <span className="truncate font-medium">{copy.label}</span>
