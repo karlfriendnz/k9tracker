@@ -24,6 +24,7 @@ enum SubscriptionStatus {
   ACTIVE
   INACTIVE
   TRIALING
+  PAST_DUE
   CANCELLED
 }
 
@@ -261,6 +262,14 @@ model TrainerProfile {
   // for paid plans that don't have a trial window or trainers who never
   // had one (legacy accounts).
   trialEndsAt        DateTime?
+  // Stripe identifiers — populated lazily, the first time the trainer
+  // hits Checkout. Customer is reused across plan changes; subscription
+  // and price flip when they upgrade/downgrade.
+  stripeCustomerId     String?   @unique
+  stripeSubscriptionId String?   @unique
+  // End of the current paid period — drives the "renews on …" copy and
+  // the access-cutoff job for cancelled subscriptions.
+  currentPeriodEnd     DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -777,6 +786,11 @@ model SubscriptionPlan {
   maxClients   Int? // null = unlimited
   featureFlags Json    @default("{}")
   isActive     Boolean @default(true)
+  // Stripe Price ID this plan maps to (e.g. price_1Abc…). Null while a
+  // plan exists in our DB but hasn't been wired to Stripe yet — the
+  // checkout flow filters those out so the trainer can't pick a plan
+  // we can't actually charge for.
+  stripePriceId String? @unique
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

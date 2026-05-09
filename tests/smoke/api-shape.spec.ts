@@ -18,6 +18,10 @@ const ENDPOINTS: { method: 'GET' | 'POST'; path: string }[] = [
   // the row lookup fails; what we're guarding against is the route exploding
   // before either step.
   { method: 'POST', path: '/api/clients/cmnotreal/packages' },
+  // Billing checkout — auth-gated; the test below just verifies the
+  // route survives the unauth bounce. The webhook is signature-gated
+  // rather than auth-gated, so it gets its own test below.
+  { method: 'POST', path: '/api/billing/checkout' },
 ]
 
 test.describe('Authed API endpoints', () => {
@@ -54,4 +58,17 @@ test.describe('Authed API endpoints', () => {
       expect([307, 401, 403], `expected auth-bounce (got ${status})`).toContain(status)
     })
   }
+
+  // Stripe webhook is signature-gated, not auth-gated, so an unsigned
+  // POST should land on the signature check (400) or hit the
+  // not-configured short-circuit (503) — never 500.
+  test('POST /api/webhooks/stripe rejects unsigned without crashing', async ({ request }) => {
+    const r = await request.post('/api/webhooks/stripe', {
+      data: '{}',
+      headers: { 'Content-Type': 'application/json' },
+      maxRedirects: 0,
+    })
+    const status = r.status()
+    expect([400, 503], `expected sig/config rejection (got ${status})`).toContain(status)
+  })
 })

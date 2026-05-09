@@ -38,6 +38,9 @@ const TRAINER_ROUTES = [
   '/forms/session/new',
   '/progress',
   '/sessions/needs-notes',
+  '/billing/plans',
+  '/billing/success',
+  '/billing/cancel',
 ]
 
 const CLIENT_ROUTES = [

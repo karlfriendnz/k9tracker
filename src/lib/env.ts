@@ -55,6 +55,12 @@ const schema = z.object({
   APPLE_KEY_ID: optionalString,
   APPLE_PRIVATE_KEY: optionalString,
 
+  // Stripe (billing). Optional — when missing, /billing/plans renders a
+  // "billing coming soon" state and the trial banner has no CTA. Hard
+  // fields once we ship public pricing.
+  STRIPE_SECRET_KEY: optionalString,
+  STRIPE_WEBHOOK_SECRET: optionalString,
+
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
 })
 

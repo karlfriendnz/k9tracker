@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { AppShell } from '@/components/shared/app-shell'
 import { OnboardingFab } from './onboarding-fab'
 import { OnboardingCelebration } from './onboarding-celebration'
+import { TrialBanner } from './trial-banner'
 import { getOnboardingFabState } from '@/lib/onboarding/state'
 import { STEP_TO_MENU } from '@/lib/onboarding/path-step'
 
@@ -12,10 +13,16 @@ export default async function TrainerLayout({ children }: { children: React.Reac
   if (!session || session.user.role !== 'TRAINER') redirect('/login')
 
   // Read logo + business name fresh from DB on every render so settings updates
-  // are reflected immediately. The JWT caches these only at sign-in.
+  // are reflected immediately. The JWT caches these only at sign-in. Also
+  // pulls the trial/sub state for the chrome banner.
   const tp = await prisma.trainerProfile.findUnique({
     where: { userId: session.user.id },
-    select: { businessName: true, logoUrl: true },
+    select: {
+      businessName: true,
+      logoUrl: true,
+      subscriptionStatus: true,
+      trialEndsAt: true,
+    },
   })
 
   const fabState = session.user.trainerId
@@ -47,6 +54,15 @@ export default async function TrainerLayout({ children }: { children: React.Reac
       highlightMenuHref={highlightMenuHref}
       completedStepKeys={completedStepKeys}
     >
+      {/* Trial / payment-status banner — only renders when there's
+          something the trainer needs to know (trial running out, payment
+          past due, etc). Active paid subs see nothing. */}
+      {tp && (
+        <TrialBanner
+          status={tp.subscriptionStatus}
+          trialEndsAt={tp.trialEndsAt}
+        />
+      )}
       {/* FAB sits above the page content so when it's a sticky banner it
           appears at the top of <main> rather than way below at the bottom. */}
       {fabState.show && fabState.nextStep && (
