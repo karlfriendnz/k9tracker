@@ -2,19 +2,20 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { auth } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
+import { SOLO_PRICE, PLAN_NAME, DEFAULT_CURRENCY } from '@/lib/pricing'
 import { SignupForm } from './signup-form'
 
 export const metadata: Metadata = {
   title: 'Start your trial · PupManager',
-  description: 'Pick your team size and start your 10-day PupManager trial. No card needed for the first 10 days.',
+  description: 'Start your 10-day PupManager trial — no card needed for the first 10 days.',
 }
 
 // /signup is the marketing-driven entry point (linked from
-// pupmanager.com/pricing). Keeps the existing /register form available
-// for direct/legacy traffic, but this is the path the website pushes
-// trainers down: more thorough info capture, seat-count slider, live
-// total, then straight to a Stripe Checkout Session.
+// pupmanager.com/pricing). Single-column account creation; pricing
+// reads from the shared `lib/pricing` constants (same source as
+// pupmanager.com/pricing) so we don't need to round-trip the database
+// to render this page — that keeps it CI-safe and lets it render
+// even before SubscriptionPlan rows are seeded in a fresh env.
 export default async function SignupPage() {
   // Authed trainers landing on /signup (most often via the trial-chip
   // "Pick a plan" CTA, which intentionally uses /signup as the
@@ -25,19 +26,10 @@ export default async function SignupPage() {
   if (session?.user?.role === 'TRAINER') redirect('/billing/setup')
   if (session?.user?.role === 'CLIENT') redirect('/home')
 
-  // Pull the cheapest paid plan as the per-seat anchor for the slider.
-  // We fall back to a sensible default ($40 NZD) so the page still
-  // renders something useful before the admin has wired up Stripe.
-  const cheapestPaid = await prisma.subscriptionPlan.findFirst({
-    where: { isActive: true, priceMonthly: { gt: 0 } },
-    orderBy: { priceMonthly: 'asc' },
-    select: { id: true, name: true, priceMonthly: true, stripePriceId: true },
-  })
-
-  const perSeatPrice = cheapestPaid?.priceMonthly ?? 40
-  const planId = cheapestPaid?.id ?? null
-  const planName = cheapestPaid?.name ?? 'Growth'
-  const purchasable = !!cheapestPaid?.stripePriceId
+  // Static pricing footer — actual plan-id / Stripe-price wiring
+  // happens later on /billing/setup once the trainer is authed.
+  const perSeatPrice = SOLO_PRICE[DEFAULT_CURRENCY]
+  const planName = PLAN_NAME
 
   return (
     <div className="flex flex-col gap-6">
@@ -49,15 +41,15 @@ export default async function SignupPage() {
           Set up your training business
         </h1>
         <p className="mx-auto mt-2 max-w-sm text-sm text-slate-600">
-          A few quick details, pick how many trainers you have, and we&apos;ll get you booking sessions in minutes.
+          A few quick details and we&apos;ll get you booking sessions in minutes.
         </p>
       </div>
 
       <SignupForm
-        planId={planId}
+        planId={null}
         planName={planName}
         perSeatPrice={perSeatPrice}
-        purchasable={purchasable}
+        purchasable={false}
       />
 
       <p className="text-center text-sm text-slate-500">
