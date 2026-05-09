@@ -6,9 +6,10 @@ import { PREVIEW_COOKIE } from '@/lib/client-context'
 const { auth } = NextAuth(authConfig)
 
 const PUBLIC_PATHS = [
-  '/login', '/register', '/forgot-password', '/verify-email', '/invite',
+  '/login', '/register', '/signup', '/forgot-password', '/verify-email', '/verify-account', '/invite',
   '/api/auth',
   '/api/cron',   // Bearer-token authed inside the route handler
+  '/api/webhooks', // Stripe + future inbound webhooks (signature-gated inside)
   '/form',       // public embed forms
   '/api/form',   // public form submission API
 ]

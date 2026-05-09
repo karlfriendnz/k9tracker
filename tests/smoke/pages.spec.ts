@@ -11,6 +11,7 @@ import { test, expect } from '@playwright/test'
 const PUBLIC_ROUTES = [
   '/login',
   '/register',
+  '/signup',
   '/forgot-password',
   '/verify-email',
   '/verify-account',
