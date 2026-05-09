@@ -10,7 +10,7 @@ const MAX_SEATS = 5
 
 const schema = z.object({
   businessName: z.string().min(2, 'Business name is required'),
-  phone: z.string().optional().transform(v => v?.trim() || ''),
+  phone: z.string().min(4, 'Phone number is required'),
   addressLine1: z.string().min(2, 'Street address is required'),
   addressLine2: z.string().optional().transform(v => v?.trim() || ''),
   addressCity: z.string().min(1, 'City is required'),
@@ -87,7 +87,7 @@ export function SetupForm({ planId, planName, perSeatPrice, purchasable, default
             className={inputClass}
           />
         </Field>
-        <Field label="Phone (optional)">
+        <Field label="Phone" error={errors.phone?.message}>
           <input
             {...register('phone')}
             type="tel"

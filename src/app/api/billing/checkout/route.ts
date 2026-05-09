@@ -13,15 +13,18 @@ const schema = z.object({
   seats: z.number().int().min(1).max(MAX_SEATS).default(1),
   // Business profile fields captured on /billing/setup. We persist them
   // to TrainerProfile and feed them into the Stripe Customer + Checkout
-  // Session so invoices show the right address.
+  // Session so invoices show the right address. Phone, city and
+  // country are required (everything else may be left blank — line2 +
+  // region are genuinely optional, line1 + postcode are still
+  // required at the form layer for completeness).
   businessName:    z.string().optional(),
-  phone:           z.string().optional(),
+  phone:           z.string().min(4,   'Phone number is required'),
   addressLine1:    z.string().optional(),
   addressLine2:    z.string().optional(),
-  addressCity:     z.string().optional(),
+  addressCity:     z.string().min(1,   'City is required'),
   addressRegion:   z.string().optional(),
   addressPostcode: z.string().optional(),
-  addressCountry:  z.string().optional(),
+  addressCountry:  z.string().min(2,   'Country is required'),
 })
 
 // POST /api/billing/checkout
