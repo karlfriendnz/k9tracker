@@ -78,6 +78,10 @@ export default async function EditClientPage({
       <EditClientForm
         clientId={clientId}
         initialName={client.user.name ?? ''}
+        initialEmail={client.user.email ?? ''}
+        // Email is the client's login credential — only the primary
+        // trainer can change it (co-managers see the field disabled).
+        canEditEmail={access.client.trainerId === access.trainerId}
         initialDogs={initialDogs}
         customFields={customFields.map(f => ({
           id: f.id,

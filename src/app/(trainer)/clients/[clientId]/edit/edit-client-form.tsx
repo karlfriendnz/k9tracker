@@ -35,6 +35,9 @@ type Dog = {
 type Props = {
   clientId: string
   initialName: string
+  initialEmail: string
+  /** False for co-managers — field renders read-only with a hint. */
+  canEditEmail: boolean
   initialDogs: Dog[]
   customFields: CustomField[]
   initialFieldValues: Record<string, string>
@@ -88,13 +91,14 @@ function FieldInput({
   )
 }
 
-export function EditClientForm({ clientId, initialName, initialDogs, customFields, initialFieldValues }: Props) {
+export function EditClientForm({ clientId, initialName, initialEmail, canEditEmail, initialDogs, customFields, initialFieldValues }: Props) {
   const router = useRouter()
   const [tab, setTab] = useState<Tab>('dogs')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const [name, setName] = useState(initialName)
+  const [email, setEmail] = useState(initialEmail)
   const [dogs, setDogs] = useState<Dog[]>(initialDogs)
   const [expandedDog, setExpandedDog] = useState<number>(0)
   const [fieldValues, setFieldValues] = useState<Record<string, string>>(initialFieldValues)
@@ -135,12 +139,20 @@ export function EditClientForm({ clientId, initialName, initialDogs, customField
     setSaving(true)
     setError(null)
 
+    const trimmedEmail = email.trim()
+    // Skip the email field on the wire when it's unchanged so a
+    // canEditEmail=false trainer (co-manager) doesn't bounce off the
+    // server-side primary-trainer check just because the form
+    // resubmitted the existing value.
+    const emailChanged = canEditEmail && trimmedEmail !== '' && trimmedEmail.toLowerCase() !== initialEmail.trim().toLowerCase()
+
     const primaryDog = dogs.find(d => d.isPrimary)
     const res = await fetch(`/api/clients/${clientId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name,
+        ...(emailChanged ? { email: trimmedEmail } : {}),
         dog: primaryDog ? {
           name: primaryDog.name,
           breed: primaryDog.breed || null,
@@ -152,7 +164,8 @@ export function EditClientForm({ clientId, initialName, initialDogs, customField
     })
 
     if (!res.ok) {
-      setError('Failed to save. Please try again.')
+      const data = await res.json().catch(() => ({}))
+      setError(typeof data.error === 'string' ? data.error : 'Failed to save. Please try again.')
       setSaving(false)
       return
     }
@@ -341,38 +354,63 @@ export function EditClientForm({ clientId, initialName, initialDogs, customField
 
       {/* ── Details ──────────────────────────────────────────────────────── */}
       {tab === 'details' && (
-        ownerFields.length === 0 ? (
-          <div className="text-center py-12 text-slate-400">
-            <p>No owner fields defined.</p>
-            <p className="text-sm mt-1">Add them in Settings → Custom fields.</p>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-6">
-            <Card>
-              <CardBody className="pt-5 flex flex-col gap-4">
-                <h2 className="font-semibold text-slate-900">Client details</h2>
-                <Input label="Name" value={name} onChange={e => setName(e.target.value)} />
+        <div className="flex flex-col gap-6">
+          {/* Always-on Name + Email card — the two core identity fields
+              live here regardless of whether any custom fields exist.
+              Email is gated on canEditEmail (false for co-managers,
+              who'd otherwise be able to lock the primary trainer out
+              by changing the login credential). */}
+          <Card>
+            <CardBody className="pt-5 flex flex-col gap-4">
+              <h2 className="font-semibold text-slate-900">Client details</h2>
+              <Input
+                label="Name"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="Sarah Carter"
+              />
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-slate-700">Email</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  disabled={!canEditEmail}
+                  autoComplete="email"
+                  placeholder="client@example.com"
+                  className="h-12 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-50 disabled:text-slate-500"
+                />
+                {canEditEmail ? (
+                  <p className="text-xs text-slate-500">
+                    Used to log in. Changing this resets their email verification — re-send the invite afterwards.
+                  </p>
+                ) : (
+                  <p className="text-xs text-slate-500">
+                    Only the primary trainer can change a client&apos;s login email.
+                  </p>
+                )}
+              </div>
+            </CardBody>
+          </Card>
+
+          {ownerFields.length > 0 && groupByCategory(ownerFields).map(group => (
+            <Card key={group.category ?? '__uncategorised__'}>
+              <CardBody className="pt-5 flex flex-col gap-1">
+                <h2 className="font-semibold text-slate-900 mb-4">{group.category ?? 'Additional details'}</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {group.fields.map(field => (
+                    <FieldInput
+                      key={field.id}
+                      field={field}
+                      value={fieldValues[field.id] ?? ''}
+                      onChange={v => setFieldValue(field.id, v)}
+                    />
+                  ))}
+                </div>
               </CardBody>
             </Card>
-            {groupByCategory(ownerFields).map(group => (
-              <Card key={group.category ?? '__uncategorised__'}>
-                <CardBody className="pt-5 flex flex-col gap-1">
-                  <h2 className="font-semibold text-slate-900 mb-4">{group.category ?? 'Additional details'}</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {group.fields.map(field => (
-                      <FieldInput
-                        key={field.id}
-                        field={field}
-                        value={fieldValues[field.id] ?? ''}
-                        onChange={v => setFieldValue(field.id, v)}
-                      />
-                    ))}
-                  </div>
-                </CardBody>
-              </Card>
-            ))}
-          </div>
-        )
+          ))}
+        </div>
       )}
 
       {/* Persistent save bar */}

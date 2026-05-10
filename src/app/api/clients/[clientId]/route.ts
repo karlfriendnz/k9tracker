@@ -6,6 +6,10 @@ import { z } from 'zod'
 
 const schema = z.object({
   name: z.string().min(1).optional(),
+  // Trainer-editable email. Trimmed + lowercased before the unique
+  // check so we can't end up with `Foo@bar.com` and `foo@bar.com`
+  // colliding case-insensitively at the auth layer.
+  email: z.string().email().transform(s => s.trim().toLowerCase()).optional(),
   status: z.enum(['ACTIVE', 'INACTIVE']).optional(),
   dog: z.object({
     name: z.string().min(1),
@@ -42,11 +46,52 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ client
   const parsed = schema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
 
-  const { name, status, dog } = parsed.data
+  const { name, email, status, dog } = parsed.data
   const { client } = access
 
   if (name !== undefined) {
     await prisma.user.update({ where: { id: client.userId }, data: { name } })
+  }
+
+  if (email !== undefined) {
+    // Only the primary trainer can change the client's email — that's
+    // the credential the client uses to log in, and a co-manager
+    // shouldn't be able to lock the primary out of their own account.
+    if (client.trainerId !== access.trainerId) {
+      return NextResponse.json(
+        { error: "Only the client's primary trainer can change their email." },
+        { status: 403 },
+      )
+    }
+    // No-op when the email matches what's already on file (case-fold
+    // already normalised by the schema transform). Avoids a needless
+    // emailVerified reset.
+    const currentUser = await prisma.user.findUnique({
+      where: { id: client.userId },
+      select: { email: true },
+    })
+    if (currentUser && currentUser.email?.toLowerCase() !== email) {
+      try {
+        await prisma.user.update({
+          where: { id: client.userId },
+          data: {
+            email,
+            // Wipe the verification stamp — the new address hasn't
+            // been confirmed yet. The trainer can hit "Re-invite"
+            // afterwards to ship a fresh link.
+            emailVerified: null,
+          },
+        })
+      } catch (err) {
+        if (err && typeof err === 'object' && 'code' in err && (err as { code?: string }).code === 'P2002') {
+          return NextResponse.json(
+            { error: 'That email is already used by another account.' },
+            { status: 409 },
+          )
+        }
+        throw err
+      }
+    }
   }
 
   if (status !== undefined) {
