@@ -4,11 +4,26 @@ import { useState, useRef } from 'react'
 import { upload } from '@vercel/blob/client'
 import imageCompression from 'browser-image-compression'
 import { Camera, Video, Trash2, Loader2, ImageIcon, Play, AlertCircle } from 'lucide-react'
+import { clientLog } from '@/lib/client-log'
 
 const IMAGE_MAX_BYTES = 10 * 1024 * 1024
-const VIDEO_MAX_BYTES = 100 * 1024 * 1024
-const VIDEO_MAX_SECONDS = 60 * 5 // 5 minutes — the spec target. Friendly toast,
-//                                   not a hard server cap; trainer can re-shoot.
+// Lowered from 100MB → 60MB. Capacitor's iOS WebView has a tighter
+// memory ceiling than full Safari (typically ~200-400 MB process
+// budget), and a freshly-recorded 4K HEVC iPhone clip can be 50+ MB
+// per minute. Holding that file as a Blob while the SDK streams it
+// to Vercel was OOM'ing the WebView and crashing the app on Take
+// Video. 60 MB still covers ~2-3 min of 1080p HEVC which is plenty
+// for session-notes clips. Trainers wanting longer can pick from
+// the library where iOS pre-transcodes to a smaller H.264 file.
+const VIDEO_MAX_BYTES = 60 * 1024 * 1024
+// Skip the offscreen <video>/<canvas> metadata read entirely for
+// files past this size — even loading them into a video element on
+// iOS WebView is enough to push the process over the limit. The
+// upload still proceeds; we just lose duration + thumbnail.
+const METADATA_SKIP_BYTES = 20 * 1024 * 1024
+const VIDEO_MAX_SECONDS = 60 * 5 // 5 minutes — soft client cap, only
+//                                  enforced when we successfully read
+//                                  duration. Server has no length cap.
 
 export interface SessionAttachmentItem {
   id: string
@@ -194,13 +209,40 @@ export function SessionAttachments({ sessionId, initialAttachments }: Props) {
   }
 
   async function uploadOneVideo(file: File): Promise<void> {
+    clientLog('take-video.received', {
+      sessionId,
+      name: file.name,
+      sizeBytes: file.size,
+      type: file.type,
+    })
     if (file.size > VIDEO_MAX_BYTES) {
-      throw new Error(`${file.name}: video too large — keep it under 100 MB.`)
+      clientLog('take-video.rejected.too-large', { sizeBytes: file.size })
+      throw new Error(
+        `${file.name}: video too large (${Math.round(file.size / 1024 / 1024)} MB) — keep it under 60 MB. ` +
+        `Tip: pick from your library instead of "Take Video" — iOS compresses library clips automatically.`,
+      )
     }
-    const { durationMs, thumbnail } = await readVideoMetadata(file)
-    if (durationMs > VIDEO_MAX_SECONDS * 1000) {
+
+    // Skip metadata entirely for mid-sized files. On iOS WebView even
+    // wrapping the file in a <video> element decodes enough of it to
+    // OOM the process; uploading without duration/thumbnail is the
+    // safe path and the tile still works (placeholder gradient + no
+    // duration badge).
+    let durationMs = 0
+    let thumbnail: Blob | null = null
+    if (file.size <= METADATA_SKIP_BYTES) {
+      clientLog('take-video.metadata.start', { sizeBytes: file.size })
+      const meta = await readVideoMetadata(file)
+      durationMs = meta.durationMs
+      thumbnail = meta.thumbnail
+      clientLog('take-video.metadata.done', { durationMs, hasThumbnail: !!thumbnail })
+    } else {
+      clientLog('take-video.metadata.skipped', { reason: 'large-file', sizeBytes: file.size })
+    }
+    if (durationMs > 0 && durationMs > VIDEO_MAX_SECONDS * 1000) {
       throw new Error(`${file.name}: video too long — keep it under ${VIDEO_MAX_SECONDS / 60} minutes.`)
     }
+    clientLog('take-video.upload.start', { sizeBytes: file.size, durationMs })
 
     // Upload the video itself first — that's the long one. Progress
     // updates flow through `setUploading`. Thumbnail upload happens
@@ -213,8 +255,15 @@ export function SessionAttachments({ sessionId, initialAttachments }: Props) {
         sizeBytes: file.size,
         durationMs,
       }),
-      onUploadProgress: (p) => setUploading(u => u && { ...u, progress: p.percentage }),
+      onUploadProgress: (p) => {
+        setUploading(u => u && { ...u, progress: p.percentage })
+        // Log only at coarse milestones to keep the volume sane.
+        if (p.percentage % 25 < 1) {
+          clientLog('take-video.upload.progress', { pct: Math.round(p.percentage) })
+        }
+      },
     })
+    clientLog('take-video.upload.done', { url: blob.url })
 
     // Push the thumbnail (a small JPEG captured at t=0.1s in
     // readVideoMetadata) to Blob via the same authed upload route.
@@ -251,6 +300,7 @@ export function SessionAttachments({ sessionId, initialAttachments }: Props) {
       durationMs,
       thumbnailUrl,
     })
+    clientLog('take-video.confirm.done', { id: created.id })
     setAttachments(prev => upsert(prev, created))
   }
 
@@ -317,7 +367,10 @@ export function SessionAttachments({ sessionId, initialAttachments }: Props) {
         </button>
         <button
           type="button"
-          onClick={() => videoInputRef.current?.click()}
+          onClick={() => {
+            clientLog('take-video.button-tap', { sessionId, ua: navigator.userAgent })
+            videoInputRef.current?.click()
+          }}
           disabled={uploading !== null}
           className="inline-flex items-center gap-1.5 text-sm font-medium px-3 py-2 rounded-lg bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-60"
         >
@@ -347,6 +400,10 @@ export function SessionAttachments({ sessionId, initialAttachments }: Props) {
           className="hidden"
           onChange={(e) => {
             const files = Array.from(e.target.files ?? [])
+            clientLog('take-video.picker-change', {
+              count: files.length,
+              files: files.map(f => ({ name: f.name, sizeBytes: f.size, type: f.type })),
+            })
             if (files.length > 0) void uploadQueue(files, 'VIDEO')
             if (videoInputRef.current) videoInputRef.current.value = ''
           }}
