@@ -39,42 +39,45 @@ interface Props {
 }
 
 // One stepped page in the intake flow. Either an owner-side section, or a
-// dog-side section (scoped to a single dog). `valueKey` is how each field's
-// answer is keyed in the values map (owner = fieldId, dog = `${fieldId}:${dogId}`).
+// dog-side section (scoped to a single dog), or a single mixed page when
+// the trainer hasn't defined any sections at all. `valueKey` is how each
+// field's answer is keyed in the values map (owner = fieldId, dog =
+// `${fieldId}:${dogId}`). title=null = render the page without an
+// eyebrow + heading (the "no sections" experience).
 interface Step {
   id: string
-  title: string
+  title: string | null
   subtitle: string | null
   description: string | null
   fields: { field: CustomField; valueKey: string }[]
 }
 
-const DEFAULT_SECTION = 'General'
-
+// Group a slice of fields by section. ONLY sections the trainer has
+// explicitly added to their intakeSectionOrder count — anything else
+// (a leftover `category` value from before sections were added,
+// stale seed data, etc.) collapses into a single trailing orphan
+// bucket with `section: null`. The previous behaviour created a
+// section per unique category which surprised trainers: their
+// "Fields without a section" panel showed 36 fields, but the client
+// saw 5 pages because of dormant category values.
 function groupBySection(fields: CustomField[], sectionMeta: SectionMeta[]) {
-  // Build a section list ordered by the trainer's sectionMeta, then append
-  // any sections present in field categories but missing from sectionMeta
-  // (legacy data) — and finally a "General" bucket for orphan fields.
-  const orderedNames = sectionMeta.map(s => s.name)
-  const seen = new Set<string>()
-  const result: { section: string; description: string | null; fields: CustomField[] }[] = []
+  const result: { section: string | null; description: string | null; fields: CustomField[] }[] = []
+  const definedNames = new Set(sectionMeta.map(s => s.name))
 
   for (const meta of sectionMeta) {
     const matching = fields.filter(f => f.category === meta.name)
     if (matching.length === 0) continue
-    seen.add(meta.name)
     result.push({ section: meta.name, description: meta.description, fields: matching })
   }
-  for (const f of fields) {
-    const key = f.category?.trim()
-    if (key && !seen.has(key) && !orderedNames.includes(key)) {
-      seen.add(key)
-      result.push({ section: key, description: null, fields: fields.filter(x => x.category === key) })
-    }
-  }
-  const orphans = fields.filter(f => !f.category?.trim())
+
+  // Anything not in a defined section is an orphan, regardless of
+  // whether it has a stale category value.
+  const orphans = fields.filter(f => {
+    const cat = f.category?.trim()
+    return !cat || !definedNames.has(cat)
+  })
   if (orphans.length > 0) {
-    result.push({ section: DEFAULT_SECTION, description: null, fields: orphans })
+    result.push({ section: null, description: null, fields: orphans })
   }
   return result
 }
@@ -83,13 +86,35 @@ function buildSteps(customFields: CustomField[], dogs: Dog[], sectionMeta: Secti
   const ownerFields = customFields.filter(f => f.appliesTo === 'OWNER')
   const dogFields = customFields.filter(f => f.appliesTo === 'DOG')
 
+  // No sections defined → ONE big headless page with every field on
+  // it (owner first, then dog fields per dog). Matches the trainer's
+  // mental model: "if I haven't put fields in sections, my client
+  // sees one form."
+  if (sectionMeta.length === 0) {
+    const fields = [
+      ...ownerFields.map(f => ({ field: f, valueKey: f.id })),
+      ...dogs.flatMap(dog => dogFields.map(f => ({ field: f, valueKey: `${f.id}:${dog.id}` }))),
+    ]
+    if (fields.length === 0) return []
+    return [{
+      id: 'all',
+      title: null,
+      subtitle: null,
+      description: null,
+      fields,
+    }]
+  }
+
+  // Sections defined → one step per (scope × section). Orphan fields
+  // (category not in any defined section) get their own trailing
+  // headless step so they're not dropped on the floor.
   const steps: Step[] = []
 
   for (const group of groupBySection(ownerFields, sectionMeta)) {
     steps.push({
-      id: `owner:${group.section}`,
+      id: `owner:${group.section ?? '__orphans__'}`,
       title: group.section,
-      subtitle: 'About you',
+      subtitle: group.section ? 'About you' : null,
       description: group.description,
       fields: group.fields.map(f => ({ field: f, valueKey: f.id })),
     })
@@ -98,9 +123,9 @@ function buildSteps(customFields: CustomField[], dogs: Dog[], sectionMeta: Secti
   for (const dog of dogs) {
     for (const group of groupBySection(dogFields, sectionMeta)) {
       steps.push({
-        id: `dog:${dog.id}:${group.section}`,
+        id: `dog:${dog.id}:${group.section ?? '__orphans__'}`,
         title: group.section,
-        subtitle: `About ${dog.name}`,
+        subtitle: group.section ? `About ${dog.name}` : null,
         description: group.description,
         fields: group.fields.map(f => ({ field: f, valueKey: `${f.id}:${dog.id}` })),
       })
@@ -230,7 +255,10 @@ export function IntakeGate({ businessName, customFields, sectionMeta, dogs, exis
           </p>
         </div>
 
-        {/* Progress: dots + label */}
+        {/* Progress: dots + label. Hidden when there's only one
+            step — single-page experience reads cleanest without a
+            "Step 1 of 1" indicator. */}
+        {totalSteps > 1 && (
         <div className="mb-6 flex flex-col items-center gap-2">
           <div className="flex items-center gap-1.5">
             {steps.map((s, i) => (
@@ -249,8 +277,13 @@ export function IntakeGate({ businessName, customFields, sectionMeta, dogs, exis
             Step {stepIndex + 1} of {totalSteps}
           </p>
         </div>
+        )}
 
-        {/* Current section card */}
+        {/* Current section card. Headless step (no title) — typically
+            the single-page "no sections" experience or a trailing
+            orphan bucket — renders without the eyebrow/heading/
+            description so the form just looks like a clean list of
+            fields without manufactured chrome. */}
         {currentStep && (
           <div className="bg-white rounded-2xl border border-slate-200 p-6 flex flex-col gap-4">
             {currentStep.subtitle && (
@@ -258,7 +291,9 @@ export function IntakeGate({ businessName, customFields, sectionMeta, dogs, exis
                 {currentStep.subtitle}
               </p>
             )}
-            <h2 className="font-semibold text-slate-900 text-lg -mt-2">{currentStep.title}</h2>
+            {currentStep.title && (
+              <h2 className="font-semibold text-slate-900 text-lg -mt-2">{currentStep.title}</h2>
+            )}
             {currentStep.description && (
               <p className="text-sm text-slate-500 -mt-1 leading-relaxed">{currentStep.description}</p>
             )}
