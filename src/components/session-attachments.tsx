@@ -124,10 +124,14 @@ export function SessionAttachments({ sessionId, initialAttachments }: Props) {
     if (file.size > VIDEO_MAX_BYTES) {
       throw new Error(`${file.name}: video too large — keep it under 100 MB.`)
     }
-    const { durationMs } = await readVideoMetadata(file)
+    const { durationMs, thumbnail } = await readVideoMetadata(file)
     if (durationMs > VIDEO_MAX_SECONDS * 1000) {
       throw new Error(`${file.name}: video too long — keep it under ${VIDEO_MAX_SECONDS / 60} minutes.`)
     }
+
+    // Upload the video itself first — that's the long one. Progress
+    // updates flow through `setUploading`. Thumbnail upload happens
+    // afterwards so it doesn't compete for bandwidth.
     const blob = await upload(safeName(file.name, 'mp4'), file, {
       access: 'public',
       handleUploadUrl: `/api/sessions/${sessionId}/attachments/upload`,
@@ -138,11 +142,41 @@ export function SessionAttachments({ sessionId, initialAttachments }: Props) {
       }),
       onUploadProgress: (p) => setUploading(u => u && { ...u, progress: p.percentage }),
     })
+
+    // Push the thumbnail (a small JPEG captured at t=0.1s in
+    // readVideoMetadata) to Blob via the same authed upload route.
+    // 'THUMBNAIL' kind tells the route to skip creating its own
+    // SessionAttachment row; we'll attach this URL to the video row
+    // below in the confirm step.
+    let thumbnailUrl: string | undefined = undefined
+    if (thumbnail) {
+      try {
+        const thumbBlob = await upload(
+          safeName(file.name.replace(/\.[^.]+$/, '') + '.thumb.jpg', 'jpg'),
+          thumbnail,
+          {
+            access: 'public',
+            handleUploadUrl: `/api/sessions/${sessionId}/attachments/upload`,
+            clientPayload: JSON.stringify({
+              kind: 'THUMBNAIL',
+              sizeBytes: thumbnail.size,
+            }),
+          },
+        )
+        thumbnailUrl = thumbBlob.url
+      } catch (err) {
+        // Thumbnail is best-effort — fall back to the placeholder
+        // tile if it fails. Don't surface to the trainer.
+        console.warn('[session-attachments] thumbnail upload failed', err)
+      }
+    }
+
     const created = await confirmAttachment(sessionId, {
       kind: 'VIDEO',
       url: blob.url,
       sizeBytes: file.size,
       durationMs,
+      thumbnailUrl,
     })
     setAttachments(prev => upsert(prev, created))
   }

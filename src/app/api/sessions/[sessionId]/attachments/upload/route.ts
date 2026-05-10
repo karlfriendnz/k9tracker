@@ -46,11 +46,16 @@ export async function POST(
         // The client tells us {kind, sizeBytes, durationMs?, caption?}
         // through clientPayload. We re-validate the size against the
         // type-specific cap so a hostile client can't bypass it.
+        // 'THUMBNAIL' is a child asset of a VIDEO row — uploaded
+        // through the same auth path but never given its own
+        // SessionAttachment row (the video row's thumbnailUrl points
+        // at it). Treated as a tiny image for size purposes.
         const payload = parsePayload(clientPayloadStr)
         const isVideo = payload.kind === 'VIDEO'
         const isImage = payload.kind === 'IMAGE'
-        if (!isVideo && !isImage) throw new Error('Unsupported attachment kind')
-        const max = isVideo ? VIDEO_MAX : IMAGE_MAX
+        const isThumbnail = payload.kind === 'THUMBNAIL'
+        if (!isVideo && !isImage && !isThumbnail) throw new Error('Unsupported attachment kind')
+        const max = isVideo ? VIDEO_MAX : isThumbnail ? 2 * 1024 * 1024 : IMAGE_MAX
         if (payload.sizeBytes && payload.sizeBytes > max) {
           throw new Error(isVideo ? 'Video exceeds 100 MB' : 'Image exceeds 10 MB')
         }
@@ -89,11 +94,15 @@ export async function POST(
         const meta = JSON.parse(tokenPayload) as {
           trainerId: string
           sessionId: string
-          kind: 'IMAGE' | 'VIDEO'
+          kind: 'IMAGE' | 'VIDEO' | 'THUMBNAIL'
           sizeBytes: number
           durationMs: number | null
           caption: string | null
         }
+        // Thumbnails are children of a video — we don't write a row
+        // for them; the parent video row's thumbnailUrl will reference
+        // this URL once the client confirms the video.
+        if (meta.kind === 'THUMBNAIL') return
         const existing = await prisma.sessionAttachment.findFirst({
           where: { sessionId: meta.sessionId, url: blob.url },
         })
@@ -120,7 +129,7 @@ export async function POST(
 }
 
 function parsePayload(raw: string | null): {
-  kind?: 'IMAGE' | 'VIDEO'
+  kind?: 'IMAGE' | 'VIDEO' | 'THUMBNAIL'
   sizeBytes?: number
   durationMs?: number | null
   caption?: string | null
