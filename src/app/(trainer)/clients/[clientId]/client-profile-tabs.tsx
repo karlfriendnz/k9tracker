@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Card, CardBody } from '@/components/ui/card'
-import { formatDate } from '@/lib/utils'
+import { formatDate, cn, formatSessionTitle } from '@/lib/utils'
 import { X, MapPin, Video, Clock, Calendar, Trash2, AlertTriangle, Play, ShoppingBag, Plus, Check, Loader2, Tag, Package as PackageIcon, FileDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SessionFormReport } from '@/components/session-form-report'
@@ -275,44 +275,8 @@ export function ClientProfileTabs({
       {/* ── Overview ─────────────────────────────────────────────────────── */}
       {tab === 'overview' && (
         <div className="flex flex-col gap-6">
-          {/* Stat cards */}
-          <div className="grid grid-cols-3 gap-4">
-            <Card className="p-5 text-center">
-              <p className={`text-4xl font-bold mb-1 ${
-                stats.complianceRate == null ? 'text-slate-300'
-                : stats.complianceRate >= 70 ? 'text-green-600'
-                : stats.complianceRate >= 40 ? 'text-amber-500'
-                : 'text-red-500'
-              }`}>
-                {stats.complianceRate != null ? `${stats.complianceRate}%` : '—'}
-              </p>
-              <p className="text-xs text-slate-400 font-medium uppercase tracking-wide">14-day compliance</p>
-              {stats.complianceRate != null && (
-                <div className="mt-3 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all ${
-                      stats.complianceRate >= 70 ? 'bg-green-500'
-                      : stats.complianceRate >= 40 ? 'bg-amber-400'
-                      : 'bg-red-400'
-                    }`}
-                    style={{ width: `${stats.complianceRate}%` }}
-                  />
-                </div>
-              )}
-            </Card>
-
-            <Card className="p-5 text-center">
-              <p className="text-4xl font-bold text-slate-900 mb-1">{stats.completedTasks}</p>
-              <p className="text-xs text-slate-400 font-medium uppercase tracking-wide">Tasks completed</p>
-              <p className="text-xs text-slate-300 mt-2">of {stats.totalTasks} assigned</p>
-            </Card>
-
-            <Card className="p-5 text-center">
-              <p className="text-4xl font-bold text-slate-900 mb-1">{stats.totalTasks - stats.completedTasks}</p>
-              <p className="text-xs text-slate-400 font-medium uppercase tracking-wide">Remaining</p>
-              <p className="text-xs text-slate-300 mt-2">in last 14 days</p>
-            </Card>
-          </div>
+          {/* Previous week / Upcoming week — rolling 7-day windows around now */}
+          <OverviewWeekPanels sessions={sessions} />
 
           {/* Bring to next session */}
           {canEdit && (
@@ -396,49 +360,56 @@ export function ClientProfileTabs({
               )}
             </CardBody>
           </Card>
+
+          {/* Stat cards — pinned to the bottom while the compliance / tasks
+              numbers are still being designed; the top of the tab is given
+              over to week panels + bring-to-next + recent tasks. */}
+          <div className="grid grid-cols-3 gap-4">
+            <Card className="p-5 text-center">
+              <p className={`text-4xl font-bold mb-1 ${
+                stats.complianceRate == null ? 'text-slate-300'
+                : stats.complianceRate >= 70 ? 'text-green-600'
+                : stats.complianceRate >= 40 ? 'text-amber-500'
+                : 'text-red-500'
+              }`}>
+                {stats.complianceRate != null ? `${stats.complianceRate}%` : '—'}
+              </p>
+              <p className="text-xs text-slate-400 font-medium uppercase tracking-wide">14-day compliance</p>
+              {stats.complianceRate != null && (
+                <div className="mt-3 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${
+                      stats.complianceRate >= 70 ? 'bg-green-500'
+                      : stats.complianceRate >= 40 ? 'bg-amber-400'
+                      : 'bg-red-400'
+                    }`}
+                    style={{ width: `${stats.complianceRate}%` }}
+                  />
+                </div>
+              )}
+            </Card>
+
+            <Card className="p-5 text-center">
+              <p className="text-4xl font-bold text-slate-900 mb-1">{stats.completedTasks}</p>
+              <p className="text-xs text-slate-400 font-medium uppercase tracking-wide">Tasks completed</p>
+              <p className="text-xs text-slate-300 mt-2">of {stats.totalTasks} assigned</p>
+            </Card>
+
+            <Card className="p-5 text-center">
+              <p className="text-4xl font-bold text-slate-900 mb-1">{stats.totalTasks - stats.completedTasks}</p>
+              <p className="text-xs text-slate-400 font-medium uppercase tracking-wide">Remaining</p>
+              <p className="text-xs text-slate-300 mt-2">in last 14 days</p>
+            </Card>
+          </div>
         </div>
       )}
 
       {/* ── Sessions ─────────────────────────────────────────────────────── */}
       {tab === 'sessions' && (
-        <div className="flex flex-col gap-2.5">
-          {sessions.length === 0 ? (
-            <div className="text-center py-12 text-slate-400">
-              <p>No sessions scheduled for this client yet.</p>
-            </div>
-          ) : (
-            // Mirrors the dashboard / schedule day-list visual via the
-            // shared SessionRowCard. Client name is suppressed (we're
-            // already on the client's profile) so the body shows dog +
-            // session title without redundant repetition. Per-row delete
-            // hangs off the trailing slot.
-            sessions.map(s => (
-              <SessionRowCard
-                key={s.id}
-                session={{
-                  id: s.id,
-                  title: s.title,
-                  scheduledAt: s.scheduledAt,
-                  durationMins: s.durationMins,
-                  status: s.status,
-                  invoicedAt: s.invoicedAt,
-                  location: s.location,
-                  client: null,
-                  dog: s.dogName ? { name: s.dogName } : null,
-                }}
-                trailing={
-                  <button
-                    onClick={() => setConfirmDelete({ ids: [s.id] })}
-                    aria-label="Delete session"
-                    className="self-stretch px-2 rounded-2xl text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                }
-              />
-            ))
-          )}
-        </div>
+        <SessionsTabPanel
+          sessions={sessions}
+          onConfirmDelete={(id) => setConfirmDelete({ ids: [id] })}
+        />
       )}
 
       {/* ── Delete confirmation modal ─────────────────────────────────────── */}
@@ -836,4 +807,255 @@ function ProductPickerModal({
       </div>
     </div>
   )
+}
+
+// ─── Overview week panels ──────────────────────────────────────────────────
+//
+// Two compact lists on the Overview tab — last 7 days, next 7 days. Same
+// SessionRowCard the Sessions tab uses, with showDate so the trainer can
+// orient at a glance without opening the full Sessions tab.
+
+function OverviewWeekPanels({ sessions }: { sessions: TrainingSession[] }) {
+  const now = Date.now()
+  const sevenDaysMs = 7 * 24 * 60 * 60 * 1000
+
+  const previousWeek = sessions
+    .filter(s => {
+      const t = new Date(s.scheduledAt).getTime()
+      return t >= now - sevenDaysMs && t < now
+    })
+    .sort((a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime())
+
+  const upcomingWeek = sessions
+    .filter(s => {
+      const t = new Date(s.scheduledAt).getTime()
+      return t >= now && t < now + sevenDaysMs
+    })
+    .sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime())
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <WeekPanel title="Previous week" sessions={previousWeek} emptyText="No sessions in the last 7 days." />
+      <WeekPanel title="Upcoming week" sessions={upcomingWeek} emptyText="No sessions in the next 7 days." />
+    </div>
+  )
+}
+
+const STATUS_PILL: Record<SessionStatus, string> = {
+  UPCOMING:  'bg-blue-50 text-blue-700 border-blue-200',
+  COMPLETED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  COMMENTED: 'bg-amber-50 text-amber-700 border-amber-200',
+  INVOICED:  'bg-purple-50 text-purple-700 border-purple-200',
+}
+
+function WeekPanel({
+  title,
+  sessions,
+  emptyText,
+}: {
+  title: string
+  sessions: TrainingSession[]
+  emptyText: string
+}) {
+  return (
+    <Card>
+      <CardBody className="pt-5 pb-4">
+        <h2 className="font-semibold text-slate-900 mb-3">{title}</h2>
+        {sessions.length === 0 ? (
+          <p className="text-sm text-slate-400 py-2">{emptyText}</p>
+        ) : (
+          <ul className="flex flex-col divide-y divide-slate-100 -mx-2">
+            {sessions.map(s => {
+              const d = new Date(s.scheduledAt)
+              const dayShort = d.toLocaleDateString('en-NZ', { weekday: 'short' })
+              const dayNum = d.getDate()
+              const monthShort = d.toLocaleDateString('en-NZ', { month: 'short' })
+              const time = d.toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit', hour12: true })
+              return (
+                <li key={s.id}>
+                  <Link
+                    href={`/sessions/${s.id}`}
+                    className="flex items-center gap-3 px-2 py-2.5 rounded-lg hover:bg-slate-50 transition-colors"
+                  >
+                    <div className="flex flex-col items-center justify-center min-w-[44px] py-1 px-1.5 rounded-lg bg-slate-50 text-center">
+                      <span className="text-[10px] font-semibold uppercase text-slate-500 leading-none">{dayShort}</span>
+                      <span className="text-base font-bold text-slate-900 leading-tight">{dayNum}</span>
+                      <span className="text-[10px] font-medium text-slate-400 leading-none">{monthShort}</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-slate-900 truncate">{formatSessionTitle(s.title)}</p>
+                      <p className="text-xs text-slate-500 truncate">
+                        {time} · {s.durationMins} min
+                        {s.dogName && <> · {s.dogName}</>}
+                      </p>
+                    </div>
+                    <span className={cn(
+                      'flex-shrink-0 text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full border',
+                      STATUS_PILL[s.status],
+                    )}>
+                      {s.status === 'UPCOMING' ? 'Upcoming' : s.status === 'COMPLETED' ? 'Completed' : s.status === 'COMMENTED' ? 'Commented' : 'Invoiced'}
+                    </span>
+                  </Link>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </CardBody>
+    </Card>
+  )
+}
+
+// ─── Sessions tab panel ─────────────────────────────────────────────────────
+//
+// Splits the client's sessions into Upcoming vs Past sub-tabs, then groups
+// each list by week (Mon–Sun). Each row uses the shared SessionRowCard with
+// `showDate` on so the trainer can scan dates without opening sessions.
+
+function SessionsTabPanel({
+  sessions,
+  onConfirmDelete,
+}: {
+  sessions: TrainingSession[]
+  onConfirmDelete: (id: string) => void
+}) {
+  const [sub, setSub] = useState<'upcoming' | 'past'>('upcoming')
+  const now = Date.now()
+
+  const upcoming = sessions
+    .filter(s => new Date(s.scheduledAt).getTime() >= now)
+    .sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime())
+  const past = sessions
+    .filter(s => new Date(s.scheduledAt).getTime() < now)
+    .sort((a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime())
+
+  if (sessions.length === 0) {
+    return (
+      <div className="text-center py-12 text-slate-400">
+        <p>No sessions scheduled for this client yet.</p>
+      </div>
+    )
+  }
+
+  const list = sub === 'upcoming' ? upcoming : past
+  const weeks = groupByWeek(list)
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Sub-tabs */}
+      <div className="flex gap-1 p-1 bg-slate-100 rounded-2xl">
+        <SubTabButton
+          active={sub === 'upcoming'}
+          onClick={() => setSub('upcoming')}
+          label="Upcoming"
+          count={upcoming.length}
+        />
+        <SubTabButton
+          active={sub === 'past'}
+          onClick={() => setSub('past')}
+          label="Past"
+          count={past.length}
+        />
+      </div>
+
+      {list.length === 0 ? (
+        <div className="text-center py-12 text-slate-400 text-sm">
+          {sub === 'upcoming' ? 'No upcoming sessions.' : 'No past sessions.'}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-5">
+          {weeks.map(({ weekStartMs, items }) => (
+            <div key={weekStartMs} className="flex flex-col gap-2.5">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400 px-1">
+                Week of {new Date(weekStartMs).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}
+              </h3>
+              {items.map(s => (
+                <SessionRowCard
+                  key={s.id}
+                  session={{
+                    id: s.id,
+                    title: s.title,
+                    scheduledAt: s.scheduledAt,
+                    durationMins: s.durationMins,
+                    status: s.status,
+                    invoicedAt: s.invoicedAt,
+                    location: s.location,
+                    client: null,
+                    dog: s.dogName ? { name: s.dogName } : null,
+                  }}
+                  showDate
+                  trailing={
+                    <button
+                      onClick={() => onConfirmDelete(s.id)}
+                      aria-label="Delete session"
+                      className="self-stretch px-2 rounded-2xl text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  }
+                />
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SubTabButton({
+  active,
+  onClick,
+  label,
+  count,
+}: {
+  active: boolean
+  onClick: () => void
+  label: string
+  count: number
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={
+        'flex-1 px-3 py-2 rounded-xl text-sm font-medium transition-colors ' +
+        (active ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700')
+      }
+    >
+      {label} <span className={'ml-1 text-xs ' + (active ? 'text-slate-400' : 'text-slate-400')}>({count})</span>
+    </button>
+  )
+}
+
+// Mon-anchored week start. Returns local-midnight ms for the Monday of the
+// session's week, used as a stable group key.
+function weekStartMs(d: Date): number {
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+  const dayIdx = x.getDay() // 0=Sun..6=Sat
+  const offset = dayIdx === 0 ? -6 : 1 - dayIdx
+  x.setDate(x.getDate() + offset)
+  return x.getTime()
+}
+
+function groupByWeek(list: TrainingSession[]): { weekStartMs: number; items: TrainingSession[] }[] {
+  const map = new Map<number, TrainingSession[]>()
+  for (const s of list) {
+    const key = weekStartMs(new Date(s.scheduledAt))
+    const arr = map.get(key) ?? []
+    arr.push(s)
+    map.set(key, arr)
+  }
+  // Preserve the input order (already sorted asc/desc by caller) when
+  // emitting weeks: walk the original list and emit each week the first
+  // time we encounter it.
+  const seen = new Set<number>()
+  const out: { weekStartMs: number; items: TrainingSession[] }[] = []
+  for (const s of list) {
+    const key = weekStartMs(new Date(s.scheduledAt))
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push({ weekStartMs: key, items: map.get(key)! })
+  }
+  return out
 }

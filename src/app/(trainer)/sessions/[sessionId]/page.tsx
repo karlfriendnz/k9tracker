@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import Link from 'next/link'
 import { ArrowLeft, Calendar, Clock, MapPin, Video, ExternalLink, Eye, ChevronDown, History, Paperclip } from 'lucide-react'
 import { Card, CardBody } from '@/components/ui/card'
+import { formatSessionTitle } from '@/lib/utils'
 import { SessionFormReport } from '@/components/session-form-report'
 import { SessionLibraryTasks } from '@/components/session-library-tasks'
 import { MarkCompleteButton } from '@/components/mark-complete-button'
@@ -124,7 +125,7 @@ export default async function SessionPage({
         <span className={`text-xs font-semibold uppercase tracking-wide ${trainingSession.sessionType === 'VIRTUAL' ? 'text-purple-500' : 'text-blue-500'}`}>
           {trainingSession.sessionType === 'VIRTUAL' ? '💻 Virtual session' : '📍 In-person session'}
         </span>
-        <h1 className="text-2xl font-bold text-slate-900 mt-1">{trainingSession.title}</h1>
+        <h1 className="text-2xl font-bold text-slate-900 mt-1">{formatSessionTitle(trainingSession.title)}</h1>
         {clientName && (
           <p className="text-sm text-slate-500 mt-1">
             {clientName}

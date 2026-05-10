@@ -8,6 +8,7 @@ import {
   reportBackgroundStyle,
   type ReportFormResponse,
   type ReportQuestion,
+  type ReportAttachment,
 } from '@/components/shared/session-report'
 import type { Metadata } from 'next'
 
@@ -36,6 +37,13 @@ export default async function SessionPreviewPage({
         select: {
           id: true, title: true, description: true, repetitions: true,
           videoUrl: true, trainerNote: true, imageUrls: true,
+        },
+      },
+      attachments: {
+        orderBy: { createdAt: 'asc' },
+        select: {
+          id: true, kind: true, url: true, thumbnailUrl: true,
+          caption: true, durationMs: true,
         },
       },
       formResponses: {
@@ -102,8 +110,17 @@ export default async function SessionPreviewPage({
             description: t.description,
             repetitions: t.repetitions,
             videoUrl: t.videoUrl,
+            imageUrls: Array.isArray(t.imageUrls) ? t.imageUrls.filter((s): s is string => typeof s === 'string') : [],
             trainerNote: t.trainerNote,
             // No completion column in trainer preview — keeps it visually clean.
+          }))}
+          attachments={trainingSession.attachments.map((a): ReportAttachment => ({
+            id: a.id,
+            kind: a.kind as 'IMAGE' | 'VIDEO',
+            url: a.url,
+            thumbnailUrl: a.thumbnailUrl,
+            caption: a.caption,
+            durationMs: a.durationMs,
           }))}
           customFieldLabels={customFieldLabels}
         />

@@ -127,7 +127,11 @@ export async function POST(
         clientId,
         dogId,
         clientPackageId: assignment.id,
-        title: pkg.sessionCount > 0
+        // Single-session packages don't need a "1/1" suffix — that's noise.
+        // Multi-session keeps "N/M" so the trainer can see progression.
+        title: pkg.sessionCount === 1
+          ? pkg.name
+          : pkg.sessionCount > 1
           ? `${pkg.name} — session ${i + 1}/${pkg.sessionCount}`
           : `${pkg.name} — session ${i + 1}`,
         scheduledAt: d,

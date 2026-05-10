@@ -1,6 +1,6 @@
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Clock, MapPin, Video } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import { prisma } from '@/lib/prisma'
 import { getActiveClient } from '@/lib/client-context'
 import {
@@ -8,6 +8,7 @@ import {
   reportBackgroundStyle,
   type ReportFormResponse,
   type ReportQuestion,
+  type ReportAttachment,
 } from '@/components/shared/session-report'
 import type { Metadata } from 'next'
 
@@ -41,8 +42,15 @@ export default async function ClientSessionPage({
         orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
         select: {
           id: true, title: true, description: true, repetitions: true,
-          videoUrl: true, trainerNote: true,
+          videoUrl: true, imageUrls: true, trainerNote: true,
           completion: { select: { id: true } },
+        },
+      },
+      attachments: {
+        orderBy: { createdAt: 'asc' },
+        select: {
+          id: true, kind: true, url: true, thumbnailUrl: true,
+          caption: true, durationMs: true,
         },
       },
       formResponses: {
@@ -81,9 +89,6 @@ export default async function ClientSessionPage({
     : []
   const customFieldLabels = new Map(linkedFields.map(f => [f.id, f.label]))
 
-  const start = trainingSession.scheduledAt
-  const isUpcoming = start.getTime() > Date.now()
-
   return (
     <div className="min-h-[100dvh] w-full" style={reportBackgroundStyle(responses)}>
       <div className="px-5 lg:px-8 py-6 max-w-3xl mx-auto">
@@ -94,42 +99,6 @@ export default async function ClientSessionPage({
           <ArrowLeft className="h-4 w-4" />
           Back to home
         </Link>
-
-        {/* When/where strip — visible regardless of whether a report exists.
-            Helps the client orient before scrolling into the report content. */}
-        <div className="mb-6 rounded-2xl bg-white/90 backdrop-blur border border-slate-100 p-4 flex flex-col gap-2">
-          <div className="flex items-center gap-2 text-sm text-slate-700">
-            <Clock className="h-3.5 w-3.5 text-slate-400" />
-            <span>
-              {start.toLocaleString('en-NZ', {
-                weekday: 'long', day: 'numeric', month: 'long',
-                hour: 'numeric', minute: '2-digit',
-              })}
-              {' · '}
-              {trainingSession.durationMins} min
-            </span>
-          </div>
-          {trainingSession.sessionType === 'VIRTUAL' ? (
-            <div className="flex items-center gap-2 text-sm text-slate-700">
-              <Video className="h-3.5 w-3.5 text-slate-400" />
-              {trainingSession.virtualLink && isUpcoming ? (
-                <a href={trainingSession.virtualLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                  Join virtual session
-                </a>
-              ) : (
-                <span>Virtual session</span>
-              )}
-            </div>
-          ) : trainingSession.location && (
-            <div className="flex items-center gap-2 text-sm text-slate-700">
-              <MapPin className="h-3.5 w-3.5 text-slate-400" />
-              <span>{trainingSession.location}</span>
-            </div>
-          )}
-          <p className="text-xs text-slate-400">
-            with {trainingSession.trainer.user.name ?? trainingSession.trainer.businessName}
-          </p>
-        </div>
 
         <SessionReport
           sessionTitle={trainingSession.title}
@@ -142,8 +111,17 @@ export default async function ClientSessionPage({
             description: t.description,
             repetitions: t.repetitions,
             videoUrl: t.videoUrl,
+            imageUrls: Array.isArray(t.imageUrls) ? t.imageUrls.filter((s): s is string => typeof s === 'string') : [],
             trainerNote: t.trainerNote,
             completed: t.completion !== null,
+          }))}
+          attachments={trainingSession.attachments.map((a): ReportAttachment => ({
+            id: a.id,
+            kind: a.kind as 'IMAGE' | 'VIDEO',
+            url: a.url,
+            thumbnailUrl: a.thumbnailUrl,
+            caption: a.caption,
+            durationMs: a.durationMs,
           }))}
           customFieldLabels={customFieldLabels}
         />

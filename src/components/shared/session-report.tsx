@@ -1,5 +1,9 @@
 import { Star, Check } from 'lucide-react'
 import { Card, CardBody } from '@/components/ui/card'
+import { formatSessionTitle } from '@/lib/utils'
+import { ReportAttachmentsGallery, type ReportAttachment } from './report-attachments'
+
+export type { ReportAttachment }
 
 // Question shapes (mirrors SessionForm.questions JSON)
 
@@ -42,6 +46,7 @@ export interface ReportTask {
   description: string | null
   repetitions: number | null
   videoUrl: string | null
+  imageUrls?: string[]
   trainerNote: string | null
   completed?: boolean // optional — surfaced in the client view to show progress
 }
@@ -53,6 +58,8 @@ export interface SessionReportProps {
   dogName?: string | null
   formResponses: ReportFormResponse[]
   tasks: ReportTask[]
+  // Photos and videos the trainer attached to this session.
+  attachments?: ReportAttachment[]
   // Map of customFieldId → label, resolved by the caller (only the caller has
   // access to the trainer's CustomField records).
   customFieldLabels?: Map<string, string>
@@ -68,6 +75,7 @@ export function SessionReport({
   dogName,
   formResponses,
   tasks,
+  attachments = [],
   customFieldLabels = new Map(),
   audience = 'client',
 }: SessionReportProps) {
@@ -76,7 +84,7 @@ export function SessionReport({
   return (
     <>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-900">{sessionTitle}</h1>
+        <h1 className="text-2xl font-bold text-slate-900">{formatSessionTitle(sessionTitle)}</h1>
         <p className="text-sm text-slate-500 mt-1">
           {clientName && `${clientName} · `}
           {dogName && `🐕 ${dogName} · `}
@@ -84,11 +92,21 @@ export function SessionReport({
         </p>
       </div>
 
-      {formResponses.length === 0 && tasks.length === 0 && (
+      {formResponses.length === 0 && tasks.length === 0 && attachments.length === 0 && (
         <Card>
           <CardBody className="py-8 text-center text-slate-400 text-sm">
             Your trainer hasn&apos;t added a report for this session yet.
           </CardBody>
+        </Card>
+      )}
+
+      {/* Photos & videos from this session — placed near the top so they
+          set the scene before the trainer's narrative + tasks. */}
+      {attachments.length > 0 && (
+        <Card className="mb-6 rounded-none">
+          <div className="px-6 py-5">
+            <ReportAttachmentsGallery attachments={attachments} />
+          </div>
         </Card>
       )}
 
@@ -197,6 +215,22 @@ export function SessionReport({
                       >
                         Watch demo →
                       </a>
+                    )}
+                    {t.imageUrls && t.imageUrls.length > 0 && (
+                      <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {t.imageUrls.map((src, i) => (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <a
+                            key={i}
+                            href={src}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block aspect-square rounded-lg overflow-hidden bg-slate-100"
+                          >
+                            <img src={src} alt={`${t.title} reference ${i + 1}`} className="h-full w-full object-cover" />
+                          </a>
+                        ))}
+                      </div>
                     )}
                   </div>
                 </div>

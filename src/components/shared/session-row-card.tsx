@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { Dog, ShoppingBag, ArrowRight, DollarSign } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, formatSessionTitle } from '@/lib/utils'
 
 export type SessionRowStatus = 'UPCOMING' | 'COMPLETED' | 'COMMENTED' | 'INVOICED'
 
@@ -37,6 +37,10 @@ export interface SessionRowCardProps {
   dimmed?: boolean
   /** Sibling rendered after the Link card — typically a delete button. */
   trailing?: React.ReactNode
+  /** Surface the date in the time-rail. Off by default — the dashboard
+   *  and schedule are day-scoped so the date would just add noise.
+   *  On for mixed-date lists like a client's Sessions tab. */
+  showDate?: boolean
 }
 
 const STATUS_META: Record<SessionRowStatus, { label: string; colour: string }> = {
@@ -60,6 +64,7 @@ export function SessionRowCard({
   toBringCount,
   dimmed,
   trailing,
+  showDate,
 }: SessionRowCardProps) {
   const start = new Date(s.scheduledAt)
   const isPast = start.getTime() + s.durationMins * 60_000 < Date.now()
@@ -72,14 +77,18 @@ export function SessionRowCard({
   const startTime = start.toLocaleTimeString('en-NZ', {
     hour: 'numeric', minute: '2-digit', hour12: true, timeZone: tz,
   })
+  const startDateShort = showDate
+    ? start.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', timeZone: tz })
+    : null
 
   const clientUser = s.client?.user ?? s.dog?.primaryFor?.[0]?.user
   const clientName = clientUser ? (clientUser.name ?? clientUser.email) : null
+  const displayTitle = formatSessionTitle(s.title)
 
   const card = (
     <Link
       href={href ?? `/sessions/${s.id}`}
-      aria-label={`Open session: ${s.title}`}
+      aria-label={`Open session: ${displayTitle}`}
       className={cn(
         'block rounded-2xl border border-slate-100 bg-white shadow-sm overflow-hidden transition-all hover:shadow-md hover:-translate-y-px hover:border-blue-200 flex-1 min-w-0',
         isPast && 'opacity-60',
@@ -93,6 +102,9 @@ export function SessionRowCard({
             ? 'bg-slate-50 border-slate-100 text-slate-500'
             : 'bg-blue-50/60 border-blue-100 text-blue-700',
         )}>
+          {startDateShort && (
+            <p className="text-[10px] sm:text-[11px] font-semibold leading-none opacity-80 mb-0.5 sm:mb-0">{startDateShort}</p>
+          )}
           <p className="text-base sm:text-sm font-bold leading-none tabular-nums">{startTime}</p>
           <p className="text-[10px] sm:text-[11px] font-medium opacity-70 mt-0.5 sm:mt-0">{s.durationMins} min</p>
         </div>
@@ -106,7 +118,7 @@ export function SessionRowCard({
                 <p className="text-sm font-semibold text-slate-900 truncate">{s.dog.name}</p>
               </>
             ) : (
-              <p className="text-sm font-semibold text-slate-900 truncate">{s.title}</p>
+              <p className="text-sm font-semibold text-slate-900 truncate">{displayTitle}</p>
             )}
           </div>
 
@@ -120,7 +132,7 @@ export function SessionRowCard({
           {s.dog && (
             <>
               <span className="hidden sm:inline text-slate-300" aria-hidden>·</span>
-              <p className="text-xs text-slate-500 truncate sm:max-w-[26ch]">{s.title}</p>
+              <p className="text-xs text-slate-500 truncate sm:max-w-[26ch]">{displayTitle}</p>
             </>
           )}
 
