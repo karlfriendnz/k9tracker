@@ -42,7 +42,7 @@ export async function POST(
     const jsonResponse = await handleUpload({
       body,
       request: req,
-      onBeforeGenerateToken: async (pathname, clientPayloadStr) => {
+      onBeforeGenerateToken: async (_pathname, clientPayloadStr) => {
         // The client tells us {kind, sizeBytes, durationMs?, caption?}
         // through clientPayload. We re-validate the size against the
         // type-specific cap so a hostile client can't bypass it.
@@ -54,10 +54,14 @@ export async function POST(
         if (payload.sizeBytes && payload.sizeBytes > max) {
           throw new Error(isVideo ? 'Video exceeds 100 MB' : 'Image exceeds 10 MB')
         }
+        // We deliberately don't restrict by allowedContentTypes here —
+        // iOS sometimes sends `video/quicktime` for an .mp4 picked from
+        // the camera roll, or `application/octet-stream` when the
+        // extension is unfamiliar, and Vercel Blob 400s the upload if
+        // the file's reported MIME isn't in the allow-list. Trust the
+        // `kind` from clientPayload (already validated above) and
+        // enforce size + auth at the route level.
         return {
-          allowedContentTypes: isVideo
-            ? ['video/mp4', 'video/quicktime', 'video/webm']
-            : ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif', 'image/gif'],
           maximumSizeInBytes: max,
           // The pathname itself stays untouched — Blob inserts a random
           // suffix when we set addRandomSuffix:true (default), giving
@@ -74,6 +78,13 @@ export async function POST(
       },
 
       onUploadCompleted: async ({ blob, tokenPayload }) => {
+        // Prod-only safety net. The browser also POSTs back to
+        // /api/sessions/[id]/attachments with the same URL after
+        // upload() resolves — that route is idempotent on URL, so
+        // whichever path fires first wins and the other is a no-op.
+        // (In local dev this webhook never fires because Vercel
+        // can't reach localhost; the client-side POST is the only
+        // mechanism that actually persists rows there.)
         if (!tokenPayload) return
         const meta = JSON.parse(tokenPayload) as {
           trainerId: string
@@ -83,6 +94,10 @@ export async function POST(
           durationMs: number | null
           caption: string | null
         }
+        const existing = await prisma.sessionAttachment.findFirst({
+          where: { sessionId: meta.sessionId, url: blob.url },
+        })
+        if (existing) return
         await prisma.sessionAttachment.create({
           data: {
             sessionId: meta.sessionId,

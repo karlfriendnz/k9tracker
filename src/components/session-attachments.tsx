@@ -109,25 +109,16 @@ export function SessionAttachments({ sessionId, initialAttachments }: Props) {
         }),
         onUploadProgress: (p) => setUploading({ kind: 'IMAGE', progress: p.percentage }),
       })
-      // The server has already inserted the row inside onUploadCompleted.
-      // Re-fetch the trainer's attachment list to pick up the new id +
-      // generated metadata. Avoids a second round-trip we'd need if we
-      // tried to reconstruct the row from the upload response.
-      await refetch()
-      // Cosmetic — also append optimistically so the UI doesn't blink.
-      setAttachments(prev => prev.find(a => a.url === blob.url) ? prev : [
-        {
-          id: `tmp-${blob.url}`,
-          kind: 'IMAGE',
-          url: blob.url,
-          thumbnailUrl: null,
-          caption: null,
-          sizeBytes: compressed.size,
-          durationMs: null,
-          createdAt: new Date().toISOString(),
-        },
-        ...prev,
-      ])
+      // Vercel's onUploadCompleted webhook only fires in production
+      // (it can't reach localhost). Always POST the metadata back so
+      // the row gets created in dev too — the endpoint is idempotent
+      // on URL so it doesn't double-insert in prod.
+      const created = await confirmAttachment(sessionId, {
+        kind: 'IMAGE',
+        url: blob.url,
+        sizeBytes: compressed.size,
+      })
+      setAttachments(prev => upsert(prev, created))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Image upload failed')
     } finally {
@@ -160,20 +151,13 @@ export function SessionAttachments({ sessionId, initialAttachments }: Props) {
         }),
         onUploadProgress: (p) => setUploading({ kind: 'VIDEO', progress: p.percentage }),
       })
-      await refetch()
-      setAttachments(prev => prev.find(a => a.url === blob.url) ? prev : [
-        {
-          id: `tmp-${blob.url}`,
-          kind: 'VIDEO',
-          url: blob.url,
-          thumbnailUrl: null,
-          caption: null,
-          sizeBytes: file.size,
-          durationMs,
-          createdAt: new Date().toISOString(),
-        },
-        ...prev,
-      ])
+      const created = await confirmAttachment(sessionId, {
+        kind: 'VIDEO',
+        url: blob.url,
+        sizeBytes: file.size,
+        durationMs,
+      })
+      setAttachments(prev => upsert(prev, created))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Video upload failed')
     } finally {
@@ -190,6 +174,7 @@ export function SessionAttachments({ sessionId, initialAttachments }: Props) {
       setAttachments(data.attachments)
     } catch { /* keep optimistic state */ }
   }
+  void refetch // referenced; kept for potential manual reload
 
   async function deleteAttachment(id: string) {
     setPendingDelete(id)
@@ -394,4 +379,26 @@ function safeName(original: string, fallbackExt: string): string {
   const cleaned = original.replace(/[^a-zA-Z0-9._-]/g, '_')
   if (cleaned.includes('.')) return cleaned
   return `${cleaned || 'file'}.${fallbackExt}`
+}
+
+async function confirmAttachment(
+  sessionId: string,
+  body: { kind: 'IMAGE' | 'VIDEO'; url: string; sizeBytes: number; durationMs?: number; thumbnailUrl?: string },
+): Promise<SessionAttachmentItem> {
+  const res = await fetch(`/api/sessions/${sessionId}/attachments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error(data.error ?? `Could not save attachment (${res.status})`)
+  }
+  const data = await res.json() as { attachment: SessionAttachmentItem }
+  return data.attachment
+}
+
+function upsert(list: SessionAttachmentItem[], next: SessionAttachmentItem): SessionAttachmentItem[] {
+  const filtered = list.filter(a => a.id !== next.id && a.url !== next.url)
+  return [next, ...filtered]
 }
