@@ -268,9 +268,6 @@ export function IntakeGate({ businessName, trainerLogoUrl, customFields, section
           )}
           <p className="text-sm font-medium text-blue-600 mb-2">{businessName}</p>
           <h1 className="text-2xl font-bold text-slate-900">Before you get started</h1>
-          <p className="text-slate-500 mt-2 text-sm">
-            Your trainer has a few questions to help them support you and your dog better.
-          </p>
         </div>
 
         {/* Progress: dots + label. Hidden when there's only one
