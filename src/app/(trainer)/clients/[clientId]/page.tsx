@@ -136,6 +136,11 @@ export default async function ClientDetailPage({
             )}
           </div>
           <p className="text-slate-500 text-sm">{client.user.email}</p>
+          {client.phone && (
+            <p className="text-slate-500 text-sm">
+              <a href={`tel:${client.phone}`} className="hover:text-slate-700">{client.phone}</a>
+            </p>
+          )}
           <p className="text-slate-400 text-xs mt-1">
             Client since {formatDate(client.user.createdAt)}
           </p>

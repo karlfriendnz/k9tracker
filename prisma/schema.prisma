@@ -329,6 +329,11 @@ model ClientProfile {
   trainerId String // primary trainer
   dogId     String? // set after onboarding
   status    String  @default("ACTIVE") // "ACTIVE" | "INACTIVE"
+  // Contact phone for the client (collected on intake). Lives on the
+  // profile, not on User, mirroring TrainerProfile.phone — phone is a
+  // per-trainer-relationship attribute (a client may share a phone
+  // with another household member who has their own User row).
+  phone     String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

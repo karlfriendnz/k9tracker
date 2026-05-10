@@ -27,6 +27,7 @@ export default async function EditClientPage({
     where: { id: clientId },
     select: {
       id: true,
+      phone: true,
       user: { select: { name: true, email: true } },
       dog: { select: { id: true, name: true, breed: true, weight: true, dob: true, notes: true, photoUrl: true } },
       dogs: { select: { id: true, name: true, breed: true, weight: true, dob: true, notes: true, photoUrl: true } },
@@ -79,6 +80,7 @@ export default async function EditClientPage({
         clientId={clientId}
         initialName={client.user.name ?? ''}
         initialEmail={client.user.email ?? ''}
+        initialPhone={client.phone ?? ''}
         // Email is the client's login credential — only the primary
         // trainer can change it (co-managers see the field disabled).
         canEditEmail={access.client.trainerId === access.trainerId}

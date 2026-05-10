@@ -25,6 +25,12 @@ interface SectionMeta {
   description: string | null
 }
 
+interface CoreContact {
+  name: string
+  email: string
+  phone: string
+}
+
 interface Props {
   businessName: string
   /** The trainer's logo URL — displayed prominently above the form
@@ -34,6 +40,12 @@ interface Props {
   sectionMeta: SectionMeta[]
   dogs: Dog[]
   existingValues: Record<string, string>
+  /** Current values for the client's core contact details (User.name,
+   *  User.email, ClientProfile.phone). Rendered as the first three
+   *  required fields of step 1 so the trainer always gets a
+   *  reachable client at the end of intake. Email is shown
+   *  read-only — the client signed in with it. */
+  coreContact: CoreContact
   // When true: don't POST to /api/my/field-values on submit, just show a
   // confirmation. Used by the trainer's preview page so they can walk through
   // the form without saving anything.
@@ -138,19 +150,32 @@ function buildSteps(customFields: CustomField[], dogs: Dog[], sectionMeta: Secti
   return steps
 }
 
-export function IntakeGate({ businessName, trainerLogoUrl, customFields, sectionMeta, dogs, existingValues, preview = false, onPreviewExit }: Props) {
+export function IntakeGate({ businessName, trainerLogoUrl, customFields, sectionMeta, dogs, existingValues, coreContact, preview = false, onPreviewExit }: Props) {
   const router = useRouter()
   const [values, setValues] = useState<Record<string, string>>(existingValues)
+  const [contact, setContact] = useState<CoreContact>(coreContact)
   const [stepIndex, setStepIndex] = useState(0)
   const [saving, setSaving] = useState(false)
   const [previewDone, setPreviewDone] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const steps = useMemo(() => buildSteps(customFields, dogs, sectionMeta), [customFields, dogs, sectionMeta])
-  const totalSteps = steps.length
-  const currentStep = steps[stepIndex]
+  // Core contact (name/email/phone) is always rendered above the
+  // first step's custom fields. If the trainer has no custom fields
+  // at all, we still need a one-step experience so the client can
+  // submit their contact details.
+  const effectiveSteps: Step[] = steps.length > 0 ? steps : [{
+    id: 'contact-only',
+    title: null,
+    subtitle: null,
+    description: null,
+    fields: [],
+  }]
+  const totalSteps = effectiveSteps.length
+  const currentStep = effectiveSteps[stepIndex]
   const isLast = stepIndex === totalSteps - 1
   const isFirst = stepIndex === 0
+  const showContactOnThisStep = isFirst
 
   function setValue(key: string, val: string) {
     setValues(prev => ({ ...prev, [key]: val }))
@@ -162,10 +187,15 @@ export function IntakeGate({ businessName, trainerLogoUrl, customFields, section
   // before they can advance is friction with no payoff.
   function validateCurrentStep(): string | null {
     if (preview) return null
-    if (!currentStep) return null
     const missing: string[] = []
-    for (const { field, valueKey } of currentStep.fields) {
-      if (field.required && !values[valueKey]?.trim()) missing.push(field.label)
+    if (showContactOnThisStep) {
+      if (!contact.name.trim()) missing.push('Name')
+      if (!contact.phone.trim()) missing.push('Phone')
+    }
+    if (currentStep) {
+      for (const { field, valueKey } of currentStep.fields) {
+        if (field.required && !values[valueKey]?.trim()) missing.push(field.label)
+      }
     }
     return missing.length > 0 ? `Please fill in: ${missing.join(', ')}` : null
   }
@@ -192,6 +222,20 @@ export function IntakeGate({ businessName, trainerLogoUrl, customFields, section
     setSaving(true)
     setError(null)
 
+    // Save core contact (User.name + ClientProfile.phone) first so a
+    // partial failure leaves the trainer with at least a reachable
+    // client. Email is read-only here — the client signed in with it.
+    const contactRes = await fetch('/api/my/profile', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: contact.name.trim(), phone: contact.phone.trim() || null }),
+    })
+    if (!contactRes.ok) {
+      setError('Something went wrong saving your details. Please try again.')
+      setSaving(false)
+      return
+    }
+
     const payload = Object.entries(values)
       .filter(([, v]) => v.trim())
       .map(([key, value]) => {
@@ -199,21 +243,21 @@ export function IntakeGate({ businessName, trainerLogoUrl, customFields, section
         return { fieldId, value, dogId: dogId ?? null }
       })
 
-    const res = await fetch('/api/my/field-values', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ values: payload }),
-    })
+    if (payload.length > 0) {
+      const res = await fetch('/api/my/field-values', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ values: payload }),
+      })
 
-    if (!res.ok) {
-      setError('Something went wrong. Please try again.')
-      setSaving(false)
-      return
+      if (!res.ok) {
+        setError('Something went wrong. Please try again.')
+        setSaving(false)
+        return
+      }
     }
     router.refresh()
   }
-
-  if (totalSteps === 0) return null
 
   if (preview && previewDone) {
     return (
@@ -316,6 +360,38 @@ export function IntakeGate({ businessName, trainerLogoUrl, customFields, section
             {currentStep.description && (
               <p className="text-sm text-slate-500 -mt-1 leading-relaxed">{currentStep.description}</p>
             )}
+            {/* Core contact (name/email/phone) anchors the first step.
+                Email is read-only — the client signed in with it, and
+                changing it here would orphan their session. Name and
+                phone write back to User.name + ClientProfile.phone via
+                /api/my/profile on submit. */}
+            {showContactOnThisStep && (
+              <>
+                <ContactField
+                  label="Name"
+                  required
+                  value={contact.name}
+                  onChange={v => setContact(c => ({ ...c, name: v }))}
+                  placeholder="Your full name"
+                />
+                <ContactField
+                  label="Email"
+                  required
+                  readOnly
+                  value={contact.email}
+                  onChange={() => {}}
+                  type="email"
+                />
+                <ContactField
+                  label="Phone"
+                  required
+                  value={contact.phone}
+                  onChange={v => setContact(c => ({ ...c, phone: v }))}
+                  type="tel"
+                  placeholder="So your trainer can reach you"
+                />
+              </>
+            )}
             {currentStep.fields.map(({ field, valueKey }) => (
               <FieldInput
                 key={valueKey}
@@ -354,6 +430,45 @@ export function IntakeGate({ businessName, trainerLogoUrl, customFields, section
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+function ContactField({
+  label,
+  value,
+  onChange,
+  required = false,
+  readOnly = false,
+  type = 'text',
+  placeholder,
+}: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  required?: boolean
+  readOnly?: boolean
+  type?: 'text' | 'email' | 'tel'
+  placeholder?: string
+}) {
+  return (
+    <div>
+      <label className="text-sm font-medium text-slate-700 block mb-1.5">
+        {label}
+        {required && <span className="text-red-500 ml-1">*</span>}
+      </label>
+      <input
+        type={type}
+        value={value}
+        readOnly={readOnly}
+        onChange={e => onChange(e.target.value)}
+        className={
+          readOnly
+            ? 'h-12 w-full rounded-xl border border-slate-200 bg-slate-50 text-slate-500 px-3 text-sm'
+            : 'h-12 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
+        }
+        placeholder={placeholder}
+      />
     </div>
   )
 }

@@ -37,6 +37,7 @@ export function IntakeGatePreview({
       sectionMeta={sectionMeta}
       dogs={SAMPLE_DOGS}
       existingValues={{}}
+      coreContact={{ name: '', email: 'sample@client.com', phone: '' }}
       preview
       onPreviewExit={() => router.push('/forms/intake')}
     />

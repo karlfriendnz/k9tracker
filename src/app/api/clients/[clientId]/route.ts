@@ -10,6 +10,8 @@ const schema = z.object({
   // check so we can't end up with `Foo@bar.com` and `foo@bar.com`
   // colliding case-insensitively at the auth layer.
   email: z.string().email().transform(s => s.trim().toLowerCase()).optional(),
+  // Contact phone, stored on ClientProfile.phone. Empty string clears.
+  phone: z.string().trim().max(40).nullable().optional(),
   status: z.enum(['ACTIVE', 'INACTIVE']).optional(),
   dog: z.object({
     name: z.string().min(1),
@@ -46,11 +48,18 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ client
   const parsed = schema.safeParse(body)
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 })
 
-  const { name, email, status, dog } = parsed.data
+  const { name, email, phone, status, dog } = parsed.data
   const { client } = access
 
   if (name !== undefined) {
     await prisma.user.update({ where: { id: client.userId }, data: { name } })
+  }
+
+  if (phone !== undefined) {
+    await prisma.clientProfile.update({
+      where: { id: client.id },
+      data: { phone: phone?.trim() || null },
+    })
   }
 
   if (email !== undefined) {

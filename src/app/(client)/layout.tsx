@@ -58,12 +58,27 @@ export default async function ClientLayout({ children }: { children: React.React
     }
   }
 
+  // Core contact details are also required on intake. Email is always
+  // present (the client signed in with it), but name + phone may be
+  // empty for clients who joined via magic link. Trip the gate when
+  // either is missing, even if the trainer hasn't defined any custom
+  // fields — we still need name + phone before the trainer can do
+  // their job.
+  const coreContact = {
+    name: clientProfile.user.name ?? '',
+    email: clientProfile.user.email ?? '',
+    phone: clientProfile.phone ?? '',
+  }
+  const missingCoreContact = !coreContact.name.trim() || !coreContact.phone.trim()
+
   const clientDisplayName = clientProfile.user.name ?? clientProfile.user.email ?? 'Client'
 
   // Trainer in preview should see the actual app, not the intake gate — the
   // gate would force them through the client's data-entry flow which would
   // write as the client. The banner already telegraphs that this is a view.
-  const showIntakeGate = !active.isPreview && hasMissingRequired && customFields.length > 0
+  const showIntakeGate = !active.isPreview && (
+    missingCoreContact || (hasMissingRequired && customFields.length > 0)
+  )
 
   // Trainer-in-preview gets the onboarding guide + indigo nav-dot
   // highlighting only while their wizard is incomplete. Real clients (no
@@ -120,6 +135,7 @@ export default async function ClientLayout({ children }: { children: React.React
           )}
           dogs={allDogs}
           existingValues={existingValues}
+          coreContact={coreContact}
         />
       </>
     )

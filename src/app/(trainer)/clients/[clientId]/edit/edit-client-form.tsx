@@ -36,6 +36,7 @@ type Props = {
   clientId: string
   initialName: string
   initialEmail: string
+  initialPhone: string
   /** False for co-managers — field renders read-only with a hint. */
   canEditEmail: boolean
   initialDogs: Dog[]
@@ -91,7 +92,7 @@ function FieldInput({
   )
 }
 
-export function EditClientForm({ clientId, initialName, initialEmail, canEditEmail, initialDogs, customFields, initialFieldValues }: Props) {
+export function EditClientForm({ clientId, initialName, initialEmail, initialPhone, canEditEmail, initialDogs, customFields, initialFieldValues }: Props) {
   const router = useRouter()
   const [tab, setTab] = useState<Tab>('dogs')
   const [saving, setSaving] = useState(false)
@@ -99,6 +100,7 @@ export function EditClientForm({ clientId, initialName, initialEmail, canEditEma
 
   const [name, setName] = useState(initialName)
   const [email, setEmail] = useState(initialEmail)
+  const [phone, setPhone] = useState(initialPhone)
   const [dogs, setDogs] = useState<Dog[]>(initialDogs)
   const [expandedDog, setExpandedDog] = useState<number>(0)
   const [fieldValues, setFieldValues] = useState<Record<string, string>>(initialFieldValues)
@@ -152,6 +154,7 @@ export function EditClientForm({ clientId, initialName, initialEmail, canEditEma
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name,
+        phone: phone.trim() || null,
         ...(emailChanged ? { email: trimmedEmail } : {}),
         dog: primaryDog ? {
           name: primaryDog.name,
@@ -389,6 +392,17 @@ export function EditClientForm({ clientId, initialName, initialEmail, canEditEma
                     Only the primary trainer can change a client&apos;s login email.
                   </p>
                 )}
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-slate-700">Phone</label>
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={e => setPhone(e.target.value)}
+                  autoComplete="tel"
+                  placeholder="+64 21 555 0100"
+                  className="h-12 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
               </div>
             </CardBody>
           </Card>
