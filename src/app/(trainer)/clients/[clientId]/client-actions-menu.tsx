@@ -31,6 +31,10 @@ interface AvailabilityRow {
 interface Props {
   clientId: string
   clientName: string
+  /** Email the re-invite will be sent to — surfaced inside the
+   *  confirm dialog so the trainer can sanity-check before
+   *  triggering an outbound send. */
+  clientEmail: string
   /** True only when the client hasn't activated their account yet —
    *  hides the Re-invite item once they're verified. */
   needsInvite: boolean
@@ -62,7 +66,7 @@ interface Props {
 // ShareClientModal / AssignPackageButton render based on that value.
 // Re-invite has its own inline status (sending → sent → idle) so it
 // never blocks the menu.
-type ModalKind = null | 'assign' | 'share' | 'delete'
+type ModalKind = null | 'assign' | 'share' | 'delete' | 'reinvite'
 type ReinviteState =
   | { kind: 'idle' }
   | { kind: 'sending' }
@@ -70,7 +74,7 @@ type ReinviteState =
   | { kind: 'error'; message: string }
 
 export function ClientActionsMenu({
-  clientId, clientName, needsInvite, packages, availability, dogs,
+  clientId, clientName, clientEmail, needsInvite, packages, availability, dogs,
   canEdit, isPrimaryTrainer,
 }: Props) {
   const router = useRouter()
@@ -119,12 +123,12 @@ export function ClientActionsMenu({
   }
 
   async function handleReinvite() {
-    setMenuOpen(false)
     setReinvite({ kind: 'sending' })
     try {
       const res = await fetch(`/api/clients/${clientId}/reinvite`, { method: 'POST' })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error ?? 'Could not send invite')
+      setActiveModal(null)
       setReinvite({ kind: 'sent' })
       setTimeout(() => setReinvite({ kind: 'idle' }), 6000)
     } catch (err) {
@@ -182,7 +186,14 @@ export function ClientActionsMenu({
             <MenuButton
               icon={<Send className="h-4 w-4 text-slate-400" />}
               label="Re-invite client"
-              onClick={handleReinvite}
+              onClick={() => {
+                setMenuOpen(false)
+                // Reset any previous error so the confirm dialog
+                // opens clean — error from a prior attempt would
+                // otherwise sit at the bottom of the menu trigger.
+                setReinvite({ kind: 'idle' })
+                setActiveModal('reinvite')
+              }}
             />
           )}
           <MenuButton
@@ -243,6 +254,65 @@ export function ClientActionsMenu({
         open={activeModal === 'share'}
         onOpenChange={v => setActiveModal(v ? 'share' : null)}
       />
+
+      {/* Re-invite confirm — surfaces the recipient email so the
+          trainer can spot a typo before triggering an outbound send.
+          Dialog shape mirrors Delete (small, focused, single decision)
+          for a consistent feel across the menu's destructive-ish
+          actions. */}
+      {activeModal === 'reinvite' && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
+          onClick={() => reinvite.kind !== 'sending' && setActiveModal(null)}
+        >
+          <div
+            className="w-full max-w-sm bg-white rounded-2xl shadow-xl p-5"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3 mb-2">
+              <h2 className="text-base font-semibold text-slate-900">Re-send invite to {clientName}?</h2>
+              <button
+                type="button"
+                onClick={() => reinvite.kind !== 'sending' && setActiveModal(null)}
+                aria-label="Close"
+                className="text-slate-400 hover:text-slate-600 -mr-1 -mt-1 p-1"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <p className="text-sm text-slate-600 leading-snug">
+              We&apos;ll email a fresh sign-up link to{' '}
+              <span className="font-medium text-slate-900">{clientEmail}</span>. Any
+              previous invite link they had will stop working.
+            </p>
+            {reinvite.kind === 'error' && (
+              <p className="mt-3 text-xs text-red-600 inline-flex items-center gap-1">
+                <AlertCircle className="h-3 w-3" /> {reinvite.message}
+              </p>
+            )}
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setActiveModal(null)}
+                disabled={reinvite.kind === 'sending'}
+                className="text-sm font-medium px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleReinvite}
+                disabled={reinvite.kind === 'sending'}
+                className="inline-flex items-center gap-1.5 text-sm font-semibold px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
+              >
+                {reinvite.kind === 'sending'
+                  ? <><Loader2 className="h-4 w-4 animate-spin" /> Sending…</>
+                  : <><Send className="h-4 w-4" /> Yes, re-send</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Delete confirm — stays in the menu's own component because
           it's small, destructive, and should look in-place rather

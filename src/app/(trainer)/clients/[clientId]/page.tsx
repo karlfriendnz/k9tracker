@@ -146,6 +146,7 @@ export default async function ClientDetailPage({
         <ClientActionsMenu
           clientId={client.id}
           clientName={client.user.name ?? client.user.email}
+          clientEmail={client.user.email ?? ''}
           canEdit={canEdit}
           isPrimaryTrainer={isPrimaryTrainer}
           needsInvite={!client.user.emailVerified}
