@@ -164,16 +164,21 @@ export const NOTIFICATION_TYPES: Record<NotificationType, NotificationTypeMeta> 
   NEW_MESSAGE: {
     type: 'NEW_MESSAGE',
     label: 'New message',
-    description: 'A client sent you a message.',
+    description: 'Someone sent you a message in the app.',
     trigger: 'event',
     channels: ['PUSH'],
     defaults: {
       enabled: true,
-      title: 'Message from {{clientName}}',
+      title: 'Message from {{senderName}}',
       body: '{{preview}}',
     },
-    placeholders: ['clientName', 'preview'],
+    // `clientName` kept as a placeholder for backward compatibility with
+    // trainers who already customised "Message from {{clientName}}" in
+    // their settings — the sender helper passes both senderName and
+    // clientName so existing templates keep rendering.
+    placeholders: ['senderName', 'clientName', 'preview'],
     sampleValues: {
+      senderName: 'Grace Wilshaw',
       clientName: 'Grace Wilshaw',
       preview: 'Hi! Just wondering about Tilly\'s next session…',
     },

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { safeEvaluate } from '@/lib/achievements'
+import { notifyMessageRecipient } from '@/lib/notify-message-recipient'
 import { z } from 'zod'
 
 const schema = z.object({
@@ -100,6 +101,21 @@ export async function POST(req: Request) {
   // MESSAGES_SENT trigger only counts client-authored messages.
   if (channel === 'TRAINER_CLIENT' && !trainerProfile) {
     await safeEvaluate(clientId)
+  }
+
+  // Fire-and-forget push to the recipient (the other party in the
+  // thread). Only TRAINER_CLIENT messages — internal trainer notes or
+  // other channels don't need to push the other side. We `await` here
+  // rather than dropping the promise so the run keeps the function
+  // warm under Fluid Compute, but errors are caught internally so a
+  // flaky APNs response can't fail the message-create itself.
+  if (channel === 'TRAINER_CLIENT') {
+    await notifyMessageRecipient({
+      messageId: message.id,
+      clientId,
+      senderId: session.user.id,
+      body: msgBody,
+    })
   }
 
   return NextResponse.json(message, { status: 201 })
