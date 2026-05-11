@@ -537,6 +537,13 @@ function WeekGrid({
   // pxPerHour up and the calendar grows forever.
   const [pxPerHour, setPxPerHour] = useState(PX_PER_HOUR)
   const totalHours = Math.max(1, endHour - startHour)
+  // Mobile 3-day window state. `mobileDayStart` is the index in weekDays
+  // of the leftmost visible day; valid range is 0..(weekDays.length - 3).
+  // `isMobile` toggles between the 3-day phone layout and the full
+  // 7-day desktop layout. We keep the state at the WeekGrid level so
+  // sessions outside the window simply don't render.
+  const [mobileDayStart, setMobileDayStart] = useState(0)
+  const [isMobile, setIsMobile] = useState(false)
   useLayoutEffect(() => {
     if (typeof window === 'undefined') return
     // Approximate chrome height above the schedule grid (page header, FAB,
@@ -547,11 +554,29 @@ function WeekGrid({
       const available = Math.max(window.innerHeight - CHROME_PX, totalHours * 48)
       const fitted = Math.max(48, Math.floor(available / totalHours))
       setPxPerHour(fitted)
+      setIsMobile(window.innerWidth < 640)
     }
     update()
     window.addEventListener('resize', update)
     return () => window.removeEventListener('resize', update)
   }, [totalHours])
+
+  // When the parent jumps to a new week, default the mobile window to
+  // include `selectedDate` if it falls inside the new week. Keeps the
+  // user oriented after a week-level navigation.
+  useEffect(() => {
+    if (!isMobile) return
+    const idx = weekDays.findIndex(d => toDateStr(d) === selectedDate)
+    if (idx < 0) return
+    const start = Math.min(Math.max(0, idx - 1), Math.max(0, weekDays.length - 3))
+    setMobileDayStart(start)
+  }, [isMobile, weekDays, selectedDate])
+
+  const visibleDays = isMobile
+    ? weekDays.slice(mobileDayStart, mobileDayStart + 3)
+    : weekDays
+  const canMobilePrev = isMobile && mobileDayStart > 0
+  const canMobileNext = isMobile && mobileDayStart + 3 < weekDays.length
 
   // ── Drag state ──────────────────────────────────────────────────────────────
   const [dragging, setDragging] = useState<{
@@ -654,10 +679,41 @@ function WeekGrid({
 
   return (
     <div className="h-full flex flex-col bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+      {/* Mobile 3-day window navigator — sits above the day headers so the
+          trainer can step through the week in 3-day chunks. The week-level
+          date nav (in the page header) still moves between weeks. */}
+      {isMobile && weekDays.length > 3 && (
+        <div className="flex items-center justify-between px-3 py-1.5 border-b border-slate-100 bg-slate-50">
+          <button
+            onClick={() => setMobileDayStart(s => Math.max(0, s - 3))}
+            disabled={!canMobilePrev}
+            className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 disabled:text-slate-300 px-2 py-1 rounded-md hover:bg-white"
+            aria-label="Previous 3 days"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            <span>Prev</span>
+          </button>
+          <p className="text-[11px] text-slate-500 tabular-nums">
+            {visibleDays[0]?.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}
+            {' – '}
+            {visibleDays[visibleDays.length - 1]?.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}
+          </p>
+          <button
+            onClick={() => setMobileDayStart(s => Math.min(weekDays.length - 3, s + 3))}
+            disabled={!canMobileNext}
+            className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 disabled:text-slate-300 px-2 py-1 rounded-md hover:bg-white"
+            aria-label="Next 3 days"
+          >
+            <span>Next</span>
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       {/* Day headers */}
-      <div className="grid border-b border-slate-100 flex-shrink-0" style={{ gridTemplateColumns: `48px repeat(${weekDays.length}, 1fr)` }}>
+      <div className="grid border-b border-slate-100 flex-shrink-0" style={{ gridTemplateColumns: `48px repeat(${visibleDays.length}, 1fr)` }}>
         <div className="border-r border-slate-100" />
-        {weekDays.map((d) => {
+        {visibleDays.map((d) => {
           const ds = toDateStr(d)
           const isToday = ds === today
           const isSelected = ds === selectedDate
@@ -681,7 +737,7 @@ function WeekGrid({
         <div
           ref={gridRef}
           className="relative grid"
-          style={{ gridTemplateColumns: `48px repeat(${weekDays.length}, 1fr)`, height: totalHeight }}
+          style={{ gridTemplateColumns: `48px repeat(${visibleDays.length}, 1fr)`, height: totalHeight }}
           onPointerMove={dragging ? handlePointerMove : undefined}
           onPointerUp={dragging ? handlePointerUp : undefined}
         >
@@ -699,7 +755,7 @@ function WeekGrid({
           </div>
 
           {/* Day columns */}
-          {weekDays.map((d, dayIndex) => {
+          {visibleDays.map((d, dayIndex) => {
             const ds         = toDateStr(d)
             const isToday    = ds === today
             const daySessions = sessions.filter(s => toDateStr(new Date(s.scheduledAt)) === ds)
@@ -2678,10 +2734,38 @@ export function ScheduleView({
           </button>
         </div>
 
-        {/* Search — full input from sm; icon-only button on phones that
-            expands into a slide-down search row underneath when tapped. */}
-        <div className="ml-auto sm:relative sm:w-56 lg:w-64">
-          {/* Mobile: icon button toggles a second-row search field below. */}
+        {/* Tablet+ inline search field (phones get a search-icon button
+            inside the action cluster below — keeps the header to one row). */}
+        <div className="hidden sm:block sm:relative sm:w-56 lg:w-64 sm:ml-auto">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <input
+            type="search"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search sessions…"
+            className="w-full h-8 pl-9 pr-7 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          {searchTokens.length > 0 && (
+            <span className="absolute right-7 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 tabular-nums">
+              {matchedIds.size}
+            </span>
+          )}
+          {search && (
+            <button
+              onClick={() => setSearch('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600"
+              aria-label="Clear search"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+
+        {/* Action cluster — icon-only on phones, icon + label from sm.
+            Reports/Hours/Calendar collapse so the header stays one row. */}
+        <div className="flex items-center gap-1.5 flex-shrink-0 ml-auto sm:ml-0">
+          {/* Mobile-only search trigger — sits alongside the other action
+              icons so the header reads as a single button row. */}
           <button
             type="button"
             onClick={() => setSearchOpenMobile(v => !v)}
@@ -2692,36 +2776,7 @@ export function ScheduleView({
           >
             <Search className="h-4 w-4" />
           </button>
-          {/* Tablet+ inline search input. */}
-          <div className="hidden sm:block relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <input
-              type="search"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Search sessions…"
-              className="w-full h-8 pl-9 pr-7 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            {searchTokens.length > 0 && (
-              <span className="absolute right-7 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 tabular-nums">
-                {matchedIds.size}
-              </span>
-            )}
-            {search && (
-              <button
-                onClick={() => setSearch('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600"
-                aria-label="Clear search"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
-        </div>
 
-        {/* Action cluster — icon-only on phones, icon + label from sm.
-            Reports/Hours/Calendar collapse so the header stays one row. */}
-        <div className="flex items-center gap-1.5 flex-shrink-0">
           {!googleCalendarConnected ? (
             <a href="/api/google-calendar/connect" title="Connect Google Calendar" className="hidden sm:inline-flex">
               <Button variant="secondary" size="sm" aria-label="Connect Google Calendar">
