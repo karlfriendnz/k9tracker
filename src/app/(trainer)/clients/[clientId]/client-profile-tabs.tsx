@@ -92,6 +92,10 @@ interface Props {
   dogNames: Record<string, string>  // dogId → name
   products: ShopProduct[]
   pendingProductRequests: PendingProductRequest[]
+  // Built-in contact fields surfaced at the top of the Details tab so
+  // the trainer-defined custom fields aren't the only thing there. The
+  // page header used to render these and got noisy.
+  contact: { email: string | null; phone: string | null; clientSince: string }
 }
 
 function groupByCategory<T extends { category: string | null }>(items: T[]) {
@@ -119,6 +123,7 @@ export function ClientProfileTabs({
   dogNames,
   products,
   pendingProductRequests: initialPendingRequests,
+  contact,
 }: Props) {
   const [tab, setTab] = useState<Tab>('overview')
   const [pendingRequests, setPendingRequests] = useState(initialPendingRequests)
@@ -629,12 +634,37 @@ export function ClientProfileTabs({
       {/* ── Details ──────────────────────────────────────────────────────── */}
       {tab === 'details' && (
         <div className="flex flex-col gap-6">
-          {ownerFields.length === 0 ? (
-            <div className="text-center py-12 text-slate-400">
-              <p>No owner fields defined yet.</p>
-              <p className="text-sm mt-1">Add fields in Settings → Custom fields.</p>
-            </div>
-          ) : (
+          {/* Built-in contact card always shown first — email, phone, and
+              the relationship start date. Trainer-defined fields render
+              below in their own grouped cards. */}
+          <Card>
+            <CardBody className="pt-5">
+              <h2 className="font-semibold text-slate-900 mb-5">Contact</h2>
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-4 text-sm">
+                <div className={contact.email && contact.email.length > 32 ? 'col-span-2' : ''}>
+                  <p className="text-xs text-slate-400 mb-0.5">Email</p>
+                  {contact.email ? (
+                    <a href={`mailto:${contact.email}`} className="text-blue-600 hover:underline break-all">{contact.email}</a>
+                  ) : (
+                    <p className="text-slate-300">—</p>
+                  )}
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400 mb-0.5">Phone</p>
+                  {contact.phone ? (
+                    <a href={`tel:${contact.phone}`} className="text-blue-600 hover:underline">{contact.phone}</a>
+                  ) : (
+                    <p className="text-slate-300">—</p>
+                  )}
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400 mb-0.5">Client since</p>
+                  <p className="text-slate-800">{contact.clientSince}</p>
+                </div>
+              </div>
+            </CardBody>
+          </Card>
+          {ownerFields.length === 0 ? null : (
             groupByCategory(ownerFields).map(group => (
               <Card key={group.category ?? '__uncategorised__'}>
                 <CardBody className="pt-5">

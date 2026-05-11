@@ -116,26 +116,17 @@ export default async function ClientDetailPage({
         back={{ href: '/clients', label: 'Back to clients' }}
       />
 
-      {/* Header */}
-      <div className="flex items-start justify-between mb-8 gap-4">
-        <div>
-          <div className="flex items-center gap-3 mb-1">
-            {canEdit && <StatusToggle clientId={client.id} initialStatus={client.status} />}
-            {!isPrimaryTrainer && (
-              <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">
-                Co-managed
-              </span>
-            )}
-          </div>
-          <p className="text-slate-500 text-sm">{client.user.email}</p>
-          {client.phone && (
-            <p className="text-slate-500 text-sm">
-              <a href={`tel:${client.phone}`} className="hover:text-slate-700">{client.phone}</a>
-            </p>
+      {/* Header — status + actions only. Email, phone, and the "client
+          since" date moved into the Details tab so the top of the page
+          isn't cluttered with metadata. */}
+      <div className="flex items-center justify-between mb-6 gap-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          {canEdit && <StatusToggle clientId={client.id} initialStatus={client.status} />}
+          {!isPrimaryTrainer && (
+            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">
+              Co-managed
+            </span>
           )}
-          <p className="text-slate-400 text-xs mt-1">
-            Client since {formatDate(client.user.createdAt)}
-          </p>
         </div>
         {/* All per-client actions live behind a single dropdown so the
             header stays clean on phone-narrow viewports and the
@@ -230,6 +221,11 @@ export default async function ClientDetailPage({
         }))}
         fieldValueMap={fieldValueMap}
         dogNames={dogNames}
+        contact={{
+          email: client.user.email,
+          phone: client.phone,
+          clientSince: formatDate(client.user.createdAt),
+        }}
       />
     </div>
   )
