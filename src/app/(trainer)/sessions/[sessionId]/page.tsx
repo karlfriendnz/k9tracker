@@ -103,7 +103,10 @@ export default async function SessionPage({
           ~50px gap on iOS. */}
       <div
         className="sticky z-20 -mx-4 md:-mx-8 px-4 md:px-8 py-2.5 mb-4 bg-white/95 backdrop-blur border-b border-slate-100"
-        style={{ top: 'env(safe-area-inset-top, 0px)' }}
+        // Pins below the global mobile app header (h-12 = 3rem) so the two
+        // sticky bars stack cleanly. Desktop has no app header but the
+        // sticky still works at top: 0 since there's no chrome above.
+        style={{ top: 'calc(env(safe-area-inset-top, 0px) + 3rem)' }}
       >
         <div className="flex items-center justify-between gap-2 max-w-3xl mx-auto">
           {clientId ? (
