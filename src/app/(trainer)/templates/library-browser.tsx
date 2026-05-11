@@ -7,6 +7,7 @@ import {
   BookOpen, Tag, Layers, Send, AlertTriangle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { PageHeader } from '@/components/shared/page-header'
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -745,6 +746,8 @@ export function LibraryBrowser({ initialTypes, clients }: Props) {
 
   return (
     <div className="p-4 md:p-8 max-w-4xl mx-auto">
+      <PageHeader title="Library" />
+
       {!selectedTypeId && <TypesView />}
       {selectedTypeId && !selectedThemeId && <ThemesView />}
       {selectedTypeId && selectedThemeId && <TasksView />}

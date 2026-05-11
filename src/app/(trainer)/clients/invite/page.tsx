@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { InviteClientForm } from './invite-client-form'
+import { PageHeader } from '@/components/shared/page-header'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Invite client' }
@@ -28,12 +29,13 @@ ${trainerProfile?.businessName ?? 'Your Trainer'}`
 
   return (
     <div className="p-4 md:p-8 max-w-2xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-900">Invite a new client</h1>
-        <p className="text-sm text-slate-500 mt-1">
-          Customise the invitation email before sending
-        </p>
-      </div>
+      <PageHeader
+        title="Invite a new client"
+        back={{ href: '/clients', label: 'Back to clients' }}
+      />
+      <p className="text-sm text-slate-500 mb-6">
+        Customise the invitation email before sending
+      </p>
       <InviteClientForm defaultTemplate={defaultTemplate} />
     </div>
   )

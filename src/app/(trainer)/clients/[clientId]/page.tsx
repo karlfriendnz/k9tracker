@@ -2,12 +2,11 @@ import { redirect, notFound } from 'next/navigation'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { getClientAccess } from '@/lib/trainer-access'
-import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 import { ClientProfileTabs } from './client-profile-tabs'
 import { StatusToggle } from './status-toggle'
 import { ClientActionsMenu } from './client-actions-menu'
+import { PageHeader } from '@/components/shared/page-header'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Client profile' }
@@ -112,21 +111,15 @@ export default async function ClientDetailPage({
 
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto">
-      <Link
-        href="/clients"
-        className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-6"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to clients
-      </Link>
+      <PageHeader
+        title={client.user.name ?? client.user.email ?? 'Client'}
+        back={{ href: '/clients', label: 'Back to clients' }}
+      />
 
       {/* Header */}
       <div className="flex items-start justify-between mb-8 gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">
-            <h1 className="text-2xl font-bold text-slate-900">
-              {client.user.name ?? client.user.email}
-            </h1>
             {canEdit && <StatusToggle clientId={client.id} initialStatus={client.status} />}
             {!isPrimaryTrainer && (
               <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">

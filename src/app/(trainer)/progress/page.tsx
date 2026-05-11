@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { getInitials } from '@/lib/utils'
+import { PageHeader } from '@/components/shared/page-header'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Progress & Analytics' }
@@ -48,10 +49,8 @@ export default async function ProgressPage() {
 
   return (
     <div className="p-4 md:p-8 max-w-3xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-900">Progress & Analytics</h1>
-        <p className="text-sm text-slate-500 mt-1">7-day compliance overview for all clients</p>
-      </div>
+      <PageHeader title="Progress & Analytics" subtitle="7-day compliance overview for all clients" />
+
 
       {clientStats.length === 0 ? (
         <div className="text-center py-12 text-slate-400">

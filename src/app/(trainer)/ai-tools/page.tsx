@@ -5,6 +5,7 @@ import { Card, CardBody } from '@/components/ui/card'
 import { Sparkles, Wand2, BarChart2 } from 'lucide-react'
 import { AIPlanGenerator } from './ai-plan-generator'
 import { AIProgressSummary } from './ai-progress-summary'
+import { PageHeader } from '@/components/shared/page-header'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'AI Tools' }
@@ -27,10 +28,10 @@ export default async function AIToolsPage() {
 
   return (
     <div className="p-4 md:p-8 max-w-2xl mx-auto">
-      <div className="flex items-center gap-2 mb-2">
-        <Sparkles className="h-6 w-6 text-blue-600" />
-        <h1 className="text-2xl font-bold text-slate-900">AI Tools</h1>
-      </div>
+      <PageHeader
+        title="AI Tools"
+        actions={<Sparkles className="h-5 w-5 text-blue-600" />}
+      />
       <p className="text-sm text-slate-500 mb-8">AI-powered tools to help you plan and review client training</p>
 
       <div className="flex flex-col gap-8">

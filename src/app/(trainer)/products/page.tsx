@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ProductsManager } from './products-manager'
+import { PageHeader } from '@/components/shared/page-header'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Products' }
@@ -19,14 +20,10 @@ export default async function ProductsPage() {
 
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto">
-      <div className="flex items-end justify-between mb-8 gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Products</h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Sell physical items and digital downloads to your clients.
-          </p>
-        </div>
-      </div>
+      <PageHeader title="Products" />
+      <p className="text-sm text-slate-500 mb-6">
+        Sell physical items and digital downloads to your clients.
+      </p>
 
       <ProductsManager
         initialProducts={products.map(p => ({

@@ -42,17 +42,26 @@ export default async function TrainerMessageThreadPage({ params }: { params: Pro
 
   return (
     <div className="flex flex-col h-[calc(100dvh-4rem)] md:h-screen max-w-2xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100">
-        <Link href="/messages" className="text-slate-400 hover:text-slate-600">
-          <ArrowLeft className="h-5 w-5" />
+      {/* Sticky thread header. Reserves env(safe-area-inset-top) on iOS so
+          the back chevron and client name aren't tucked under the notch.
+          marginTop pulls back through <main>'s capped safe-area pad. */}
+      <div
+        className="sticky top-0 z-30 flex items-center gap-3 px-4 border-b border-slate-100 bg-white"
+        style={{
+          paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.625rem)',
+          paddingBottom: '0.625rem',
+          marginTop: 'calc(min(env(safe-area-inset-top, 0px), 1rem) * -1)',
+        }}
+      >
+        <Link href="/messages" aria-label="Back to messages" className="-ml-1.5 flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 flex-shrink-0">
+          <ArrowLeft className="h-4 w-4" />
         </Link>
         <div className="h-9 w-9 rounded-full bg-blue-100 text-blue-700 font-bold text-sm flex items-center justify-center flex-shrink-0">
           {displayName[0].toUpperCase()}
         </div>
-        <div>
-          <p className="font-semibold text-slate-900 text-sm">{displayName}</p>
-          {client.dog && <p className="text-xs text-slate-500">{client.dog.name}</p>}
+        <div className="min-w-0">
+          <p className="font-semibold text-slate-900 text-sm truncate">{displayName}</p>
+          {client.dog && <p className="text-xs text-slate-500 truncate">{client.dog.name}</p>}
         </div>
       </div>
 

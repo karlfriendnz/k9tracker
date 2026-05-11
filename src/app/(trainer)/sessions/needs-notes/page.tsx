@@ -2,7 +2,8 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { ArrowLeft, ListTodo, ChevronRight, Dog, FileText, DollarSign } from 'lucide-react'
+import { ListTodo, ChevronRight, Dog, FileText, DollarSign } from 'lucide-react'
+import { PageHeader } from '@/components/shared/page-header'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'To do' }
@@ -133,18 +134,14 @@ export default async function SessionsTodoPage() {
 
   return (
     <div className="p-4 md:p-8 max-w-3xl mx-auto">
-      <Link
-        href="/dashboard"
-        className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-4"
-      >
-        <ArrowLeft className="h-4 w-4" /> Dashboard
-      </Link>
+      <PageHeader
+        title="Sessions to wrap up"
+        back={{ href: '/dashboard', label: 'Back to dashboard' }}
+        actions={<ListTodo className="h-5 w-5 text-amber-500" />}
+      />
 
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-          <ListTodo className="h-6 w-6 text-amber-500" />
-          Sessions to wrap up
-        </h1>
+
         {sessions.length === 0 ? (
           <p className="text-sm text-slate-500 mt-1">
             You&apos;re all caught up — every past session has notes recorded and is invoiced.
@@ -169,9 +166,7 @@ export default async function SessionsTodoPage() {
                   {totalInvoiceCents > 0 ? formatDollars(totalInvoiceCents) : needsInvoiceCount}
                 </p>
                 <p className="text-xs text-slate-500 mt-1">
-                  {totalInvoiceCents > 0
-                    ? `across ${needsInvoiceCount} session${needsInvoiceCount === 1 ? '' : 's'} to invoice`
-                    : `session${needsInvoiceCount === 1 ? '' : 's'} to invoice`}
+                  {needsInvoiceCount} session{needsInvoiceCount === 1 ? '' : 's'} to invoice
                 </p>
               </div>
             </div>

@@ -6,6 +6,7 @@ import { SettingsTabs } from './settings-tabs'
 import { NotificationsPanel } from './notifications-panel'
 import { FormsManager } from '../forms/forms-manager'
 import type { Question } from '../forms/session/session-forms-manager'
+import { PageHeader } from '@/components/shared/page-header'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Settings' }
@@ -55,7 +56,7 @@ export default async function TrainerSettingsPage() {
 
   return (
     <div className="p-4 md:p-8 max-w-2xl md:max-w-[872px] mx-auto">
-      <h1 className="text-2xl font-bold text-slate-900 mb-6">Settings</h1>
+      <PageHeader title="Settings" />
 
       <SettingsTabs
         profile={<TrainerSettingsForm user={user} profile={trainerProfile} />}

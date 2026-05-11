@@ -2636,7 +2636,14 @@ export function ScheduleView({
   return (
     <div className="flex flex-col h-full">
       {/* ── Header (title + date nav on the left, controls on the right) ────── */}
-      <div className="flex items-center px-4 md:px-6 py-3 gap-3 flex-wrap border-b border-slate-100 bg-white">
+      <div
+        className="sticky top-0 z-30 flex items-center px-4 md:px-6 gap-3 flex-wrap border-b border-slate-100 bg-white"
+        style={{
+          paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.625rem)',
+          paddingBottom: '0.625rem',
+          marginTop: 'calc(min(env(safe-area-inset-top, 0px), 1rem) * -1)',
+        }}
+      >
         <h1 className="text-xl font-bold text-slate-900">Schedule</h1>
 
         {/* Date nav — sits next to the title */}

@@ -4,8 +4,9 @@ import { prisma } from '@/lib/prisma'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card, CardBody } from '@/components/ui/card'
-import { ArrowLeft, Edit2 } from 'lucide-react'
+import { Edit2 } from 'lucide-react'
 import { ApplyTemplateModal } from './apply-template-modal'
+import { PageHeader } from '@/components/shared/page-header'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Template' }
@@ -32,23 +33,26 @@ export default async function TemplateDetailPage({ params }: { params: Promise<{
 
   return (
     <div className="p-4 md:p-8 max-w-2xl mx-auto">
-      <Link href="/templates" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 mb-6">
-        <ArrowLeft className="h-4 w-4" /> Back to templates
-      </Link>
+      <PageHeader
+        title={template.name}
+        subtitle={`${template.tasks.length} tasks`}
+        back={{ href: '/templates', label: 'Back to templates' }}
+        actions={
+          <>
+            <Link href={`/templates/${template.id}/edit`}>
+              <Button variant="secondary" size="sm">
+                <Edit2 className="h-4 w-4" />
+                <span className="hidden sm:inline">Edit</span>
+              </Button>
+            </Link>
+            <ApplyTemplateModal templateId={template.id} templateName={template.name} clients={clients} />
+          </>
+        }
+      />
 
-      <div className="flex items-start justify-between mb-6 gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">{template.name}</h1>
-          {template.description && <p className="text-slate-500 text-sm mt-1">{template.description}</p>}
-          <p className="text-xs text-slate-400 mt-1">{template.tasks.length} tasks</p>
-        </div>
-        <div className="flex gap-2 flex-shrink-0">
-          <Link href={`/templates/${template.id}/edit`}>
-            <Button variant="secondary" size="sm"><Edit2 className="h-4 w-4" />Edit</Button>
-          </Link>
-          <ApplyTemplateModal templateId={template.id} templateName={template.name} clients={clients} />
-        </div>
-      </div>
+      {template.description && (
+        <p className="text-slate-500 text-sm mb-6">{template.description}</p>
+      )}
 
       <div className="flex flex-col gap-2">
         {template.tasks.map(task => (

@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Card, CardBody } from '@/components/ui/card'
 import { Alert } from '@/components/ui/alert'
 import { Plus, Package as PackageIcon, Pencil, Trash2, X, GripVertical } from 'lucide-react'
+import { PageHeader } from '@/components/shared/page-header'
 import {
   DndContext,
   PointerSensor,
@@ -164,15 +165,18 @@ export function PackagesView({
 
   return (
     <div className="p-4 md:p-8 max-w-3xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-900">Packages</h1>
-        <p className="text-sm text-slate-500 mt-1 mb-3">
-          Bundles of sessions you can assign to clients in one go.
-        </p>
-        <Button size="sm" onClick={() => setShowCreate(true)}>
-          <Plus className="h-4 w-4" /> New package
-        </Button>
-      </div>
+      <PageHeader
+        title="Packages"
+        actions={
+          <Button size="sm" onClick={() => setShowCreate(true)}>
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline">New package</span>
+          </Button>
+        }
+      />
+      <p className="text-sm text-slate-500 mb-4">
+        Bundles of sessions you can assign to clients in one go.
+      </p>
 
       {packages.length === 0 ? (
         <Card>

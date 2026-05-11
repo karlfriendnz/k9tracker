@@ -5,8 +5,9 @@ import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { UserPlus, TrendingUp, Calendar, ChevronLeft, ChevronRight, ArrowRight, Users, PawPrint, Inbox, FileText, DollarSign } from 'lucide-react'
+import { Calendar, ChevronLeft, ChevronRight, ArrowRight, Users, PawPrint, Inbox, FileText, DollarSign } from 'lucide-react'
 import { SessionRowCard } from '@/components/shared/session-row-card'
+import { PageHeader } from '@/components/shared/page-header'
 import { PendingRequestsPanel } from './pending-requests-panel'
 import { OnboardingPanel } from './onboarding-panel'
 import { initTrainerOnboarding } from '@/lib/onboarding/init'
@@ -208,22 +209,15 @@ export default async function DashboardPage({
 
   return (
     <div className="p-4 md:p-8 max-w-4xl mx-auto">
+      <PageHeader title="Dashboard" subtitle={session.user.businessName ?? undefined} />
+
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-slate-900">
           Good {getGreeting(tz)}, {session.user.name?.split(' ')[0]} 👋
         </h1>
-        <p className="hidden sm:block text-slate-500 text-sm mt-1">{session.user.businessName}</p>
       </div>
 
       <OnboardingPanel state={onboardingState} />
-
-      {/* Quick actions — top-of-page so primary jobs-to-be-done are one tap away. */}
-      <div className="grid grid-cols-4 gap-2 sm:gap-3 mb-6">
-        <QuickAction href="/clients/invite" icon={<UserPlus className="h-5 w-5" />} label="Invite client" />
-        <QuickAction href="/schedule" icon={<Calendar className="h-5 w-5" />} label="Book session" />
-        <QuickAction href="/progress" icon={<TrendingUp className="h-5 w-5" />} label="View progress" />
-        <QuickAction href="/schedule" icon={<Calendar className="h-5 w-5" />} label="Schedule" />
-      </div>
 
       {/* Vital stats strip — four tiles in one row: Notes, Invoice, Clients,
           Dogs. The first two link to /sessions/needs-notes; Clients/Dogs are
@@ -271,9 +265,7 @@ export default async function DashboardPage({
                 {wrapInvoiceCount > 0 ? (wrapInvoiceLabel ?? wrapInvoiceCount) : 0}
               </p>
               <p className="text-[11px] text-slate-500 mt-1 leading-tight">
-                {wrapInvoiceLabel && wrapInvoiceCount > 0
-                  ? `across ${wrapInvoiceCount} to invoice`
-                  : wrapInvoiceCount === 1 ? 'session to invoice' : 'sessions to invoice'}
+                {wrapInvoiceCount} session{wrapInvoiceCount === 1 ? '' : 's'} to invoice
               </p>
             </div>
           </div>
@@ -470,17 +462,6 @@ export default async function DashboardPage({
       />
 
     </div>
-  )
-}
-
-function QuickAction({ href, icon, label }: { href: string; icon: React.ReactNode; label: string }) {
-  return (
-    <Link href={href} className="block h-full">
-      <Card className="h-full p-3 sm:p-4 flex flex-col items-center justify-start gap-1.5 sm:gap-2 hover:border-blue-200 hover:shadow-md transition-all cursor-pointer text-center">
-        <span className="text-blue-600">{icon}</span>
-        <span className="text-[11px] sm:text-xs font-medium text-slate-700 leading-tight">{label}</span>
-      </Card>
-    </Link>
   )
 }
 

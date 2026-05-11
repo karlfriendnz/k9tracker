@@ -1,5 +1,6 @@
 import { Card, CardBody } from '@/components/ui/card'
 import { SupportTicketForm } from './support-ticket-form'
+import { PageHeader } from '@/components/shared/page-header'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Help & Support' }
@@ -31,7 +32,8 @@ const FAQ = [
 export default function TrainerHelpPage() {
   return (
     <div className="p-4 md:p-8 max-w-2xl mx-auto">
-      <h1 className="text-2xl font-bold text-slate-900 mb-8">Help & Support</h1>
+      <PageHeader title="Help & Support" />
+      <div className="mb-8" />
 
       {/* FAQ */}
       <div className="mb-10">

@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import Link from 'next/link'
 import { MessageCircle } from 'lucide-react'
 import { Card, CardBody } from '@/components/ui/card'
+import { PageHeader } from '@/components/shared/page-header'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Messages' }
@@ -39,7 +40,7 @@ export default async function MessagesPage() {
 
   return (
     <div className="p-4 md:p-8 max-w-2xl mx-auto">
-      <h1 className="text-2xl font-bold text-slate-900 mb-2">Messages</h1>
+      <PageHeader title="Messages" />
       <p className="text-sm text-slate-500 mb-6">Private conversations with your clients</p>
 
       {sorted.length === 0 ? (

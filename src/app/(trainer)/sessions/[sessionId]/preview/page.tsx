@@ -1,8 +1,7 @@
 import { redirect, notFound } from 'next/navigation'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import Link from 'next/link'
-import { ArrowLeft, Eye } from 'lucide-react'
+import { Eye } from 'lucide-react'
 import {
   SessionReport,
   reportBackgroundStyle,
@@ -10,6 +9,7 @@ import {
   type ReportQuestion,
   type ReportAttachment,
 } from '@/components/shared/session-report'
+import { PageHeader } from '@/components/shared/page-header'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Session report preview' }
@@ -85,18 +85,15 @@ export default async function SessionPreviewPage({
   return (
     <div className="min-h-screen w-full" style={reportBackgroundStyle(responses)}>
       <div className="p-4 md:p-8 max-w-3xl mx-auto">
-        <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
-          <Link
-            href={`/sessions/${trainingSession.id}`}
-            className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to session
-          </Link>
-          <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-purple-100 text-purple-700">
-            <Eye className="h-3.5 w-3.5" /> Preview — what your client sees
-          </span>
-        </div>
+        <PageHeader
+          title="Session preview"
+          back={{ href: `/sessions/${trainingSession.id}`, label: 'Back to session' }}
+          actions={
+            <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-purple-100 text-purple-700">
+              <Eye className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Preview — what your client sees</span>
+            </span>
+          }
+        />
 
         <SessionReport
           sessionTitle={trainingSession.title}

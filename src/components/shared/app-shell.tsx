@@ -428,39 +428,10 @@ function TrainerShell({
         </div>
       </aside>
 
-      {/* Mobile sticky brand header. Reserves the iOS safe-area itself so
-          page <main> doesn't double-pad. Logo links home; we derive the
-          page title from TRAINER_NAV — sub-routes (e.g. /clients/[id])
-          inherit the parent's label so the header reads as a section
-          breadcrumb. Solid white bg (not translucent) so the iOS
-          status-bar glyphs stay legible against this surface — the
-          @capacitor/status-bar config is Style.Dark, which needs a light
-          surface to render dark text against. */}
-      <header
-        className="md:hidden sticky top-0 z-30 bg-white border-b border-slate-100"
-        style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
-      >
-        <div className="flex items-center gap-3 h-12 px-4 max-w-3xl mx-auto">
-          <Link href="/dashboard" aria-label="Dashboard" className="flex items-center min-w-0 flex-shrink-0">
-            {trainerLogo ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={trainerLogo} alt={businessName ?? 'PupManager'} className="h-7 w-auto max-w-[140px] object-contain" />
-            ) : (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src="/logo.png" alt={businessName ?? 'PupManager'} className="h-7 w-7 rounded-lg" />
-            )}
-          </Link>
-          {(() => {
-            const match = TRAINER_NAV
-              .filter(n => pathname === n.href || pathname.startsWith(n.href + '/'))
-              .sort((a, b) => b.href.length - a.href.length)[0]
-            if (!match) return null
-            return (
-              <p className="text-sm font-semibold text-slate-900 truncate">{match.label}</p>
-            )
-          })()}
-        </div>
-      </header>
+      {/* No mobile header on the trainer side. The bottom tab bar covers
+          nav, and per-page sticky bars (e.g. session detail) own their
+          own safe-area-inset-top. Pages without a sticky bar fall back
+          to the <main> safe-area pad below. */}
 
       {/* Mobile bottom tab bar — 4 primary destinations + More */}
       <nav
@@ -574,9 +545,11 @@ function TrainerShell({
 
       <main
         className={cn('flex-1 pb-20 md:pb-0 transition-all duration-200', mainOffset)}
-        // The mobile sticky header (above) handles the iOS safe-area-inset-top
-        // itself, so <main> stays at top: 0 with no extra pad — no more
-        // ~120px blank strip on iOS Capacitor.
+        // Capped safe-area pad on mobile: pages without their own sticky
+        // top bar get a small clearance below iOS chrome. Pages that
+        // own a sticky bar can break out via negative margin and handle
+        // safe-area themselves.
+        style={{ paddingTop: 'min(env(safe-area-inset-top, 0px), 1rem)' }}
       >
         {children}
       </main>

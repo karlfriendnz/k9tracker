@@ -1,4 +1,5 @@
 import { TemplateBuilderForm } from '../template-builder-form'
+import { PageHeader } from '@/components/shared/page-header'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'New template' }
@@ -6,7 +7,10 @@ export const metadata: Metadata = { title: 'New template' }
 export default function NewTemplatePage() {
   return (
     <div className="p-4 md:p-8 max-w-2xl mx-auto">
-      <h1 className="text-2xl font-bold text-slate-900 mb-6">New training template</h1>
+      <PageHeader
+        title="New training template"
+        back={{ href: '/templates', label: 'Back to library' }}
+      />
       <TemplateBuilderForm />
     </div>
   )

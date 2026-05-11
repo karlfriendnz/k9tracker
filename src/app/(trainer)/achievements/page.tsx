@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { AchievementsManager } from './achievements-manager'
+import { PageHeader } from '@/components/shared/page-header'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Achievements' }
@@ -23,8 +24,8 @@ export default async function AchievementsPage() {
 
   return (
     <div className="p-4 md:p-8 max-w-3xl mx-auto">
-      <h1 className="text-2xl font-bold text-slate-900">Achievements</h1>
-      <p className="text-sm text-slate-500 mt-1 mb-6">
+      <PageHeader title="Achievements" />
+      <p className="text-sm text-slate-500 mb-6">
         Build a catalogue of badges your clients can earn — first session completed, off-leash recall, 30-day streak, anything that fits your programme.
       </p>
 

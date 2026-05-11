@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { UserPlus } from 'lucide-react'
 import { ClientsList } from './clients-list'
+import { PageHeader } from '@/components/shared/page-header'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Clients' }
@@ -181,20 +182,19 @@ export default async function ClientsPage({
 
   return (
     <div className="p-4 md:p-8 max-w-4xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Clients</h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            {newCount > 0 && <>{newCount} new · </>}{activeCount} active · {inactiveCount} inactive
-          </p>
-        </div>
-        <Link href="/clients/invite">
-          <Button size="sm">
-            <UserPlus className="h-4 w-4" />
-            Invite client
-          </Button>
-        </Link>
-      </div>
+      <PageHeader
+        title="Clients"
+        subtitle={`${newCount > 0 ? `${newCount} new · ` : ''}${activeCount} active · ${inactiveCount} inactive`}
+        actions={
+          <Link href="/clients/invite">
+            <Button size="sm">
+              <UserPlus className="h-4 w-4" />
+              <span className="hidden sm:inline">Invite client</span>
+            </Button>
+          </Link>
+        }
+      />
+
 
       {/* Tabs */}
       <div className="flex gap-1 p-1 bg-slate-100 rounded-2xl mb-6">

@@ -2,7 +2,7 @@ import { redirect, notFound } from 'next/navigation'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import Link from 'next/link'
-import { ArrowLeft, Calendar, Clock, MapPin, Video, ExternalLink, Eye, ChevronDown, History, Paperclip } from 'lucide-react'
+import { Calendar, Clock, MapPin, Video, ExternalLink, Eye, ChevronDown, History, Paperclip } from 'lucide-react'
 import { Card, CardBody } from '@/components/ui/card'
 import { formatSessionTitle } from '@/lib/utils'
 import { SessionFormReport } from '@/components/session-form-report'
@@ -12,6 +12,7 @@ import { MarkInvoicedButton } from '@/components/mark-invoiced-button'
 import { DeleteSessionButton } from '@/components/delete-session-button'
 import { SessionAttachments } from '@/components/session-attachments'
 import { OpenSessionLink } from './open-session-link'
+import { PageHeader } from '@/components/shared/page-header'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Session' }
@@ -92,33 +93,12 @@ export default async function SessionPage({
 
   return (
     <div className="p-4 md:p-8 max-w-3xl mx-auto">
-      {/* Sticky action bar — back link + workflow buttons stay pinned while
-          the trainer scrolls. Action labels collapse to icons on mobile so
-          all four (Preview / Complete / Invoice / Delete) fit on one line.
-          Sticky `top` uses env(safe-area-inset-top) so when the bar pins to
-          viewport-top during scroll, iOS chrome (time, battery) keeps its
-          own space above the bar. The parent <main> already handles
-          safe-area for the initial unscrolled position, so we don't add
-          internal safe-area padding here — that previously created a
-          ~50px gap on iOS. */}
-      <div
-        className="sticky z-20 -mx-4 md:-mx-8 px-4 md:px-8 py-2.5 mb-4 bg-white/95 backdrop-blur border-b border-slate-100"
-        // Pins below the global mobile app header (h-12 = 3rem) so the two
-        // sticky bars stack cleanly. Desktop has no app header but the
-        // sticky still works at top: 0 since there's no chrome above.
-        style={{ top: 'calc(env(safe-area-inset-top, 0px) + 3rem)' }}
-      >
-        <div className="flex items-center justify-between gap-2 max-w-3xl mx-auto">
-          {clientId ? (
-            <Link
-              href={`/clients/${clientId}?tab=sessions`}
-              className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 flex-shrink-0"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              <span className="hidden sm:inline">Back to client</span>
-            </Link>
-          ) : <span />}
-          <div className="flex items-center gap-1.5 flex-shrink-0">
+      <PageHeader
+        title={formatSessionTitle(trainingSession.title)}
+        subtitle={clientName ? `${clientName}${trainingSession.dog ? ` · 🐕 ${trainingSession.dog.name}` : ''}` : undefined}
+        back={clientId ? { href: `/clients/${clientId}?tab=sessions`, label: 'Back to client' } : undefined}
+        actions={
+          <>
             <Link
               href={`/sessions/${trainingSession.id}/preview`}
               className="inline-flex items-center justify-center gap-1.5 h-9 px-2 sm:px-3 rounded-lg border border-slate-200 bg-white text-sm font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition-colors"
@@ -136,21 +116,14 @@ export default async function SessionPage({
               sessionId={trainingSession.id}
               redirectTo={clientId ? `/clients/${clientId}?tab=sessions` : '/schedule'}
             />
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       <div className="mb-6">
         <span className={`text-xs font-semibold uppercase tracking-wide ${trainingSession.sessionType === 'VIRTUAL' ? 'text-purple-500' : 'text-blue-500'}`}>
           {trainingSession.sessionType === 'VIRTUAL' ? '💻 Virtual session' : '📍 In-person session'}
         </span>
-        <h1 className="text-2xl font-bold text-slate-900 mt-1">{formatSessionTitle(trainingSession.title)}</h1>
-        {clientName && (
-          <p className="text-sm text-slate-500 mt-1">
-            {clientName}
-            {trainingSession.dog ? ` · 🐕 ${trainingSession.dog.name}` : ''}
-          </p>
-        )}
       </div>
 
       <Card className="mb-6">

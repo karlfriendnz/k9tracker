@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { Inbox, ArrowRight, CheckCircle2, XCircle } from 'lucide-react'
+import { PageHeader } from '@/components/shared/page-header'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Enquiries' }
@@ -53,12 +54,10 @@ export default async function EnquiriesPage({
 
   return (
     <div className="p-4 md:p-8 max-w-3xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-900">Enquiries</h1>
-        <p className="text-sm text-slate-500 mt-0.5">
-          Form submissions awaiting your decision. Accept turns them into a client; decline closes them out.
-        </p>
-      </div>
+      <PageHeader title="Enquiries" />
+      <p className="text-sm text-slate-500 mb-6">
+        Form submissions awaiting your decision. Accept turns them into a client; decline closes them out.
+      </p>
 
       <div className="mb-5 flex gap-1 border-b border-slate-200">
         {TABS.map(t => (
