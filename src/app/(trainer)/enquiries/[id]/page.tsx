@@ -46,11 +46,14 @@ export default async function EnquiryDetailPage({ params }: { params: Promise<{ 
   return (
     <div className="p-4 md:p-8 max-w-3xl mx-auto">
       <PageHeader
-        title={enquiry.name}
-        subtitle={`Submitted ${enquiry.createdAt.toLocaleString()}${enquiry.form ? ` via "${enquiry.form.title}"` : ''}`}
+        title="Enquiry"
+        subtitle={enquiry.name}
         back={{ href: '/enquiries', label: 'Back to enquiries' }}
         actions={<StatusPill status={enquiry.status} />}
       />
+      <p className="text-xs text-slate-400 -mt-2 mb-4">
+        Submitted {enquiry.createdAt.toLocaleString()}{enquiry.form ? ` via "${enquiry.form.title}"` : ''}
+      </p>
 
 
       <Card className="p-5 mb-4">

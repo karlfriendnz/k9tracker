@@ -200,10 +200,12 @@ export function SessionRowCard({
           )}
         </div>
 
-        {/* Action rail — visual only, the parent Link handles navigation. */}
+        {/* Affordance chevron — visual only, the parent Link handles navigation.
+            Slim slate strip on mobile to stop it dominating the card; widens
+            and recolours on hover so desktop still gets a clear CTA. */}
         <div
           aria-hidden
-          className="group flex-shrink-0 w-12 sm:w-14 flex items-center justify-center px-0 bg-blue-600 text-white transition-colors"
+          className="group flex-shrink-0 w-8 sm:w-10 flex items-center justify-center bg-slate-50 text-slate-400 transition-colors hover:bg-blue-600 hover:text-white"
         >
           <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
         </div>

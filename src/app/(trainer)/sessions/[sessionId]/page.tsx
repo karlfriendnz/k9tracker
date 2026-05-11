@@ -97,28 +97,29 @@ export default async function SessionPage({
         title={formatSessionTitle(trainingSession.title)}
         subtitle={clientName ? `${clientName}${trainingSession.dog ? ` · 🐕 ${trainingSession.dog.name}` : ''}` : undefined}
         back={clientId ? { href: `/clients/${clientId}?tab=sessions`, label: 'Back to client' } : undefined}
-        actions={
-          <>
-            <Link
-              href={`/sessions/${trainingSession.id}/preview`}
-              className="inline-flex items-center justify-center gap-1.5 h-9 px-2 sm:px-3 rounded-lg border border-slate-200 bg-white text-sm font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition-colors"
-              title="Preview report"
-            >
-              <Eye className="h-4 w-4 text-purple-600" />
-              <span className="hidden sm:inline">Preview</span>
-            </Link>
-            <MarkCompleteButton sessionId={trainingSession.id} initialStatus={trainingSession.status} />
-            <MarkInvoicedButton
-              sessionId={trainingSession.id}
-              initialInvoicedAt={trainingSession.invoicedAt?.toISOString() ?? null}
-            />
-            <DeleteSessionButton
-              sessionId={trainingSession.id}
-              redirectTo={clientId ? `/clients/${clientId}?tab=sessions` : '/schedule'}
-            />
-          </>
-        }
       />
+
+      {/* Action row — below the sticky header so the title isn't fighting
+          four icon-buttons for horizontal space on phone-width screens. */}
+      <div className="mb-4 flex items-center justify-end gap-1.5">
+        <Link
+          href={`/sessions/${trainingSession.id}/preview`}
+          className="inline-flex items-center justify-center gap-1.5 h-9 px-2 sm:px-3 rounded-lg border border-slate-200 bg-white text-sm font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition-colors"
+          title="Preview report"
+        >
+          <Eye className="h-4 w-4 text-purple-600" />
+          <span className="hidden sm:inline">Preview</span>
+        </Link>
+        <MarkCompleteButton sessionId={trainingSession.id} initialStatus={trainingSession.status} />
+        <MarkInvoicedButton
+          sessionId={trainingSession.id}
+          initialInvoicedAt={trainingSession.invoicedAt?.toISOString() ?? null}
+        />
+        <DeleteSessionButton
+          sessionId={trainingSession.id}
+          redirectTo={clientId ? `/clients/${clientId}?tab=sessions` : '/schedule'}
+        />
+      </div>
 
       <div className="mb-6">
         <span className={`text-xs font-semibold uppercase tracking-wide ${trainingSession.sessionType === 'VIRTUAL' ? 'text-purple-500' : 'text-blue-500'}`}>
