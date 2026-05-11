@@ -37,15 +37,37 @@ export function MessageThread({
     setError(null)
     const text = body.trim()
     setBody('')
+
+    // Optimistic: drop the message into the thread immediately under a
+    // tagged temp id so the UI never waits on the API round-trip. The
+    // server reply replaces the temp row with the real one (keyed by
+    // tempId); a failure pulls the optimistic row back out and surfaces
+    // an error so the trainer knows nothing was actually sent.
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const optimistic: Message = {
+      id: tempId,
+      body: text,
+      senderId: currentUserId,
+      createdAt: new Date().toISOString(),
+      sender: { name: null, email: '' },
+    }
+    setMessages(prev => [...prev, optimistic])
+
     startTransition(async () => {
-      const res = await fetch('/api/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientId, body: text }),
-      })
-      if (!res.ok) { setError('Failed to send message.'); return }
-      const msg = await res.json()
-      setMessages(prev => [...prev, msg])
+      try {
+        const res = await fetch('/api/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ clientId, body: text }),
+        })
+        if (!res.ok) throw new Error('send failed')
+        const msg = await res.json() as Message
+        setMessages(prev => prev.map(m => m.id === tempId ? msg : m))
+      } catch {
+        setError('Failed to send message.')
+        setMessages(prev => prev.filter(m => m.id !== tempId))
+        setBody(text) // restore so the trainer can retry without retyping
+      }
     })
   }
 

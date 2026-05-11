@@ -37,15 +37,35 @@ export function MessageThread({
     setError(null)
     const text = body.trim()
     setBody('')
+
+    // Optimistic insert under a tagged temp id so the bubble shows up
+    // instantly; server reply swaps it for the persisted row. On
+    // failure we yank the optimistic row and restore the input.
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const optimistic: Message = {
+      id: tempId,
+      body: text,
+      senderId: currentUserId,
+      createdAt: new Date().toISOString(),
+      sender: { name: null, email: '' },
+    }
+    setMessages(prev => [...prev, optimistic])
+
     startTransition(async () => {
-      const res = await fetch('/api/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientId, body: text }),
-      })
-      if (!res.ok) { setError('Failed to send message.'); return }
-      const msg = await res.json()
-      setMessages(prev => [...prev, msg])
+      try {
+        const res = await fetch('/api/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ clientId, body: text }),
+        })
+        if (!res.ok) throw new Error('send failed')
+        const msg = await res.json() as Message
+        setMessages(prev => prev.map(m => m.id === tempId ? msg : m))
+      } catch {
+        setError('Failed to send message.')
+        setMessages(prev => prev.filter(m => m.id !== tempId))
+        setBody(text)
+      }
     })
   }
 
