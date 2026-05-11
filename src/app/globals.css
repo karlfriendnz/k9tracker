@@ -22,9 +22,13 @@ html {
 }
 
 /* Native (Capacitor) shell: respect notch / home indicator. NativeBootstrap
-   sets data-native on <html> so these only apply inside the wrapped app. */
+   sets data-native on <html> so these only apply inside the wrapped app.
+   Only side+bottom insets are padded globally — the TOP inset is handled
+   per-surface by the sticky PageHeader (which renders its solid bg behind
+   the iOS status bar). Padding the body's top here on top of that pushed
+   every page's sticky bar down by ~60px and left a dead white band above
+   it that couldn't be reclaimed by negative margin. */
 html[data-native='true'] body {
-  padding-top: env(safe-area-inset-top);
   padding-bottom: env(safe-area-inset-bottom);
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
