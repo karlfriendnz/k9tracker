@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { UserPlus, Search, Dog, Calendar, Columns3, X, Check } from 'lucide-react'
+import { UserPlus, Search, Dog, Calendar, Columns3, X, Check, Layers } from 'lucide-react'
 import { getInitials } from '@/lib/utils'
 
 type BuiltinColumnId = 'email' | 'dog' | 'breed' | 'extraDogs' | 'nextSession' | 'compliance' | 'shared'
@@ -61,6 +61,7 @@ export function ClientsList({ clients, tab, columns, customFields, customValues,
   const initial = columns.filter(c => isBuiltinId(c) || (c.startsWith('custom:') && validCustomIds.has(c.slice(7))))
   const [visible, setVisible] = useState<Set<string>>(new Set(initial))
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [groupMenuOpen, setGroupMenuOpen] = useState(false)
   const [groupKey, setGroupKey] = useState<string>(groupBy ?? '')
   const router = useRouter()
   const [savingCols, setSavingCols] = useState(false)
@@ -137,23 +138,80 @@ export function ClientsList({ clients, tab, columns, customFields, customValues,
             className="w-full h-11 pl-10 pr-4 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
-        <select
-          value={groupKey}
-          onChange={e => changeGroupBy(e.target.value)}
-          disabled={savingCols}
-          className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          aria-label="Group clients"
-        >
-          <option value="">No grouping</option>
-          <option value="nextDay">Day of next booking</option>
-          {customFields.length > 0 && (
-            <optgroup label="Custom fields">
-              {customFields.map(f => (
-                <option key={f.id} value={`custom:${f.id}`}>{f.label}</option>
-              ))}
-            </optgroup>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setGroupMenuOpen(o => !o)}
+            disabled={savingCols}
+            aria-label="Group clients"
+            title={groupKey
+              ? (groupKey === 'nextDay'
+                  ? 'Grouped by day of next booking'
+                  : `Grouped by ${customFields.find(f => `custom:${f.id}` === groupKey)?.label ?? 'custom field'}`)
+              : 'Group clients'}
+            className="relative h-11 w-11 inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+          >
+            <Layers className="h-4 w-4" />
+            {groupKey && (
+              <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-blue-600" aria-hidden />
+            )}
+          </button>
+          {groupMenuOpen && (
+            <>
+              <div className="fixed inset-0 z-30" onClick={() => setGroupMenuOpen(false)} />
+              <div className="absolute right-0 mt-2 w-64 max-h-[70vh] overflow-y-auto z-40 bg-white rounded-xl border border-slate-200 shadow-lg p-1.5">
+                <div className="flex items-center justify-between px-2 py-1.5">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Group by</p>
+                  <button onClick={() => setGroupMenuOpen(false)} className="p-0.5 text-slate-400 hover:text-slate-600">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                {[
+                  { value: '', label: 'No grouping' },
+                  { value: 'nextDay', label: 'Day of next booking' },
+                ].map(opt => {
+                  const active = groupKey === opt.value
+                  return (
+                    <button
+                      key={opt.value || 'none'}
+                      onClick={() => { changeGroupBy(opt.value); setGroupMenuOpen(false) }}
+                      disabled={savingCols}
+                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      <span className={`flex h-4 w-4 items-center justify-center rounded-full border ${active ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300'}`}>
+                        {active && <Check className="h-3 w-3" />}
+                      </span>
+                      {opt.label}
+                    </button>
+                  )
+                })}
+                {customFields.length > 0 && (
+                  <>
+                    <p className="px-2 pt-2 pb-1 text-xs font-semibold text-slate-500 uppercase tracking-wide border-t border-slate-100 mt-1">Custom fields</p>
+                    {customFields.map(f => {
+                      const id = `custom:${f.id}`
+                      const active = groupKey === id
+                      return (
+                        <button
+                          key={f.id}
+                          onClick={() => { changeGroupBy(id); setGroupMenuOpen(false) }}
+                          disabled={savingCols}
+                          className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                        >
+                          <span className={`flex h-4 w-4 items-center justify-center rounded-full border ${active ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300'}`}>
+                            {active && <Check className="h-3 w-3" />}
+                          </span>
+                          <span className="flex-1 truncate text-left">{f.label}</span>
+                          <span className="text-[10px] text-slate-400 uppercase">{f.appliesTo === 'DOG' ? 'Dog' : 'Owner'}</span>
+                        </button>
+                      )
+                    })}
+                  </>
+                )}
+              </div>
+            </>
           )}
-        </select>
+        </div>
         <div className="relative">
           <button
             type="button"

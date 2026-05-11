@@ -4,11 +4,10 @@ import { useState, useEffect } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Card, CardBody } from '@/components/ui/card'
 import { formatDate, cn, formatSessionTitle } from '@/lib/utils'
-import { X, MapPin, Video, Clock, Calendar, Trash2, AlertTriangle, Play, ShoppingBag, Plus, Check, Loader2, Tag, Package as PackageIcon, FileDown } from 'lucide-react'
+import { X, MapPin, Video, Clock, Calendar, Trash2, AlertTriangle, Play, ShoppingBag, Plus, Check, Loader2, Tag, Package as PackageIcon, FileDown, DollarSign } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SessionFormReport } from '@/components/session-form-report'
 import { ClientAchievementsPanel } from './client-achievements-panel'
-import { SessionRowCard } from '@/components/shared/session-row-card'
 import Link from 'next/link'
 
 type Tab = 'overview' | 'sessions' | 'dogs' | 'details' | 'achievements'
@@ -281,17 +280,9 @@ export function ClientProfileTabs({
           {/* Bring to next session */}
           {canEdit && (
             <Card>
-              <CardBody className="pt-5">
-                <div className="flex items-start justify-between gap-3 mb-3">
-                  <div>
-                    <h2 className="font-semibold text-slate-900 flex items-center gap-2">
-                      <ShoppingBag className="h-4 w-4 text-amber-600" />
-                      Bring to next session
-                    </h2>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Items for this client&apos;s next upcoming session. Roll forward until fulfilled.
-                    </p>
-                  </div>
+              <CardBody className="py-5">
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <h2 className="text-sm font-semibold text-slate-900">Bring to next session</h2>
                   {products.length > 0 && (
                     <Button size="sm" variant="secondary" onClick={() => setPickerOpen(true)}>
                       <Plus className="h-3.5 w-3.5 mr-1" /> Add product
@@ -300,7 +291,7 @@ export function ClientProfileTabs({
                 </div>
 
                 {pendingRequests.length === 0 ? (
-                  <p className="text-sm text-slate-400 text-center py-4">
+                  <p className="text-sm text-slate-400">
                     {products.length === 0
                       ? <>No products yet — <Link href="/products" className="text-blue-600 hover:underline">add some to your shop</Link>.</>
                       : 'No items pending.'}
@@ -334,16 +325,16 @@ export function ClientProfileTabs({
 
           {/* Recent tasks */}
           <Card>
-            <CardBody className="pt-5">
-              <h2 className="font-semibold text-slate-900 mb-4">Recent tasks</h2>
+            <CardBody className="py-5">
+              <h2 className="text-sm font-semibold text-slate-900 mb-3">Recent tasks</h2>
               {tasks.length === 0 ? (
-                <p className="text-sm text-slate-400 py-4 text-center">No tasks assigned yet.</p>
+                <p className="text-sm text-slate-400">No tasks assigned yet.</p>
               ) : (
-                <div className="divide-y divide-slate-50">
+                <ul className="flex flex-col divide-y divide-slate-100 -mx-2">
                   {tasks.map(task => (
-                    <div key={task.id} className="flex items-center gap-3 py-2.5">
+                    <li key={task.id} className="flex items-center gap-3 px-2 py-2.5">
                       <span className={`h-6 w-6 rounded-full flex items-center justify-center text-xs flex-shrink-0 ${
-                        task.completed ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-400'
+                        task.completed ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400'
                       }`}>
                         {task.completed ? '✓' : '○'}
                       </span>
@@ -353,52 +344,42 @@ export function ClientProfileTabs({
                           {dogNames[task.dogId]}
                         </span>
                       )}
-                      <span className="text-xs text-slate-400 flex-shrink-0">{formatDate(task.date)}</span>
-                    </div>
+                      <span className="text-xs text-slate-400 flex-shrink-0 tabular-nums">{formatDate(task.date)}</span>
+                    </li>
                   ))}
-                </div>
+                </ul>
               )}
             </CardBody>
           </Card>
 
           {/* Stat cards — pinned to the bottom while the compliance / tasks
-              numbers are still being designed; the top of the tab is given
-              over to week panels + bring-to-next + recent tasks. */}
-          <div className="grid grid-cols-3 gap-4">
-            <Card className="p-5 text-center">
-              <p className={`text-4xl font-bold mb-1 ${
+              numbers are still being designed. Each card shares the same
+              structural shape: big number, uppercase label, single small
+              subtitle line. Heights match because the grid uses auto-rows-fr. */}
+          <div className="grid grid-cols-3 gap-4 auto-rows-fr">
+            <Card className="p-5 flex flex-col items-center text-center">
+              <p className={`text-4xl font-bold leading-none ${
                 stats.complianceRate == null ? 'text-slate-300'
-                : stats.complianceRate >= 70 ? 'text-green-600'
+                : stats.complianceRate >= 70 ? 'text-emerald-600'
                 : stats.complianceRate >= 40 ? 'text-amber-500'
-                : 'text-red-500'
+                : 'text-rose-500'
               }`}>
                 {stats.complianceRate != null ? `${stats.complianceRate}%` : '—'}
               </p>
-              <p className="text-xs text-slate-400 font-medium uppercase tracking-wide">14-day compliance</p>
-              {stats.complianceRate != null && (
-                <div className="mt-3 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all ${
-                      stats.complianceRate >= 70 ? 'bg-green-500'
-                      : stats.complianceRate >= 40 ? 'bg-amber-400'
-                      : 'bg-red-400'
-                    }`}
-                    style={{ width: `${stats.complianceRate}%` }}
-                  />
-                </div>
-              )}
+              <p className="mt-2 text-[11px] text-slate-500 font-semibold uppercase tracking-wide">14-day compliance</p>
+              <p className="mt-1 text-xs text-slate-400">last 14 days</p>
             </Card>
 
-            <Card className="p-5 text-center">
-              <p className="text-4xl font-bold text-slate-900 mb-1">{stats.completedTasks}</p>
-              <p className="text-xs text-slate-400 font-medium uppercase tracking-wide">Tasks completed</p>
-              <p className="text-xs text-slate-300 mt-2">of {stats.totalTasks} assigned</p>
+            <Card className="p-5 flex flex-col items-center text-center">
+              <p className="text-4xl font-bold text-slate-900 leading-none">{stats.completedTasks}</p>
+              <p className="mt-2 text-[11px] text-slate-500 font-semibold uppercase tracking-wide">Tasks completed</p>
+              <p className="mt-1 text-xs text-slate-400">of {stats.totalTasks} assigned</p>
             </Card>
 
-            <Card className="p-5 text-center">
-              <p className="text-4xl font-bold text-slate-900 mb-1">{stats.totalTasks - stats.completedTasks}</p>
-              <p className="text-xs text-slate-400 font-medium uppercase tracking-wide">Remaining</p>
-              <p className="text-xs text-slate-300 mt-2">in last 14 days</p>
+            <Card className="p-5 flex flex-col items-center text-center">
+              <p className="text-4xl font-bold text-slate-900 leading-none">{stats.totalTasks - stats.completedTasks}</p>
+              <p className="mt-2 text-[11px] text-slate-500 font-semibold uppercase tracking-wide">Remaining</p>
+              <p className="mt-1 text-xs text-slate-400">last 14 days</p>
             </Card>
           </div>
         </div>
@@ -848,6 +829,99 @@ const STATUS_PILL: Record<SessionStatus, string> = {
   INVOICED:  'bg-purple-50 text-purple-700 border-purple-200',
 }
 
+const STATUS_LABEL: Record<SessionStatus, string> = {
+  UPCOMING: 'Upcoming',
+  COMPLETED: 'Completed',
+  COMMENTED: 'Commented',
+  INVOICED: 'Invoiced',
+}
+
+// Shared two-line session row used on the Overview week panels and the
+// Sessions tab. Left: small date tile (DAY / NN / MON). Right: title on
+// line one, time · duration · dog on line two, optional status pill on
+// the far right. The "Upcoming" pill is suppressed — when these rows
+// live inside Past / Upcoming sub-tabs or week panels, the status is
+// implied by the section.
+
+function ClientSessionRow({
+  session: s,
+  trailing,
+}: {
+  session: TrainingSession
+  trailing?: React.ReactNode
+}) {
+  const d = new Date(s.scheduledAt)
+  const dayNum = d.getDate()
+  const monthShort = d.toLocaleDateString('en-NZ', { month: 'short' })
+  const time = d.toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit', hour12: true })
+  const isPast = d.getTime() + s.durationMins * 60_000 < Date.now()
+  const isInvoiced = s.invoicedAt != null || s.status === 'INVOICED'
+  // Past + still UPCOMING means the trainer hasn't clicked Mark as
+  // complete yet — surface it as "Pending" (awaiting wrap-up). "Done"
+  // sat too close to "Completed" semantically; "Pending" makes the
+  // call-to-action explicit.
+  const isPending = s.status === 'UPCOMING' && isPast
+  const pillLabel = isPending ? 'Pending' : STATUS_LABEL[s.status]
+  const pillClass = isPending ? 'bg-amber-50 text-amber-700 border-amber-200' : STATUS_PILL[s.status]
+  // Suppress only the future-Upcoming case; everything else (Pending +
+  // Completed + Commented + Invoiced) gets a pill.
+  const showPill = s.status !== 'UPCOMING' || isPending
+
+  const row = (
+    <Link
+      href={`/sessions/${s.id}`}
+      className={cn(
+        'flex items-center gap-2.5 px-2 py-1.5 rounded-lg transition-colors flex-1 min-w-0',
+        isPast ? 'hover:bg-slate-50' : 'hover:bg-blue-50/50',
+      )}
+    >
+      <div className={cn(
+        'flex flex-col items-center justify-center min-w-[40px] py-0.5 px-1.5 rounded-md text-center flex-shrink-0',
+        isPast ? 'bg-slate-50 text-slate-500' : 'bg-blue-50/70 text-blue-700',
+      )}>
+        <span className="text-sm font-bold leading-tight tabular-nums">{dayNum}</span>
+        <span className="text-[10px] font-medium leading-none opacity-70 uppercase">{monthShort}</span>
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-slate-900 truncate leading-tight">{formatSessionTitle(s.title)}</p>
+        <p className="text-xs text-slate-500 truncate leading-tight">
+          {time} · {s.durationMins} min{s.dogName && <> · {s.dogName}</>}
+        </p>
+      </div>
+      <div className="flex items-center gap-1.5 flex-shrink-0">
+        {showPill && (
+          <span className={cn(
+            'inline-flex text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full border whitespace-nowrap',
+            pillClass,
+          )}>
+            {pillLabel}
+          </span>
+        )}
+        <span
+          className={cn(
+            'inline-flex items-center justify-center h-4 w-4 rounded-full',
+            isInvoiced
+              ? 'bg-emerald-500 text-white'
+              : 'border border-rose-500 text-rose-500 bg-white',
+          )}
+          title={isInvoiced ? 'Invoiced' : 'Not invoiced'}
+          aria-label={isInvoiced ? 'Invoiced' : 'Not invoiced'}
+        >
+          <DollarSign className="h-2.5 w-2.5" strokeWidth={2.5} />
+        </span>
+      </div>
+    </Link>
+  )
+
+  if (!trailing) return row
+  return (
+    <div className="flex items-stretch gap-1">
+      {row}
+      {trailing}
+    </div>
+  )
+}
+
 function WeekPanel({
   title,
   sessions,
@@ -859,46 +933,17 @@ function WeekPanel({
 }) {
   return (
     <Card>
-      <CardBody className="pt-5 pb-4">
-        <h2 className="font-semibold text-slate-900 mb-3">{title}</h2>
+      <CardBody className="py-5">
+        <h2 className="text-sm font-semibold text-slate-900 mb-3">{title}</h2>
         {sessions.length === 0 ? (
-          <p className="text-sm text-slate-400 py-2">{emptyText}</p>
+          <p className="text-sm text-slate-400">{emptyText}</p>
         ) : (
           <ul className="flex flex-col divide-y divide-slate-100 -mx-2">
-            {sessions.map(s => {
-              const d = new Date(s.scheduledAt)
-              const dayShort = d.toLocaleDateString('en-NZ', { weekday: 'short' })
-              const dayNum = d.getDate()
-              const monthShort = d.toLocaleDateString('en-NZ', { month: 'short' })
-              const time = d.toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit', hour12: true })
-              return (
-                <li key={s.id}>
-                  <Link
-                    href={`/sessions/${s.id}`}
-                    className="flex items-center gap-3 px-2 py-2.5 rounded-lg hover:bg-slate-50 transition-colors"
-                  >
-                    <div className="flex flex-col items-center justify-center min-w-[44px] py-1 px-1.5 rounded-lg bg-slate-50 text-center">
-                      <span className="text-[10px] font-semibold uppercase text-slate-500 leading-none">{dayShort}</span>
-                      <span className="text-base font-bold text-slate-900 leading-tight">{dayNum}</span>
-                      <span className="text-[10px] font-medium text-slate-400 leading-none">{monthShort}</span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-900 truncate">{formatSessionTitle(s.title)}</p>
-                      <p className="text-xs text-slate-500 truncate">
-                        {time} · {s.durationMins} min
-                        {s.dogName && <> · {s.dogName}</>}
-                      </p>
-                    </div>
-                    <span className={cn(
-                      'flex-shrink-0 text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full border',
-                      STATUS_PILL[s.status],
-                    )}>
-                      {s.status === 'UPCOMING' ? 'Upcoming' : s.status === 'COMPLETED' ? 'Completed' : s.status === 'COMMENTED' ? 'Commented' : 'Invoiced'}
-                    </span>
-                  </Link>
-                </li>
-              )
-            })}
+            {sessions.map(s => (
+              <li key={s.id}>
+                <ClientSessionRow session={s} />
+              </li>
+            ))}
           </ul>
         )}
       </CardBody>
@@ -963,41 +1008,37 @@ function SessionsTabPanel({
           {sub === 'upcoming' ? 'No upcoming sessions.' : 'No past sessions.'}
         </div>
       ) : (
-        <div className="flex flex-col gap-5">
-          {weeks.map(({ weekStartMs, items }) => (
-            <div key={weekStartMs} className="flex flex-col gap-2.5">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400 px-1">
-                Week of {new Date(weekStartMs).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}
-              </h3>
-              {items.map(s => (
-                <SessionRowCard
-                  key={s.id}
-                  session={{
-                    id: s.id,
-                    title: s.title,
-                    scheduledAt: s.scheduledAt,
-                    durationMins: s.durationMins,
-                    status: s.status,
-                    invoicedAt: s.invoicedAt,
-                    location: s.location,
-                    client: null,
-                    dog: s.dogName ? { name: s.dogName } : null,
-                  }}
-                  showDate
-                  trailing={
-                    <button
-                      onClick={() => onConfirmDelete(s.id)}
-                      aria-label="Delete session"
-                      className="self-stretch px-2 rounded-2xl text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  }
-                />
+        <Card>
+          <CardBody className="py-3">
+            <ul className="flex flex-col -mx-2">
+              {weeks.map(({ weekStartMs, items }, weekIdx) => (
+                <li key={weekStartMs} className={weekIdx > 0 ? 'mt-3 pt-3 border-t border-slate-100' : ''}>
+                  <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 px-2 mb-1">
+                    Week of {new Date(weekStartMs).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}
+                  </h3>
+                  <ul className="flex flex-col">
+                    {items.map(s => (
+                      <li key={s.id}>
+                        <ClientSessionRow
+                          session={s}
+                          trailing={
+                            <button
+                              onClick={() => onConfirmDelete(s.id)}
+                              aria-label="Delete session"
+                              className="self-stretch px-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          }
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                </li>
               ))}
-            </div>
-          ))}
-        </div>
+            </ul>
+          </CardBody>
+        </Card>
       )}
     </div>
   )

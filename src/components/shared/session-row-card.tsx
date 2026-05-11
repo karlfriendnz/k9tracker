@@ -94,19 +94,31 @@ export function SessionRowCard({
         isPast && 'opacity-60',
       )}
     >
-      <div className="flex items-stretch sm:h-12 sm:min-h-12">
-        {/* Time rail — coloured by past/future, compact on desktop. */}
+      <div className="flex items-stretch sm:min-h-14">
+        {/* Time rail — coloured by past/future. When showDate is on, render
+            two stacked lines (date / time) and let the duration fall into
+            the body. Without showDate (dashboard/schedule), keep the
+            original compact inline-on-desktop layout. */}
         <div className={cn(
-          'flex-shrink-0 w-[72px] sm:w-auto sm:px-3 flex flex-col sm:flex-row items-center justify-center sm:gap-1.5 px-2 py-2.5 sm:py-0 text-center border-r',
+          'flex-shrink-0 text-center border-r',
+          startDateShort
+            ? 'w-[78px] sm:w-[88px] px-2 py-2 flex flex-col items-center justify-center gap-0.5'
+            : 'w-[72px] sm:w-auto sm:px-3 flex flex-col sm:flex-row items-center justify-center sm:gap-1.5 px-2 py-2.5 sm:py-0',
           isPast
             ? 'bg-slate-50 border-slate-100 text-slate-500'
             : 'bg-blue-50/60 border-blue-100 text-blue-700',
         )}>
-          {startDateShort && (
-            <p className="text-[10px] sm:text-[11px] font-semibold leading-none opacity-80 mb-0.5 sm:mb-0">{startDateShort}</p>
+          {startDateShort ? (
+            <>
+              <p className="text-[11px] font-semibold uppercase tracking-wide opacity-80 leading-none">{startDateShort}</p>
+              <p className="text-sm font-bold leading-tight tabular-nums">{startTime}</p>
+            </>
+          ) : (
+            <>
+              <p className="text-base sm:text-sm font-bold leading-none tabular-nums">{startTime}</p>
+              <p className="text-[10px] sm:text-[11px] font-medium opacity-70 mt-0.5 sm:mt-0">{s.durationMins} min</p>
+            </>
           )}
-          <p className="text-base sm:text-sm font-bold leading-none tabular-nums">{startTime}</p>
-          <p className="text-[10px] sm:text-[11px] font-medium opacity-70 mt-0.5 sm:mt-0">{s.durationMins} min</p>
         </div>
 
         {/* Body — stacked on mobile, single row on desktop. */}
@@ -136,19 +148,37 @@ export function SessionRowCard({
             </>
           )}
 
-          <span className={cn(
-            'inline-flex text-[10px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap self-start mt-1 sm:mt-0 sm:ml-auto sm:self-auto',
-            meta.colour,
-          )}>
-            {meta.label}
-          </span>
+          {/* When the rail surfaces the date, duration lives in the body so
+              the rail isn't a three-line stack. */}
+          {startDateShort && (
+            <>
+              <span className="hidden sm:inline text-slate-300" aria-hidden>·</span>
+              <p className="text-xs text-slate-500 whitespace-nowrap">{s.durationMins} min</p>
+            </>
+          )}
+
+          {/* Hide the "Upcoming" pill — when these rows live in the
+              Past/Upcoming sub-tabs the status is implied by the tab, and
+              the pill becomes noise. Completed / Commented / Invoiced
+              still surface theirs. */}
+          {s.status !== 'UPCOMING' && (
+            <span className={cn(
+              'inline-flex text-[10px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap self-start mt-1 sm:mt-0 sm:ml-auto sm:self-auto',
+              meta.colour,
+            )}>
+              {meta.label}
+            </span>
+          )}
 
           {/* Invoice indicator — green-filled disc when invoiced, red outlined
               disc when not. Always shows so the trainer can see billing state
-              at a glance without opening the session. */}
+              at a glance without opening the session. When the status pill
+              is hidden (UPCOMING), the disc takes its ml-auto so the right
+              edge of the body stays anchored. */}
           <span
             className={cn(
               'inline-flex items-center justify-center h-5 w-5 rounded-full self-start mt-1 sm:mt-0 sm:self-auto flex-shrink-0',
+              s.status === 'UPCOMING' && 'sm:ml-auto',
               isInvoiced
                 ? 'bg-emerald-500 text-white'
                 : 'border-2 border-rose-500 text-rose-500 bg-white',
@@ -173,10 +203,9 @@ export function SessionRowCard({
         {/* Action rail — visual only, the parent Link handles navigation. */}
         <div
           aria-hidden
-          className="group flex-shrink-0 w-14 sm:w-auto flex items-center justify-center gap-1 sm:gap-1.5 px-0 sm:px-3 bg-blue-600 text-white transition-colors"
+          className="group flex-shrink-0 w-12 sm:w-14 flex items-center justify-center px-0 bg-blue-600 text-white transition-colors"
         >
-          <span className="hidden sm:inline text-xs font-semibold">Start</span>
-          <ArrowRight className="h-4 w-4 sm:h-3.5 sm:w-3.5 transition-transform group-hover:translate-x-0.5" />
+          <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
         </div>
       </div>
     </Link>

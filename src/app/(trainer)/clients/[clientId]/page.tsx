@@ -48,7 +48,6 @@ export default async function ClientDetailPage({
   const trainingSessions = await prisma.trainingSession.findMany({
     where: { clientId },
     orderBy: { scheduledAt: 'desc' },
-    take: 20,
     include: {
       dog: { select: { name: true } },
     },

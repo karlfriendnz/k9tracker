@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { UserPlus, TrendingUp, Calendar, ChevronLeft, ChevronRight, ArrowRight, Users, PawPrint, CheckCircle2, Inbox, FileText, type LucideIcon } from 'lucide-react'
+import { UserPlus, TrendingUp, Calendar, ChevronLeft, ChevronRight, ArrowRight, Users, PawPrint, Inbox, FileText, DollarSign } from 'lucide-react'
 import { SessionRowCard } from '@/components/shared/session-row-card'
 import { PendingRequestsPanel } from './pending-requests-panel'
 import { OnboardingPanel } from './onboarding-panel'
@@ -116,15 +116,6 @@ export default async function DashboardPage({
     orderBy: { createdAt: 'desc' },
   })
 
-  const [weeklyTasksAssigned, weeklyTasksCompleted] = await Promise.all([
-    prisma.trainingTask.count({
-      where: { client: { trainerId }, date: { gte: sevenDaysAgo } },
-    }),
-    prisma.trainingTask.count({
-      where: { client: { trainerId }, date: { gte: sevenDaysAgo }, completion: { isNot: null } },
-    }),
-  ])
-
   const totalClients = clients.length
   const activeClients = clients.filter(c => c.status === 'ACTIVE').length
   // Dog counts: primary dog (c.dogId) + additional household dogs (c.dogs).
@@ -133,17 +124,6 @@ export default async function DashboardPage({
   const dogCount = (c: typeof clients[number]) => (c.dogId ? 1 : 0) + c.dogs.length
   const totalDogs = clients.reduce((sum, c) => sum + dogCount(c), 0)
   const activeDogs = clients.filter(c => c.status === 'ACTIVE').reduce((sum, c) => sum + dogCount(c), 0)
-  const overallCompliance =
-    weeklyTasksAssigned > 0
-      ? Math.round((weeklyTasksCompleted / weeklyTasksAssigned) * 100)
-      : null
-
-  const lowComplianceClients = clients.filter((c) => {
-    const assigned = c.diaryEntries.length
-    if (assigned === 0) return false
-    const completed = c.diaryEntries.filter(t => t.completion).length
-    return completed / assigned < 0.4
-  })
 
   // Recent enquiries — only NEW (still pending decision). Accepted and
   // declined ones drop off the dashboard once actioned; trainer can find
@@ -167,7 +147,9 @@ export default async function DashboardPage({
 
   // Past sessions still needing notes OR an invoice — the dashboard CTA links
   // to /sessions/needs-notes which is now framed as a generic "to do" list.
-  const sessionsToActionCount = await prisma.trainingSession.count({
+  // We fetch the rows (not just a count) so we can also surface the
+  // notes-pending count + total un-invoiced value alongside the headline.
+  const sessionsToAction = await prisma.trainingSession.findMany({
     where: {
       trainerId,
       scheduledAt: { lt: new Date() },
@@ -177,7 +159,29 @@ export default async function DashboardPage({
         { invoicedAt: null },
       ],
     },
+    select: {
+      invoicedAt: true,
+      _count: { select: { formResponses: true } },
+      clientPackage: {
+        select: { package: { select: { priceCents: true, sessionCount: true } } },
+      },
+    },
   })
+  const sessionsToActionCount = sessionsToAction.length
+  const wrapNotesCount = sessionsToAction.filter(s => s._count.formResponses === 0).length
+  const wrapInvoiceCount = sessionsToAction.filter(s => s.invoicedAt == null).length
+  const wrapInvoiceCents = sessionsToAction.reduce((sum, s) => {
+    if (s.invoicedAt != null) return sum
+    const pkg = s.clientPackage?.package
+    if (!pkg?.priceCents || !pkg.sessionCount || pkg.sessionCount <= 0) return sum
+    return sum + Math.round(pkg.priceCents / pkg.sessionCount)
+  }, 0)
+  const wrapInvoiceLabel = wrapInvoiceCents > 0
+    ? '$' + (wrapInvoiceCents / 100).toLocaleString('en-NZ', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: wrapInvoiceCents % 100 === 0 ? 0 : 2,
+      })
+    : null
 
   // Pending product requests across this trainer's clients — shown as a panel
   // so the trainer can fulfil items at the next session and dismiss the chip.
@@ -214,11 +218,88 @@ export default async function DashboardPage({
       <OnboardingPanel state={onboardingState} />
 
       {/* Quick actions — top-of-page so primary jobs-to-be-done are one tap away. */}
-      <div className="grid grid-cols-4 gap-2 sm:gap-3 mb-8">
+      <div className="grid grid-cols-4 gap-2 sm:gap-3 mb-6">
         <QuickAction href="/clients/invite" icon={<UserPlus className="h-5 w-5" />} label="Invite client" />
         <QuickAction href="/schedule" icon={<Calendar className="h-5 w-5" />} label="Book session" />
         <QuickAction href="/progress" icon={<TrendingUp className="h-5 w-5" />} label="View progress" />
         <QuickAction href="/schedule" icon={<Calendar className="h-5 w-5" />} label="Schedule" />
+      </div>
+
+      {/* Vital stats strip — four tiles in one row: Notes, Invoice, Clients,
+          Dogs. The first two link to /sessions/needs-notes; Clients/Dogs are
+          informational. Tiles show their value even when zero so the row stays
+          a stable four-up. */}
+      <div className="mb-8 grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <Link
+          href="/sessions/needs-notes"
+          className={cn(
+            'block rounded-2xl bg-white border p-3.5 transition-colors',
+            wrapNotesCount > 0 ? 'border-amber-100 hover:border-amber-300' : 'border-slate-100 hover:border-slate-200',
+          )}
+        >
+          <div className="flex items-center gap-2.5">
+            <span className={cn(
+              'flex h-9 w-9 items-center justify-center rounded-lg flex-shrink-0',
+              wrapNotesCount > 0 ? 'bg-amber-50 text-amber-600' : 'bg-slate-50 text-slate-400',
+            )}>
+              <FileText className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-xl font-bold text-slate-900 leading-none tabular-nums">{wrapNotesCount}</p>
+              <p className="text-[11px] text-slate-500 mt-1 leading-tight">
+                {wrapNotesCount === 1 ? 'note to write' : 'notes to write'}
+              </p>
+            </div>
+          </div>
+        </Link>
+        <Link
+          href="/sessions/needs-notes"
+          className={cn(
+            'block rounded-2xl bg-white border p-3.5 transition-colors',
+            wrapInvoiceCount > 0 ? 'border-rose-100 hover:border-rose-300' : 'border-slate-100 hover:border-slate-200',
+          )}
+        >
+          <div className="flex items-center gap-2.5">
+            <span className={cn(
+              'flex h-9 w-9 items-center justify-center rounded-lg flex-shrink-0',
+              wrapInvoiceCount > 0 ? 'bg-rose-600 text-white' : 'bg-slate-50 text-slate-400',
+            )}>
+              <DollarSign className="h-4 w-4" strokeWidth={3} />
+            </span>
+            <div className="min-w-0">
+              <p className="text-xl font-bold text-slate-900 leading-none tabular-nums">
+                {wrapInvoiceCount > 0 ? (wrapInvoiceLabel ?? wrapInvoiceCount) : 0}
+              </p>
+              <p className="text-[11px] text-slate-500 mt-1 leading-tight">
+                {wrapInvoiceLabel && wrapInvoiceCount > 0
+                  ? `across ${wrapInvoiceCount} to invoice`
+                  : wrapInvoiceCount === 1 ? 'session to invoice' : 'sessions to invoice'}
+              </p>
+            </div>
+          </div>
+        </Link>
+        <div className="block rounded-2xl bg-white border border-slate-100 p-3.5">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50 text-blue-600 flex-shrink-0">
+              <Users className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-xl font-bold text-slate-900 leading-none tabular-nums">{activeClients}/{totalClients}</p>
+              <p className="text-[11px] text-slate-500 mt-1 leading-tight">active clients</p>
+            </div>
+          </div>
+        </div>
+        <div className="block rounded-2xl bg-white border border-slate-100 p-3.5">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-50 text-amber-600 flex-shrink-0">
+              <PawPrint className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-xl font-bold text-slate-900 leading-none tabular-nums">{activeDogs}/{totalDogs}</p>
+              <p className="text-[11px] text-slate-500 mt-1 leading-tight">active dogs</p>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Day-scoped session list — surfaced next so the trainer sees what's
@@ -297,32 +378,6 @@ export default async function DashboardPage({
           </div>
         )}
       </div>
-
-      {/* Sessions-to-action CTA — past sessions still needing notes or an
-          invoice. Links to the wrap-up todo list on /sessions/needs-notes. */}
-      {sessionsToActionCount > 0 && (
-        <Link
-          href="/sessions/needs-notes"
-          className="mb-6 block rounded-2xl border bg-amber-50 border-amber-100 hover:border-amber-200 p-4 transition-colors"
-        >
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100 text-amber-700 flex-shrink-0">
-                <FileText className="h-4 w-4" />
-              </span>
-              <div className="min-w-0">
-                <p className="font-semibold text-sm leading-tight text-amber-900">
-                  {sessionsToActionCount} session{sessionsToActionCount === 1 ? '' : 's'} to wrap up
-                </p>
-                <p className="text-xs mt-0.5 text-amber-700/80">
-                  Past sessions still needing notes or invoicing.
-                </p>
-              </div>
-            </div>
-            <ArrowRight className="h-4 w-4 flex-shrink-0 mt-1 text-amber-700" />
-          </div>
-        </Link>
-      )}
 
       {/* Recent enquiries — only shown when there's actually been recent
           inbound activity, so the dashboard doesn't carry an empty card. */}
@@ -414,123 +469,7 @@ export default async function DashboardPage({
         }))}
       />
 
-      {/* Low compliance alert */}
-      {lowComplianceClients.length > 0 && (
-        <div className="mb-6 rounded-2xl bg-amber-50 border border-amber-100 p-4">
-          <p className="font-semibold text-amber-900 mb-2">
-            ⚠️ {lowComplianceClients.length} client{lowComplianceClients.length > 1 ? 's' : ''} need attention
-          </p>
-          <div className="flex flex-col gap-2">
-            {lowComplianceClients.map((c) => {
-              const rate = Math.round(
-                (c.diaryEntries.filter(t => t.completion).length / c.diaryEntries.length) * 100
-              )
-              return (
-                <Link
-                  key={c.id}
-                  href={`/clients/${c.id}`}
-                  className="flex items-center justify-between bg-white rounded-xl px-4 py-2.5 hover:border-amber-200 border border-transparent transition-colors"
-                >
-                  <span className="text-sm font-medium text-slate-700">
-                    {c.user.name ?? c.user.email}
-                    {c.dog && <span className="text-slate-400"> · {c.dog.name}</span>}
-                  </span>
-                  <span className="text-sm font-bold text-red-500">{rate}%</span>
-                </Link>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Stats — kept at the bottom as supporting context, not primary action area. */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatCard
-          label="Clients"
-          value={`${activeClients}/${totalClients}`}
-          icon={Users}
-          iconClass="bg-blue-50 text-blue-600"
-        />
-        <StatCard
-          label="Dogs"
-          value={`${activeDogs}/${totalDogs}`}
-          icon={PawPrint}
-          iconClass="bg-amber-50 text-amber-600"
-        />
-        <StatCard
-          label="Completed"
-          value={String(weeklyTasksCompleted)}
-          icon={CheckCircle2}
-          iconClass="bg-emerald-50 text-emerald-600"
-          sub={weeklyTasksAssigned > 0 ? `of ${weeklyTasksAssigned}` : undefined}
-        />
-        <StatCard
-          label="Compliance"
-          value={overallCompliance != null ? `${overallCompliance}%` : '—'}
-          icon={TrendingUp}
-          iconClass={overallCompliance == null
-            ? 'bg-slate-100 text-slate-500'
-            : overallCompliance >= 70
-              ? 'bg-emerald-50 text-emerald-600'
-              : 'bg-rose-50 text-rose-600'
-          }
-          highlight={overallCompliance != null}
-          highlightGood={overallCompliance != null && overallCompliance >= 70}
-          progress={overallCompliance ?? undefined}
-        />
-      </div>
     </div>
-  )
-}
-
-function StatCard({
-  label,
-  value,
-  icon: Icon,
-  iconClass,
-  sub,
-  highlight,
-  highlightGood,
-  progress,
-}: {
-  label: string
-  value: string
-  icon: LucideIcon
-  iconClass?: string
-  sub?: React.ReactNode
-  highlight?: boolean
-  highlightGood?: boolean
-  progress?: number
-}) {
-  return (
-    <Card className="p-4 h-full flex flex-col gap-2">
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-        <span className={cn(
-          'flex h-7 w-7 items-center justify-center rounded-lg flex-shrink-0',
-          iconClass ?? 'bg-slate-100 text-slate-500'
-        )}>
-          <Icon className="h-3.5 w-3.5" aria-hidden />
-        </span>
-      </div>
-      <div className="flex items-baseline gap-1.5">
-        <p className={cn(
-          'text-2xl font-bold tabular-nums leading-none',
-          highlight ? (highlightGood ? 'text-emerald-600' : 'text-rose-500') : 'text-slate-900'
-        )}>
-          {value}
-        </p>
-        {sub && <p className="text-xs text-slate-500">{sub}</p>}
-      </div>
-      {/* mt-auto pins the progress bar to the bottom; cards without a bar
-          end with the value pinned to the top, so heights match. */}
-      <div className="mt-auto h-1.5 rounded-full bg-slate-100 overflow-hidden" style={{ visibility: progress != null ? 'visible' : 'hidden' }}>
-        <div
-          className={cn('h-full transition-all', progress != null && progress >= 70 ? 'bg-emerald-500' : 'bg-rose-400')}
-          style={{ width: progress != null ? `${Math.min(100, Math.max(0, progress))}%` : '0%' }}
-        />
-      </div>
-    </Card>
   )
 }
 

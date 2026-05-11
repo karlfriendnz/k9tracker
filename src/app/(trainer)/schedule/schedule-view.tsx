@@ -2450,23 +2450,11 @@ export function ScheduleView({
   useEffect(() => { setSessions(initialSessions) }, [initialSessions])
   useEffect(() => { setAvailSlots(initialAvailSlots) }, [initialAvailSlots])
 
-  // Auto-mark sessions as COMPLETED once their scheduled time has passed
-  useEffect(() => {
-    const now = new Date()
-    setSessions(prev => prev.map(s => {
-      if (s.status === 'UPCOMING' && new Date(s.scheduledAt) < now) {
-        // Fire-and-forget PATCH — non-critical
-        fetch(`/api/schedule/${s.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: 'COMPLETED' }),
-        })
-        return { ...s, status: 'COMPLETED' as SessionStatus }
-      }
-      return s
-    }))
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialSessions])
+  // Status no longer auto-flips to COMPLETED when scheduledAt is in the
+  // past — the trainer marks completion explicitly via the
+  // MarkCompleteButton on the session detail page. Past UPCOMING rows
+  // stay UPCOMING until they click; the time-rail colour already conveys
+  // "this is in the past".
 
   const weekStart = getMondayOf(selectedDate)
   // Filter visible weekdays per trainer preference. JS getDay: 0=Sun..6=Sat;
