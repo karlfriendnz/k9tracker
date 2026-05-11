@@ -101,6 +101,37 @@ export function NativeBootstrap() {
     };
   }, []);
 
+  // Universal Links / Android App Links — when iOS or Android hands the
+  // app an HTTPS URL (a magic-link tap from email, a share-sheet link
+  // to a session, a deep link in a push payload that points at a web
+  // URL), Capacitor fires `appUrlOpen` with the full URL. We navigate
+  // the WebView to the path so the user lands on the right page inside
+  // the app instead of being bounced out to Safari.
+  //
+  // Strip the origin before navigating: the WebView is already on
+  // app.pupmanager.com (via the native-shell loader), so a
+  // window.location.href to the full URL would force a reload of the
+  // shell. window.location.assign with just the pathname+search keeps
+  // us inside the same WebView session.
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    const handle = CapacitorApp.addListener('appUrlOpen', ({ url }) => {
+      try {
+        const u = new URL(url);
+        // Only follow links to our own origin — anything else is
+        // either malformed or someone trying to navigate the app out
+        // of its sandbox.
+        if (u.hostname !== 'app.pupmanager.com') return;
+        const target = u.pathname + (u.search || '') + (u.hash || '');
+        window.location.assign(target);
+      } catch {
+        // Malformed URL — silently ignore. The user can always retry
+        // from email.
+      }
+    });
+    return () => { void handle.then(h => h.remove()); };
+  }, []);
+
   // Refetch Server Components whenever the app comes back to foreground.
   // iOS doesn't kill backgrounded apps — the WebView keeps the React
   // tree (and any Server-Component-rendered data) exactly as it was
