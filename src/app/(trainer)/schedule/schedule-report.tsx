@@ -102,7 +102,7 @@ export function ScheduleReport({ weekStart, onClose }: { weekStart: string; onCl
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={onClose}>
       <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-md" />
       <div
-        className="relative z-50 bg-slate-50 rounded-3xl shadow-2xl w-full max-w-4xl max-h-[92vh] overflow-hidden flex flex-col md:flex-row"
+        className="relative z-50 bg-slate-50 rounded-3xl shadow-2xl w-full max-w-4xl h-[92dvh] md:max-h-[92vh] md:h-auto overflow-hidden flex flex-col md:flex-row"
         onClick={e => e.stopPropagation()}
       >
         {/* Sidebar (md+) / horizontal tabs (sm) */}
@@ -136,8 +136,10 @@ export function ScheduleReport({ weekStart, onClose }: { weekStart: string; onCl
           </div>
         </aside>
 
-        {/* Body */}
-        <div className="flex-1 flex flex-col min-w-0">
+        {/* Body — `min-h-0` is required so flex-1 child can shrink and let
+            its inner overflow-y-auto actually scroll instead of pushing
+            the modal's height. */}
+        <div className="flex-1 flex flex-col min-w-0 min-h-0">
           <div className="flex items-center justify-between gap-3 px-5 py-3 bg-white border-b border-slate-100">
             <p className="text-sm font-semibold text-slate-900">
               {tab === 'weekly' ? 'Weekly report' : 'Annual report'}

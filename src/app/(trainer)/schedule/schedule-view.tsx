@@ -2412,6 +2412,7 @@ export function ScheduleView({
   // Free-text search across visible sessions. Non-matching blocks fade to
   // 20% opacity until the search is cleared.
   const [search, setSearch] = useState('')
+  const [searchOpenMobile, setSearchOpenMobile] = useState(false)
   const searchTokens = search.trim().toLocaleLowerCase('en-NZ').split(/\s+/).filter(Boolean)
   function sessionMatchesSearch(s: Session): boolean {
     if (searchTokens.length === 0) return true
@@ -2677,55 +2678,72 @@ export function ScheduleView({
           </button>
         </div>
 
-        {/* Search (pushed to the right cluster) */}
-        <div className="relative w-56 lg:w-64 ml-auto">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-          <input
-            type="search"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search sessions…"
-            className="w-full h-8 pl-9 pr-14 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          {searchTokens.length > 0 && (
-            <span className="absolute right-7 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 tabular-nums">
-              {matchedIds.size}
-            </span>
-          )}
-          {search && (
-            <button
-              onClick={() => setSearch('')}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600"
-              aria-label="Clear search"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          )}
+        {/* Search — full input from sm; icon-only button on phones that
+            expands into a slide-down search row underneath when tapped. */}
+        <div className="ml-auto sm:relative sm:w-56 lg:w-64">
+          {/* Mobile: icon button toggles a second-row search field below. */}
+          <button
+            type="button"
+            onClick={() => setSearchOpenMobile(v => !v)}
+            aria-label="Search sessions"
+            className={`sm:hidden inline-flex h-8 w-8 items-center justify-center rounded-lg border ${
+              search || searchOpenMobile ? 'border-blue-300 bg-blue-50 text-blue-600' : 'border-slate-200 bg-white text-slate-500'
+            }`}
+          >
+            <Search className="h-4 w-4" />
+          </button>
+          {/* Tablet+ inline search input. */}
+          <div className="hidden sm:block relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <input
+              type="search"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search sessions…"
+              className="w-full h-8 pl-9 pr-7 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {searchTokens.length > 0 && (
+              <span className="absolute right-7 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 tabular-nums">
+                {matchedIds.size}
+              </span>
+            )}
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600"
+                aria-label="Clear search"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
         </div>
 
-        <div className="flex items-center gap-1.5 flex-wrap">
+        {/* Action cluster — icon-only on phones, icon + label from sm.
+            Reports/Hours/Calendar collapse so the header stays one row. */}
+        <div className="flex items-center gap-1.5 flex-shrink-0">
           {!googleCalendarConnected ? (
-            <a href="/api/google-calendar/connect" title="Connect Google Calendar">
+            <a href="/api/google-calendar/connect" title="Connect Google Calendar" className="hidden sm:inline-flex">
               <Button variant="secondary" size="sm" aria-label="Connect Google Calendar">
                 <Calendar className="h-4 w-4" />
               </Button>
             </a>
           ) : (
             <span
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-emerald-600 bg-emerald-50 border border-emerald-100"
+              className="hidden sm:inline-flex h-8 w-8 items-center justify-center rounded-lg text-emerald-600 bg-emerald-50 border border-emerald-100"
               title="Google Calendar synced"
             >
               <Calendar className="h-3.5 w-3.5" />
             </span>
           )}
 
-          <Button variant="secondary" size="sm" onClick={() => setShowReport(true)} title="Weekly report">
-            <BarChart2 className="h-4 w-4" /> Reports
+          <Button variant="secondary" size="sm" onClick={() => setShowReport(true)} title="Weekly report" aria-label="Weekly report">
+            <BarChart2 className="h-4 w-4" /> <span className="hidden sm:inline">Reports</span>
           </Button>
 
           <span className="relative inline-flex">
-            <Button variant="secondary" size="sm" onClick={() => setShowAvail(true)} title="Availability hours">
-              <Clock className="h-4 w-4" /> Hours
+            <Button variant="secondary" size="sm" onClick={() => setShowAvail(true)} title="Availability hours" aria-label="Availability hours">
+              <Clock className="h-4 w-4" /> <span className="hidden sm:inline">Hours</span>
             </Button>
             {showHints && availSlots.length === 0 && (
               <span
@@ -2764,6 +2782,38 @@ export function ScheduleView({
           </div>
         </div>
       </div>
+
+      {/* Mobile-only search field, revealed by the search icon-button above.
+          Sits below the header row so the header itself stays one tidy line. */}
+      {(searchOpenMobile || search) && (
+        <div className="sm:hidden px-4 pb-2 bg-white border-b border-slate-100">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <input
+              type="search"
+              autoFocus
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search sessions…"
+              className="w-full h-9 pl-9 pr-9 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {(search || searchOpenMobile) && (
+              <button
+                onClick={() => { setSearch(''); setSearchOpenMobile(false) }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600"
+                aria-label="Close search"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+            {searchTokens.length > 0 && (
+              <span className="absolute right-9 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 tabular-nums">
+                {matchedIds.size}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       {dropWarning && (
         <div className="flex items-start gap-2 px-4 md:px-6 py-2 bg-amber-50 border-b border-amber-200 text-xs text-amber-800">
