@@ -85,7 +85,11 @@ export function MessagesView({
       {/* ── Thread list (left pane) ─────────────────────────────────────── */}
       <aside
         className={cn(
-          'flex-col w-full md:w-80 md:flex-shrink-0 md:border-r border-slate-100 bg-white min-w-0',
+          // `min-h-0` is critical — without it the aside's intrinsic
+          // height defaults to its content, which means the inner
+          // overflow-y-auto can't take effect and the list grows past
+          // the viewport instead of scrolling.
+          'flex-col w-full md:w-80 md:flex-shrink-0 md:border-r border-slate-100 bg-white min-w-0 min-h-0',
           listVisibility,
         )}
       >

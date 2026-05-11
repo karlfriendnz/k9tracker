@@ -51,8 +51,10 @@ export function MessageThread({
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3">
+      {/* Messages — `min-h-0` here too so the flex-1 sizing doesn't get
+          overridden by the intrinsic content height, which would defeat
+          overflow-y-auto and push the composer off-screen. */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 flex flex-col gap-3">
         {messages.length === 0 && (
           <p className="text-center text-slate-400 text-sm py-8">No messages yet. Say hello!</p>
         )}
@@ -76,9 +78,15 @@ export function MessageThread({
         <div ref={bottomRef} />
       </div>
 
-      {/* Input — solid bg so the messages list can scroll behind without
-          the composer becoming hard to read on its own. */}
-      <div className="border-t border-slate-100 px-4 pt-3 pb-3 bg-white">
+      {/* Composer — sticky to the bottom of the thread pane. flex-shrink-0
+          stops it from collapsing if the messages list ever needs more
+          room. Safe-area-inset-bottom keeps the input clear of the iOS
+          home indicator on devices where this pane reaches the viewport
+          edge. */}
+      <div
+        className="flex-shrink-0 sticky bottom-0 border-t border-slate-100 px-4 pt-3 bg-white"
+        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.75rem)' }}
+      >
         {error && <p className="text-xs text-red-500 mb-2">{error}</p>}
         <form onSubmit={sendMessage} className="flex gap-2">
           <input
