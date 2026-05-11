@@ -122,21 +122,19 @@ export default async function SessionPage({
 
       <Card className="mb-6">
         <CardBody className="py-4 flex flex-col gap-2.5 text-sm">
-          {/* Session title and in-person/virtual badge — the page header
-              just says "Session", so this is where the trainer learns
-              which one it is. */}
-          <div className="flex items-start justify-between gap-3 pb-2 border-b border-slate-100">
-            <div className="min-w-0">
-              <h2 className="text-base font-semibold text-slate-900 leading-snug">
-                {formatSessionTitle(trainingSession.title)}
-              </h2>
-              {clientName && (
-                <p className="text-xs text-slate-500 mt-0.5">
-                  {clientName}{trainingSession.dog ? ` · 🐕 ${trainingSession.dog.name}` : ''}
-                </p>
-              )}
-            </div>
-            <span className={`flex-shrink-0 text-[10px] font-semibold uppercase tracking-wide px-2 py-1 rounded-full ${
+          {/* Session title + client/dog above, in-person/virtual badge on
+              its own row underneath so it isn't fighting a long session
+              title for horizontal space on phones. */}
+          <div className="pb-2 border-b border-slate-100">
+            <h2 className="text-base font-semibold text-slate-900 leading-snug">
+              {formatSessionTitle(trainingSession.title)}
+            </h2>
+            {clientName && (
+              <p className="text-xs text-slate-500 mt-0.5">
+                {clientName}{trainingSession.dog ? ` · 🐕 ${trainingSession.dog.name}` : ''}
+              </p>
+            )}
+            <span className={`inline-flex items-center mt-2 text-[10px] font-semibold uppercase tracking-wide px-2 py-1 rounded-full ${
               trainingSession.sessionType === 'VIRTUAL'
                 ? 'bg-purple-50 text-purple-700'
                 : 'bg-blue-50 text-blue-700'
