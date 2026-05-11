@@ -92,15 +92,18 @@ export default async function SessionPage({
 
   return (
     <div className="p-4 md:p-8 max-w-3xl mx-auto">
-      {/* Sticky action bar — back link + workflow buttons stay pinned at the
-          top while the trainer scrolls the report. Action labels collapse to
-          icons on mobile so all four (Preview / Complete / Invoice / Delete)
-          fit on one line without wrapping. The safe-area padding stops the
-          iOS chrome (time, battery) bleeding into the bar once the page is
-          scrolled and the bar is sticking to viewport-top. */}
+      {/* Sticky action bar — back link + workflow buttons stay pinned while
+          the trainer scrolls. Action labels collapse to icons on mobile so
+          all four (Preview / Complete / Invoice / Delete) fit on one line.
+          Sticky `top` uses env(safe-area-inset-top) so when the bar pins to
+          viewport-top during scroll, iOS chrome (time, battery) keeps its
+          own space above the bar. The parent <main> already handles
+          safe-area for the initial unscrolled position, so we don't add
+          internal safe-area padding here — that previously created a
+          ~50px gap on iOS. */}
       <div
-        className="sticky top-0 z-20 -mx-4 md:-mx-8 px-4 md:px-8 mb-4 bg-white/95 backdrop-blur border-b border-slate-100"
-        style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.625rem)', paddingBottom: '0.625rem' }}
+        className="sticky z-20 -mx-4 md:-mx-8 px-4 md:px-8 py-2.5 mb-4 bg-white/95 backdrop-blur border-b border-slate-100"
+        style={{ top: 'env(safe-area-inset-top, 0px)' }}
       >
         <div className="flex items-center justify-between gap-2 max-w-3xl mx-auto">
           {clientId ? (
