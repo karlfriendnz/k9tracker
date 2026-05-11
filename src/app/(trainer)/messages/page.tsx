@@ -116,10 +116,20 @@ export default async function MessagesPage({
   }
 
   return (
-    // No max-w cap — the two-pane layout uses the full main width so the
-    // thread list and the active conversation each get as much room as
-    // they need.
-    <div className="px-4 md:px-8 pt-4 md:pt-8 flex flex-col flex-1 min-h-0">
+    // Bounded to viewport height so the two-pane layout can scroll its
+    // panes internally. The trainer-shell outer is `min-h-screen` (it
+    // grows when a page is taller than the viewport), so flex-1 +
+    // min-h-0 alone wouldn't constrain this. On mobile we subtract the
+    // bottom tab nav (~5rem) so the composer sits just above the nav
+    // instead of behind it; desktop has no bottom nav so it gets the
+    // full viewport.
+    //
+    // Note: no top padding — the messages surface goes flush against
+    // its container so there's no dead band above PageHeader, and the
+    // chrome below PageHeader (tabs + list) flows seamlessly.
+    <div
+      className="px-4 md:px-8 flex flex-col overflow-hidden h-[calc(100dvh-5rem)] md:h-[100dvh]"
+    >
       <PageHeader title="Messages" />
       <MessagesView
         activeClients={activeClients}

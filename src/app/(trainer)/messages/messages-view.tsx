@@ -81,7 +81,10 @@ export function MessagesView({
   const threadVisibility = selectedClient ? 'flex' : 'hidden md:flex'
 
   return (
-    <div className="flex flex-1 min-h-0 -mx-4 md:-mx-8 -mb-20 md:mb-0 border-t border-slate-100">
+    // -mt-4 cancels PageHeader's mb-4 so there's no dead band between
+    // the page title and the two-pane content. -mx negates the page's
+    // px so the panes go flush to main's edges.
+    <div className="flex flex-1 min-h-0 -mt-4 -mx-4 md:-mx-8 -mb-20 md:mb-0 border-t border-slate-100">
       {/* ── Thread list (left pane) ─────────────────────────────────────── */}
       <aside
         className={cn(
@@ -93,8 +96,9 @@ export function MessagesView({
           listVisibility,
         )}
       >
-        {/* Tab strip */}
-        <div className="flex gap-1 border-b border-slate-200 px-2 pt-2">
+        {/* Tab strip — sticky at the top of the list pane so the Active /
+            Inactive controls stay visible while the list scrolls. */}
+        <div className="sticky top-0 z-10 flex gap-1 border-b border-slate-200 bg-white px-2 pt-2">
           {([
             { key: 'active',   label: 'Active',   count: activeClients.length,   unread: activeUnread },
             { key: 'inactive', label: 'Inactive', count: inactiveClients.length, unread: inactiveUnread },
