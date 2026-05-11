@@ -76,8 +76,10 @@ export function MessageThread({
         <div ref={bottomRef} />
       </div>
 
-      {/* Input */}
-      <div className="border-t border-slate-100 px-4 py-3">
+      {/* Input — solid bg-white so the messages list can scroll behind
+          without the composer becoming hard to read. Padding-bottom
+          adds breathing room above the bottom tab nav on mobile. */}
+      <div className="border-t border-slate-100 px-4 pt-3 pb-3 bg-white">
         {error && <p className="text-xs text-red-500 mb-2">{error}</p>}
         <form onSubmit={sendMessage} className="flex gap-2">
           <input

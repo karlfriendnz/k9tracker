@@ -50,7 +50,7 @@ export function MessageThread({
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col flex-1 min-h-0">
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3">
         {messages.length === 0 && (
@@ -76,8 +76,9 @@ export function MessageThread({
         <div ref={bottomRef} />
       </div>
 
-      {/* Input */}
-      <div className="border-t border-slate-100 px-4 py-3">
+      {/* Input — solid bg so the messages list can scroll behind without
+          the composer becoming hard to read on its own. */}
+      <div className="border-t border-slate-100 px-4 pt-3 pb-3 bg-white">
         {error && <p className="text-xs text-red-500 mb-2">{error}</p>}
         <form onSubmit={sendMessage} className="flex gap-2">
           <input

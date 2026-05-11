@@ -39,10 +39,9 @@ const TRAINER_MOBILE_PRIMARY_HREFS = new Set([
 const CLIENT_NAV = [
   { href: '/home', label: 'Home', icon: Home },
   { href: '/my-sessions', label: 'Sessions', icon: Calendar },
+  { href: '/my-messages', label: 'Messages', icon: MessageSquare },
   { href: '/my-availability', label: 'Available', icon: CalendarClock },
   { href: '/my-shop', label: 'Shop', icon: ShoppingBag },
-  // Messaging tab hidden for now — route still works for direct deep links.
-  // { href: '/my-messages', label: 'Messages', icon: MessageSquare },
   { href: '/my-profile', label: 'Profile', icon: User },
 ]
 
@@ -185,8 +184,11 @@ function ClientShell({ children, trainerLogo, businessName, clientNavHints, unre
           </div>
         </header>
 
-        {/* Main content */}
-        <main className="flex-1 pb-24 md:pb-8">
+        {/* Main content — flex column so chat-style routes can grow a
+            single child to fill the available height (flex-1 + min-h-0)
+            and pin a composer at the bottom without needing a brittle
+            100dvh-minus-chrome height calc. */}
+        <main className="flex-1 flex flex-col min-h-0 pb-24 md:pb-8">
           {children}
         </main>
 
@@ -620,7 +622,7 @@ function TrainerShell({
       )}
 
       <main
-        className={cn('flex-1 pb-20 md:pb-0 transition-all duration-200', mainOffset)}
+        className={cn('flex-1 flex flex-col min-h-0 pb-20 md:pb-0 transition-all duration-200', mainOffset)}
         // Capped safe-area pad on mobile: pages without their own sticky
         // top bar get a small clearance below iOS chrome. Pages that
         // own a sticky bar can break out via negative margin and handle

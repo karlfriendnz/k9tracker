@@ -41,7 +41,7 @@ export default async function TrainerMessageThreadPage({ params }: { params: Pro
   const displayName = client.user.name ?? client.user.email
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-4rem)] md:h-screen max-w-2xl mx-auto">
+    <div className="flex flex-col flex-1 min-h-0 max-w-2xl w-full mx-auto -mb-20 md:mb-0">
       {/* Sticky thread header. Reserves env(safe-area-inset-top) on iOS so
           the back chevron and client name aren't tucked under the notch.
           marginTop pulls back through <main>'s capped safe-area pad. */}

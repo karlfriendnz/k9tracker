@@ -37,14 +37,20 @@ export default async function ClientMessagesPage() {
   const trainerName = clientProfile.trainer.user.name ?? clientProfile.trainer.user.email
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-4rem)]">
-      {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-100">
+    // Negative bottom margin reclaims <main>'s pb-24 buffer so the chat
+    // composer can sit flush above the bottom tab nav instead of leaving
+    // a ~96px dead band beneath it. Desktop has no bottom nav so the
+    // override falls back to mb-0.
+    <div className="flex flex-col flex-1 min-h-0 -mb-24 md:mb-0">
+      {/* Sticky trainer header — pins to the top of the chat scroll so the
+          client always knows who they're talking to, even after scrolling
+          deep into the message history. */}
+      <div className="sticky top-0 z-10 flex items-center gap-3 px-4 py-3 border-b border-slate-100 bg-white">
         <div className="h-9 w-9 rounded-full bg-amber-100 text-amber-700 font-bold text-sm flex items-center justify-center flex-shrink-0">
           {trainerName[0].toUpperCase()}
         </div>
-        <div>
-          <p className="font-semibold text-slate-900 text-sm">{trainerName}</p>
+        <div className="min-w-0">
+          <p className="font-semibold text-slate-900 text-sm truncate">{trainerName}</p>
           <p className="text-xs text-slate-500">Your trainer</p>
         </div>
       </div>
