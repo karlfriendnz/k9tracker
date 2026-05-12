@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation'
 import { signOut } from 'next-auth/react'
 import { cn } from '@/lib/utils'
 import {
-  LayoutDashboard, Users, Calendar, CalendarClock, Layers, Package,
+  LayoutDashboard, Users, Calendar, Layers, Package,
   MessageSquare, Settings, HelpCircle, User, Trophy,
   Home, LogOut, ShoppingBag, ChevronsLeft, ChevronsRight,
   MoreHorizontal, X, Inbox,
@@ -40,8 +40,6 @@ const CLIENT_NAV = [
   { href: '/home', label: 'Home', icon: Home },
   { href: '/my-sessions', label: 'Sessions', icon: Calendar },
   { href: '/my-messages', label: 'Messages', icon: MessageSquare },
-  { href: '/my-availability', label: 'Available', icon: CalendarClock },
-  { href: '/my-shop', label: 'Shop', icon: ShoppingBag },
   { href: '/my-profile', label: 'Profile', icon: User },
 ]
 

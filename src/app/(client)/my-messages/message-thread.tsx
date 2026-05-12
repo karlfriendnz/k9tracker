@@ -113,11 +113,12 @@ export function MessageThread({
         <div ref={bottomRef} />
       </div>
 
-      {/* Composer — sticky to the bottom of the thread pane, with safe-
-          area-inset-bottom so the input clears the iOS home indicator
-          even when the chat page claims back the surrounding pb-24. */}
+      {/* Composer — flex-shrink-0 keeps it visible at the bottom of the
+          flex column while the messages list flexes/scrolls above it.
+          Bottom padding accounts for iOS home indicator on native; on
+          mobile web the bottom tab nav sits below this. */}
       <div
-        className="flex-shrink-0 sticky bottom-0 border-t border-slate-100 px-4 pt-3 bg-white"
+        className="flex-shrink-0 border-t border-slate-100 px-4 pt-3 bg-white"
         style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.75rem)' }}
       >
         {error && <p className="text-xs text-red-500 mb-2">{error}</p>}
