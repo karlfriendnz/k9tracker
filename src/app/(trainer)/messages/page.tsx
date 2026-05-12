@@ -129,19 +129,22 @@ export default async function MessagesPage({
     // chrome below PageHeader (tabs + list) flows seamlessly.
     <>
       <PageHeader title="Messages" />
-      <div
-        className="px-4 md:px-8 flex flex-col overflow-hidden h-[calc(100dvh-5rem-3rem)] md:h-[calc(100dvh-3rem)]"
-      >
-      <MessagesView
-        activeClients={activeClients}
-        inactiveClients={inactiveClients}
-        activeUnread={activeUnread}
-        inactiveUnread={inactiveUnread}
-        tab={tab}
-        selectedClient={selectedClient}
-        threadMessages={threadMessages}
-        currentUserId={session.user.id}
-      />
+      {/* Cap the two-pane content to the viewport minus the
+          PageHeader's height (69px). The page itself never scrolls;
+          the inner panes scroll internally. flex-1 alone wouldn't
+          constrain it because <main>'s parent uses min-h-screen, so
+          main grows to fit oversized content rather than capping. */}
+      <div className="flex flex-col overflow-hidden px-4 md:px-8 h-[calc(100dvh-5rem-69px)] md:h-[calc(100dvh-69px)]">
+        <MessagesView
+          activeClients={activeClients}
+          inactiveClients={inactiveClients}
+          activeUnread={activeUnread}
+          inactiveUnread={inactiveUnread}
+          tab={tab}
+          selectedClient={selectedClient}
+          threadMessages={threadMessages}
+          currentUserId={session.user.id}
+        />
       </div>
     </>
   )
