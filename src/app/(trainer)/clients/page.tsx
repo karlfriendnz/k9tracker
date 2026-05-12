@@ -181,7 +181,7 @@ export default async function ClientsPage({
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-4xl mx-auto">
+    <div className="p-4 md:p-8 w-full max-w-4xl xl:max-w-7xl mx-auto">
       <PageHeader
         title="Clients"
         subtitle={`${newCount > 0 ? `${newCount} new · ` : ''}${activeCount} active · ${inactiveCount} inactive`}

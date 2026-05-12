@@ -32,7 +32,7 @@ export default async function TemplateDetailPage({ params }: { params: Promise<{
   })
 
   return (
-    <div className="p-4 md:p-8 max-w-2xl mx-auto">
+    <div className="p-4 md:p-8 w-full max-w-2xl md:max-w-4xl xl:max-w-6xl mx-auto">
       <PageHeader
         title={template.name}
         subtitle={`${template.tasks.length} tasks`}

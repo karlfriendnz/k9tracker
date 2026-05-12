@@ -23,7 +23,7 @@ export default async function AchievementsPage() {
   })
 
   return (
-    <div className="p-4 md:p-8 max-w-3xl mx-auto">
+    <div className="p-4 md:p-8 w-full max-w-3xl md:max-w-5xl xl:max-w-7xl mx-auto">
       <PageHeader title="Achievements" />
       <p className="text-sm text-slate-500 mb-6">
         Build a catalogue of badges your clients can earn — first session completed, off-leash recall, 30-day streak, anything that fits your programme.

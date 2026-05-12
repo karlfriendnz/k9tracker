@@ -44,7 +44,7 @@ export default async function EnquiryDetailPage({ params }: { params: Promise<{ 
   const labelById = Object.fromEntries(fields.map(f => [f.id, f.label]))
 
   return (
-    <div className="p-4 md:p-8 max-w-3xl mx-auto">
+    <div className="p-4 md:p-8 w-full max-w-3xl md:max-w-5xl xl:max-w-7xl mx-auto">
       <PageHeader
         title="Enquiry"
         subtitle={`Submitted ${enquiry.createdAt.toLocaleString()}${enquiry.form ? ` via "${enquiry.form.title}"` : ''}`}

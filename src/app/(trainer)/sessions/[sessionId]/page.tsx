@@ -92,7 +92,7 @@ export default async function SessionPage({
     : []
 
   return (
-    <div className="p-4 md:p-8 max-w-3xl mx-auto">
+    <div className="p-4 md:p-8 w-full max-w-3xl lg:max-w-6xl xl:max-w-7xl mx-auto">
       <PageHeader
         title="Session"
         back={clientId ? { href: `/clients/${clientId}?tab=sessions`, label: 'Back to client' } : undefined}
@@ -104,24 +104,31 @@ export default async function SessionPage({
         }
       />
 
-      {/* Primary actions — Mark complete + Mark invoiced as big stacked
-          tap targets (icon top, label below). Preview and Delete live
-          inside the More menu in the sticky header above. */}
-      <div className="mb-4 flex items-stretch gap-2">
-        <MarkCompleteButton
-          sessionId={trainingSession.id}
-          initialStatus={trainingSession.status}
-          variant="stacked"
-        />
-        <MarkInvoicedButton
-          sessionId={trainingSession.id}
-          initialInvoicedAt={trainingSession.invoicedAt?.toISOString() ?? null}
-          variant="stacked"
-        />
-      </div>
+      {/* Desktop (lg+): two-column layout — left rail with the session's
+          metadata + primary actions, right column with the form report,
+          attachments, and library tasks. The rail is sticky so trainers
+          can scroll through long form responses without losing context.
+          Mobile/tablet keep the original single-column flow. */}
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] xl:gap-8 xl:items-start">
+        <aside className="flex flex-col gap-4 xl:sticky xl:top-4">
+          {/* Primary actions — Mark complete + Mark invoiced as big stacked
+              tap targets (icon top, label below). Preview and Delete live
+              inside the More menu in the sticky header above. */}
+          <div className="flex items-stretch gap-2">
+            <MarkCompleteButton
+              sessionId={trainingSession.id}
+              initialStatus={trainingSession.status}
+              variant="stacked"
+            />
+            <MarkInvoicedButton
+              sessionId={trainingSession.id}
+              initialInvoicedAt={trainingSession.invoicedAt?.toISOString() ?? null}
+              variant="stacked"
+            />
+          </div>
 
-      <Card className="mb-6">
-        <CardBody className="py-4 flex flex-col gap-2.5 text-sm">
+          <Card>
+            <CardBody className="py-4 flex flex-col gap-2.5 text-sm">
           {/* Identity stack — dog first (the trainer's emotional anchor),
               then the human, then the session label. In-person/virtual
               badge underneath on its own row. */}
@@ -191,11 +198,11 @@ export default async function SessionPage({
         </CardBody>
       </Card>
 
-      {/* Previous notes accordion — collapsed by default. Each past session
-          is its own row; opening a row reveals the trainer's intro/closing
-          messages and a summary of form answers from that session. */}
-      {previousSessions.length > 0 && (
-        <Card className="mb-6 overflow-hidden">
+          {/* Previous notes accordion — collapsed by default. Each past session
+              is its own row; opening a row reveals the trainer's intro/closing
+              messages and a summary of form answers from that session. */}
+          {previousSessions.length > 0 && (
+            <Card className="overflow-hidden">
           <details className="group">
             <summary className="cursor-pointer list-none px-5 py-3 flex items-center gap-3 hover:bg-slate-50">
               <History className="h-4 w-4 text-slate-400" />
@@ -246,48 +253,50 @@ export default async function SessionPage({
                 </details>
               ))}
             </div>
-          </details>
-        </Card>
-      )}
+              </details>
+            </Card>
+          )}
+        </aside>
 
-      {/* The form section overrides Card's padding so the questions/inputs
-          stretch the full width of the card. The header line above sets the
-          title; SessionFormReport itself supplies the dropdown or filler. */}
-      <Card className="overflow-hidden">
-        <SessionFormReport sessionId={trainingSession.id} layout="inline" autoPromptIfEmpty />
-      </Card>
+        <div className="flex flex-col gap-6 mt-6 xl:mt-0 min-w-0">
+          {/* The form section overrides Card's padding so the questions/inputs
+              stretch the full width of the card. The header line above sets the
+              title; SessionFormReport itself supplies the dropdown or filler. */}
+          <Card className="overflow-hidden">
+            <SessionFormReport sessionId={trainingSession.id} layout="inline" autoPromptIfEmpty />
+          </Card>
 
-      {/* Trainer-uploaded media. Sits between the form and the
-          library-tasks card so anything the trainer captures live in
-          a session is right next to the rest of their notes. */}
-      <Card className="mt-6">
-        <CardBody className="py-5">
-          <div className="flex items-center gap-2 mb-3">
-            <Paperclip className="h-4 w-4 text-slate-400" />
-            <h2 className="text-sm font-semibold text-slate-700">Attachments</h2>
-          </div>
-          <SessionAttachments
+          {/* Trainer-uploaded media. Sits between the form and the
+              library-tasks card so anything the trainer captures live in
+              a session is right next to the rest of their notes. */}
+          <Card>
+            <CardBody className="py-5">
+              <div className="flex items-center gap-2 mb-3">
+                <Paperclip className="h-4 w-4 text-slate-400" />
+                <h2 className="text-sm font-semibold text-slate-700">Attachments</h2>
+              </div>
+              <SessionAttachments
+                sessionId={trainingSession.id}
+                initialAttachments={trainingSession.attachments.map(a => ({
+                  id: a.id,
+                  kind: a.kind,
+                  url: a.url,
+                  thumbnailUrl: a.thumbnailUrl,
+                  caption: a.caption,
+                  sizeBytes: a.sizeBytes,
+                  durationMs: a.durationMs,
+                  createdAt: a.createdAt.toISOString(),
+                }))}
+              />
+            </CardBody>
+          </Card>
+
+          <SessionLibraryTasks
             sessionId={trainingSession.id}
-            initialAttachments={trainingSession.attachments.map(a => ({
-              id: a.id,
-              kind: a.kind,
-              url: a.url,
-              thumbnailUrl: a.thumbnailUrl,
-              caption: a.caption,
-              sizeBytes: a.sizeBytes,
-              durationMs: a.durationMs,
-              createdAt: a.createdAt.toISOString(),
-            }))}
+            clientId={clientId ?? null}
+            sessionDate={d.toISOString().split('T')[0]}
           />
-        </CardBody>
-      </Card>
-
-      <div className="mt-6">
-        <SessionLibraryTasks
-          sessionId={trainingSession.id}
-          clientId={clientId ?? null}
-          sessionDate={d.toISOString().split('T')[0]}
-        />
+        </div>
       </div>
     </div>
   )

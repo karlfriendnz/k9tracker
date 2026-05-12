@@ -164,7 +164,7 @@ export function PackagesView({
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-3xl mx-auto">
+    <div className="p-4 md:p-8 w-full max-w-3xl md:max-w-5xl xl:max-w-7xl mx-auto">
       <PageHeader
         title="Packages"
         actions={
