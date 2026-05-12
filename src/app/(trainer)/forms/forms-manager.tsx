@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Plus, X, Copy, Check, Trash2, Pencil, ExternalLink,
@@ -86,10 +86,17 @@ export function EmbedFormEditor({
   customFields: CustomField[]
 }) {
   const router = useRouter()
-  // Local URL helpers — only meaningful when initial exists.
-  const formUrl = typeof window !== 'undefined' && initial
-    ? `${window.location.origin}/form/${initial.id}`
-    : initial ? `/form/${initial.id}` : undefined
+  // Local URL helpers — only meaningful when initial exists. Computed
+  // in an effect (not during render) so SSR and the first client
+  // render produce the same HTML; reading `window.location.origin`
+  // inline would emit different markup and trigger a hydration
+  // mismatch warning that breaks event-handler attachment (which is
+  // why the save button + colour picker stopped responding).
+  const [formUrl, setFormUrl] = useState<string | undefined>(undefined)
+  useEffect(() => {
+    if (!initial) return
+    setFormUrl(`${window.location.origin}/form/${initial.id}`)
+  }, [initial])
   const embedSnippet = formUrl
     ? `<iframe src="${formUrl}" width="100%" height="700" style="border:none;border-radius:12px;" title="Registration form"></iframe>`
     : undefined
