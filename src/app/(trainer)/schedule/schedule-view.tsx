@@ -11,7 +11,7 @@ import { Card, CardBody } from '@/components/ui/card'
 import { Alert } from '@/components/ui/alert'
 import Link from 'next/link'
 import {
-  ChevronLeft, ChevronRight, Plus, Calendar, LayoutGrid, List,
+  ChevronLeft, ChevronRight, Plus, Calendar, CalendarDays, Columns3, List,
   Clock, Trash2, X, MapPin, Video, ExternalLink, Loader2, Play, Pencil, AlertTriangle, Search, BarChart2,
 } from 'lucide-react'
 import {
@@ -504,6 +504,7 @@ function WeekGrid({
   matchedIds,
   searchActive,
   onAdvanceWeek,
+  forceFullWeek = false,
 }: {
   weekDays: Date[]
   sessions: Session[]
@@ -528,6 +529,10 @@ function WeekGrid({
   // local state so the next render lands at the right end of the new
   // week (start when spilling forward, end when spilling backward).
   onAdvanceWeek?: (delta: 1 | -1) => void
+  // When true, skip the mobile 3-day windowing and render every day in
+  // weekDays even on a phone. Lets trainers see the whole configured
+  // week at a glance on mobile (the "Week" view option).
+  forceFullWeek?: boolean
 }) {
   const hours = Array.from({ length: endHour - startHour }, (_, i) => startHour + i)
   const gridRef = useRef<HTMLDivElement>(null)
@@ -617,14 +622,18 @@ function WeekGrid({
     }
   }
 
-  const visibleDays = isMobile
+  // 3-day windowing is mobile-only AND only when the parent hasn't asked
+  // for a full-week render. The new "Week" view on mobile sets
+  // forceFullWeek=true so phones can see every configured day in one grid.
+  const useThreeDayWindow = isMobile && !forceFullWeek
+  const visibleDays = useThreeDayWindow
     ? weekDays.slice(mobileDayStart, mobileDayStart + 3)
     : weekDays
   // Both buttons stay enabled when onAdvanceWeek is wired — the spill
   // handler takes the user into the next/previous week. Without an
   // advance callback the buttons clamp to the current week's edges.
-  const canMobilePrev = isMobile && (mobileDayStart > 0 || !!onAdvanceWeek)
-  const canMobileNext = isMobile && (mobileDayStart + 3 < weekDays.length || !!onAdvanceWeek)
+  const canMobilePrev = useThreeDayWindow && (mobileDayStart > 0 || !!onAdvanceWeek)
+  const canMobileNext = useThreeDayWindow && (mobileDayStart + 3 < weekDays.length || !!onAdvanceWeek)
 
   // ── Drag state ──────────────────────────────────────────────────────────────
   const [dragging, setDragging] = useState<{
@@ -729,8 +738,10 @@ function WeekGrid({
     <div className="h-full flex flex-col bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
       {/* Mobile 3-day window navigator — sits above the day headers so the
           trainer can step through the week in 3-day chunks. The week-level
-          date nav (in the page header) still moves between weeks. */}
-      {isMobile && weekDays.length > 3 && (
+          date nav (in the page header) still moves between weeks. Hidden
+          when forceFullWeek is on (mobile "Week" view) since every day is
+          already visible. */}
+      {useThreeDayWindow && weekDays.length > 3 && (
         <div className="flex items-center justify-between px-3 py-1.5 border-b border-slate-100 bg-slate-50">
           <button
             onClick={handleMobilePrev}
@@ -2503,8 +2514,16 @@ export function ScheduleView({
   )
   const router = useRouter()
 
-  // Default: week on desktop, day on mobile
-  const [view, setView] = useState<'day' | 'week'>('week')
+  // View modes:
+  //  • day      — single-day list
+  //  • threeDay — 3-day grid window (mobile only; the on-phone default that
+  //               originally shipped as "week")
+  //  • week     — full configured week as a grid (all days from
+  //               scheduleDays). On phones this means a squished multi-column
+  //               grid; trainers asked for it as an extra mobile option so
+  //               they can scan the whole week without paging.
+  // Default: week on desktop, day on mobile.
+  const [view, setView] = useState<'day' | 'threeDay' | 'week'>('week')
   useEffect(() => {
     if (window.innerWidth < 768) setView('day')
   }, [])
@@ -2596,7 +2615,7 @@ export function ScheduleView({
   const navSeq = useRef(0)
   async function navigate(delta: number) {
     let nextDateStr: string
-    if (view === 'week') {
+    if (view === 'week' || view === 'threeDay') {
       const monday = getMondayOf(selectedDate)
       nextDateStr = toDateStr(addDays(monday, delta * 7))
     } else {
@@ -2784,7 +2803,7 @@ export function ScheduleView({
             <ChevronLeft className="h-4 w-4" />
           </button>
           <div className="flex-1 sm:flex-initial sm:min-w-[8rem] text-center">
-            {view === 'week' ? (
+            {view === 'week' || view === 'threeDay' ? (
               <p className="font-semibold text-slate-900 text-sm tabular-nums">
                 {weekStart.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })} – {addDays(weekStart, 6).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short' })}
               </p>
@@ -2886,9 +2905,10 @@ export function ScheduleView({
             customFields={customFields}
           />
 
-          {/* Day/Week toggle (icon-only) — fixed-size squares so both
-              buttons render at the exact same dimensions regardless of
-              icon viewBox quirks. */}
+          {/* Day / 3-Day / Week toggle (icon-only) — fixed-size squares so
+              every button renders at the exact same dimensions regardless of
+              icon viewBox quirks. The 3-day button is mobile-only because
+              the full-week grid already fits comfortably on tablet+. */}
           <div className="flex p-0.5 bg-slate-100 rounded-xl gap-0.5">
             <button
               onClick={() => setView('day')}
@@ -2899,12 +2919,20 @@ export function ScheduleView({
               <List className="h-3.5 w-3.5" />
             </button>
             <button
+              onClick={() => setView('threeDay')}
+              title="3-day view"
+              aria-label="3-day view"
+              className={`sm:hidden flex h-7 w-7 items-center justify-center rounded-lg transition-all ${view === 'threeDay' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
+            >
+              <Columns3 className="h-3.5 w-3.5" />
+            </button>
+            <button
               onClick={() => setView('week')}
               title="Week view"
               aria-label="Week view"
               className={`flex h-7 w-7 items-center justify-center rounded-lg transition-all ${view === 'week' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
             >
-              <LayoutGrid className="h-3.5 w-3.5" />
+              <CalendarDays className="h-3.5 w-3.5" />
             </button>
           </div>
         </div>
@@ -2966,7 +2994,7 @@ export function ScheduleView({
 
       {/* ── Main content ─────────────────────────────────────────────────────── */}
       <div className="flex-1 overflow-hidden px-4 md:px-6 py-4">
-        {view === 'week' ? (
+        {view === 'week' || view === 'threeDay' ? (
           <WeekGrid
             weekDays={weekDays}
             sessions={sessions}
@@ -2986,6 +3014,7 @@ export function ScheduleView({
             matchedIds={matchedIds}
             searchActive={searchTokens.length > 0}
             onAdvanceWeek={navigate}
+            forceFullWeek={view === 'week'}
           />
         ) : (
           <DayList
