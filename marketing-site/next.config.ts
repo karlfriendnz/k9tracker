@@ -6,10 +6,10 @@ const projectRoot = path.resolve('.')
 
 const nextConfig: NextConfig = {
   pageExtensions: ['ts', 'tsx', 'md', 'mdx'],
-  // Pin to this subdir so Vercel's monorepo detection doesn't scan the
-  // sibling main app at the repo root (which has next-auth, src/proxy.ts,
-  // src/instrumentation.ts — none of which are deps of the marketing site).
-  outputFileTracingRoot: projectRoot,
+  // Pin Turbopack to this subdir so it doesn't walk up to the sibling main
+  // app at the repo root (which has next-auth, src/proxy.ts, src/instrumentation.ts).
+  // Note: outputFileTracingRoot is intentionally NOT set — pinning it confused
+  // Vercel's post-build manifest lookup (expected .next at repo root).
   turbopack: {
     root: projectRoot,
   },
