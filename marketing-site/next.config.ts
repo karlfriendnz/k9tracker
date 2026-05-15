@@ -3,13 +3,16 @@ import createMDX from '@next/mdx'
 import path from 'path'
 
 const projectRoot = path.resolve('.')
+const repoRoot = path.resolve('..')
 
 const nextConfig: NextConfig = {
   pageExtensions: ['ts', 'tsx', 'md', 'mdx'],
-  // Pin Turbopack to this subdir so it doesn't walk up to the sibling main
-  // app at the repo root (which has next-auth, src/proxy.ts, src/instrumentation.ts).
-  // Note: outputFileTracingRoot is intentionally NOT set — pinning it confused
-  // Vercel's post-build manifest lookup (expected .next at repo root).
+  // Monorepo split: Turbopack root must be this subdir (otherwise it scans
+  // the sibling main app and tries to compile its next-auth proxy.ts).
+  // outputFileTracingRoot stays at repo root so Vercel's post-build manifest
+  // lookup (looks at /vercel/path0/.next/routes-manifest-deterministic.json)
+  // finds the file where it expects.
+  outputFileTracingRoot: repoRoot,
   turbopack: {
     root: projectRoot,
   },
