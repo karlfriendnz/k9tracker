@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { safeEvaluate } from '@/lib/achievements'
+import { touchTrainerActivity } from '@/lib/trainer-streak'
 import { z } from 'zod'
 
 const patchSchema = z.object({
@@ -183,6 +184,10 @@ export async function PATCH(
     const cid = ctx?.clientId ?? ctx?.dog?.primaryFor[0]?.id ?? null
     await safeEvaluate(cid)
   }
+
+  // Engagement streak: editing/completing a session is a qualifying
+  // weekly action. Fire-and-forget — never block the response.
+  void touchTrainerActivity(trainerId)
 
   return NextResponse.json(updated)
 }

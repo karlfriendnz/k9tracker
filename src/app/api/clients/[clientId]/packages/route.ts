@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { getClientAccess } from '@/lib/trainer-access'
 import { safeEvaluate } from '@/lib/achievements'
+import { touchTrainerActivity } from '@/lib/trainer-streak'
 import { z } from 'zod'
 
 // Returns the client's active package assignments. Used by the session
@@ -148,6 +149,10 @@ export async function POST(
 
   // FIRST_PACKAGE_ASSIGNED trigger fires here.
   await safeEvaluate(clientId)
+
+  // Trainer engagement streak — assigning a package is a qualifying
+  // weekly action. Fire-and-forget.
+  void touchTrainerActivity(trainerId)
 
   return NextResponse.json(
     { ok: true, assignmentId: created.id, count: sessionDates.length },
