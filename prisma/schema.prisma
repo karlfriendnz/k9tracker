@@ -342,6 +342,7 @@ model TrainerProfile {
   achievements       Achievement[]
   classRuns          ClassRun[]
   waitlistEntries    WaitlistEntry[]
+  bookingRequests    BookingRequest[]
   onboardingProgress TrainerOnboardingProgress?
 
   @@map("trainer_profiles")
@@ -372,6 +373,7 @@ model ClientProfile {
   trainingSessions  TrainingSession[]
   classEnrollments  ClassEnrollment[]
   waitlistEntries   WaitlistEntry[]
+  bookingRequests   BookingRequest[]
   shares            ClientShare[]
   messages          Message[]            @relation("ClientMessages")
   customFieldValues CustomFieldValue[]
@@ -688,6 +690,12 @@ model Package {
   allowWaitlist        Boolean     @default(false)
   // Exposed on the public embed surface for client self-enrolment.
   publicEnrollment     Boolean     @default(false)
+  // Client self-booking from their availability tab. clientSelfBook
+  // opts the package in; selfBookRequiresApproval gates whether the
+  // pick creates a pending BookingRequest (true) or books instantly
+  // (false). Only meaningful when clientSelfBook is true.
+  clientSelfBook           Boolean @default(false)
+  selfBookRequiresApproval Boolean @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -696,6 +704,7 @@ model Package {
   assignments        ClientPackage[]
   classRuns          ClassRun[]
   waitlistEntries    WaitlistEntry[]
+  bookingRequests    BookingRequest[]
   defaultSessionForm SessionForm?    @relation("PackageDefaultSessionForm", fields: [defaultSessionFormId], references: [id], onDelete: SetNull)
 
   @@index([trainerId])
@@ -885,6 +894,44 @@ model WaitlistEntry {
   @@index([clientId])
   @@index([packageId])
   @@map("waitlist_entries")
+}
+
+// ─── Client self-booking ──────────────────────────────────────────────────────
+// A client self-booked a package from their availability tab. For
+// approval-required packages this row is PENDING until the trainer
+// confirms (then it spawns a ClientPackage + sessions). Instant-book
+// packages skip this model entirely and create the booking directly.
+
+enum BookingRequestStatus {
+  PENDING
+  CONFIRMED
+  DECLINED
+}
+
+model BookingRequest {
+  id        String               @id @default(cuid())
+  trainerId String
+  clientId  String
+  packageId String
+  dogId     String?
+  // Proposed session datetimes (ISO strings), generated from the
+  // client's chosen start on the package cadence. The trainer can
+  // adjust on the calendar after confirming.
+  sessionDates Json               @default("[]")
+  status       BookingRequestStatus @default(PENDING)
+  note         String?            @db.Text
+  // Set on confirm — links to the created assignment for traceability.
+  resultingClientPackageId String?
+  createdAt DateTime @default(now())
+  decidedAt DateTime?
+
+  trainer TrainerProfile @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  client  ClientProfile  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  package Package        @relation(fields: [packageId], references: [id], onDelete: Cascade)
+
+  @@index([trainerId, status])
+  @@index([clientId])
+  @@map("booking_requests")
 }
 
 // ─── Session report forms ─────────────────────────────────────────────────────
