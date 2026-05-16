@@ -8,6 +8,10 @@
 import { prisma } from './prisma'
 import type { Prisma, PrismaClient } from '@/generated/prisma'
 
+// Re-exported so server code can keep importing it from here; the flag
+// itself lives in the client-safe feature-flags module.
+export { PUBLIC_CLASS_ENROLLMENT_ENABLED } from './feature-flags'
+
 // ─── Pure logic (no DB — unit-tested in tests/unit/class-runs.test.ts) ───────
 
 /**

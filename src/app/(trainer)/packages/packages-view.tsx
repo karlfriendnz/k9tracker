@@ -11,6 +11,7 @@ import { Card, CardBody } from '@/components/ui/card'
 import { Alert } from '@/components/ui/alert'
 import { Plus, Package as PackageIcon, Pencil, Trash2, X, GripVertical } from 'lucide-react'
 import { PageHeader } from '@/components/shared/page-header'
+import { PUBLIC_CLASS_ENROLLMENT_ENABLED } from '@/lib/feature-flags'
 import {
   DndContext,
   PointerSensor,
@@ -591,13 +592,15 @@ function PackageModal({
                 </div>
               )}
 
-              <label className="flex items-start gap-3 cursor-pointer">
-                <input type="checkbox" checked={publicEnrollment} onChange={e => setPublicEnrollment(e.target.checked)} className="h-4 w-4 mt-0.5" />
-                <span className="flex-1 min-w-0">
-                  <span className="block text-sm font-medium text-slate-700">Let clients self-enrol from your embed form</span>
-                  <span className="block text-[11px] text-slate-400 mt-0.5">Open runs show publicly; requests arrive as enquiries for you to accept.</span>
-                </span>
-              </label>
+              {PUBLIC_CLASS_ENROLLMENT_ENABLED && (
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input type="checkbox" checked={publicEnrollment} onChange={e => setPublicEnrollment(e.target.checked)} className="h-4 w-4 mt-0.5" />
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-sm font-medium text-slate-700">Let clients self-enrol from your embed form</span>
+                    <span className="block text-[11px] text-slate-400 mt-0.5">Open runs show publicly; requests arrive as enquiries for you to accept.</span>
+                  </span>
+                </label>
+              )}
             </div>
           )}
 

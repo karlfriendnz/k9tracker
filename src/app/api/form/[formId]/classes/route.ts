@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import { notifyEnquiryTrainer } from '@/lib/notify-enquiry-trainer'
-import { effectiveCapacity, seatsRemaining } from '@/lib/class-runs'
+import { effectiveCapacity, seatsRemaining, PUBLIC_CLASS_ENROLLMENT_ENABLED } from '@/lib/class-runs'
 
 // Public (unauthenticated) class self-enrolment, reached via an embed
 // form. Mirrors the form-submit pattern: we never create an account or
@@ -21,6 +21,9 @@ async function trainerForForm(formId: string) {
 
 // GET — open, publicly-enrollable runs for this form's trainer + seats.
 export async function GET(_req: Request, { params }: { params: Promise<{ formId: string }> }) {
+  if (!PUBLIC_CLASS_ENROLLMENT_ENABLED) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
   const { formId } = await params
   const form = await trainerForForm(formId)
   if (!form) return NextResponse.json({ error: 'Form not found' }, { status: 404 })
@@ -69,6 +72,9 @@ const schema = z.object({
 })
 
 export async function POST(req: Request, { params }: { params: Promise<{ formId: string }> }) {
+  if (!PUBLIC_CLASS_ENROLLMENT_ENABLED) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
   const { formId } = await params
   const form = await trainerForForm(formId)
   if (!form) return NextResponse.json({ error: 'Form not found' }, { status: 404 })

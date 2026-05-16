@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
-import { effectiveCapacity, seatsRemaining } from '@/lib/class-runs'
+import { effectiveCapacity, seatsRemaining, PUBLIC_CLASS_ENROLLMENT_ENABLED } from '@/lib/class-runs'
 import { PublicClasses } from './public-classes'
 
 // Public, unauthenticated class listing reached from a trainer's embed
@@ -12,6 +12,9 @@ export default async function PublicClassesPage({
 }: {
   params: Promise<{ formId: string }>
 }) {
+  // Public class self-enrolment is hidden for now — 404 the page.
+  if (!PUBLIC_CLASS_ENROLLMENT_ENABLED) notFound()
+
   const { formId } = await params
 
   const form = await prisma.embedForm.findFirst({
