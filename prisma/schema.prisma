@@ -341,6 +341,7 @@ model TrainerProfile {
   products           Product[]
   achievements       Achievement[]
   classRuns          ClassRun[]
+  waitlistEntries    WaitlistEntry[]
   onboardingProgress TrainerOnboardingProgress?
 
   @@map("trainer_profiles")
@@ -370,6 +371,7 @@ model ClientProfile {
   diaryEntries      TrainingTask[]
   trainingSessions  TrainingSession[]
   classEnrollments  ClassEnrollment[]
+  waitlistEntries   WaitlistEntry[]
   shares            ClientShare[]
   messages          Message[]            @relation("ClientMessages")
   customFieldValues CustomFieldValue[]
@@ -693,6 +695,7 @@ model Package {
   trainer            TrainerProfile  @relation(fields: [trainerId], references: [id], onDelete: Cascade)
   assignments        ClientPackage[]
   classRuns          ClassRun[]
+  waitlistEntries    WaitlistEntry[]
   defaultSessionForm SessionForm?    @relation("PackageDefaultSessionForm", fields: [defaultSessionFormId], references: [id], onDelete: SetNull)
 
   @@index([trainerId])
@@ -828,6 +831,60 @@ model SessionAttendance {
   @@index([sessionId])
   @@index([enrollmentId])
   @@map("session_attendance")
+}
+
+// ─── General scheduling waitlist ──────────────────────────────────────────────
+// Trainer-wide list of people the trainer wants to take on but has no
+// availability for yet. Distinct from the per-ClassRun waitlist (which
+// means a specific cohort is full). The subject can be an existing client
+// OR a prospect (contact snapshot, like an unlinked Enquiry).
+
+enum WaitlistStatus {
+  WAITING
+  CONTACTED // trainer has reached out, not yet booked
+  SCHEDULED // converted into a booking
+  REMOVED   // no longer waiting (declined / went elsewhere)
+}
+
+model WaitlistEntry {
+  id        String         @id @default(cuid())
+  trainerId String
+  // Optional link to an existing client. When null this is a prospect —
+  // name is always set; email/phone are the contact snapshot.
+  clientId  String?
+  name      String
+  email     String?
+  phone     String?
+  // What they want. packageId = a specific package of interest (optional);
+  // request = freeform ("6-week reactive course, weekday evenings").
+  packageId   String?
+  request     String?      @db.Text
+  sessionType SessionType?
+  // Time preferences for matching to openings. preferredDays holds
+  // ISO weekday numbers (1=Mon … 7=Sun); empty = any day. The time
+  // window mirrors AvailabilitySlot's "HH:MM" 24-hr strings.
+  preferredDays     Int[]      @default([])
+  preferredTimeStart String?   // "HH:MM" or null = any
+  preferredTimeEnd   String?   // "HH:MM" or null = any
+  earliestStart     DateTime?  @db.Date
+  notes             String?    @db.Text
+  // Manual ordering — lower = higher priority (top of the list).
+  priority    Int            @default(0)
+  status      WaitlistStatus @default(WAITING)
+  contactedAt DateTime?
+  convertedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  trainer TrainerProfile @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  client  ClientProfile? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  package Package?       @relation(fields: [packageId], references: [id], onDelete: SetNull)
+
+  @@index([trainerId, status])
+  @@index([clientId])
+  @@index([packageId])
+  @@map("waitlist_entries")
 }
 
 // ─── Session report forms ─────────────────────────────────────────────────────
