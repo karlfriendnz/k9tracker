@@ -15,6 +15,12 @@ const updateSchema = z.object({
   color: z.enum(['blue', 'emerald', 'amber', 'rose', 'purple', 'orange', 'teal', 'indigo', 'pink', 'cyan']).nullable().optional(),
   defaultSessionFormId: z.string().nullable().optional(),
   requireSessionNotes: z.boolean().optional(),
+  isGroup: z.boolean().optional(),
+  capacity: z.number().int().min(0).max(1000).nullable().optional(),
+  allowDropIn: z.boolean().optional(),
+  dropInPriceCents: z.number().int().min(0).max(10_000_000).nullable().optional(),
+  allowWaitlist: z.boolean().optional(),
+  publicEnrollment: z.boolean().optional(),
 })
 
 async function ownPackage(packageId: string, trainerId: string) {

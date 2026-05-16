@@ -19,6 +19,14 @@ const schema = z.object({
   color: z.enum(['blue', 'emerald', 'amber', 'rose', 'purple', 'orange', 'teal', 'indigo', 'pink', 'cyan']).nullable().optional(),
   defaultSessionFormId: z.string().nullable().optional(),
   requireSessionNotes: z.boolean().optional(),
+  // Group-class config. isGroup flips this package from the 1:1
+  // ClientPackage path to the ClassRun (cohort) path.
+  isGroup: z.boolean().optional(),
+  capacity: z.number().int().min(0).max(1000).nullable().optional(),
+  allowDropIn: z.boolean().optional(),
+  dropInPriceCents: z.number().int().min(0).max(10_000_000).nullable().optional(),
+  allowWaitlist: z.boolean().optional(),
+  publicEnrollment: z.boolean().optional(),
 })
 
 export async function GET() {
@@ -69,6 +77,12 @@ export async function POST(req: Request) {
       color: parsed.data.color ?? null,
       defaultSessionFormId: parsed.data.defaultSessionFormId ?? null,
       requireSessionNotes: parsed.data.requireSessionNotes ?? true,
+      isGroup: parsed.data.isGroup ?? false,
+      capacity: parsed.data.capacity ?? null,
+      allowDropIn: parsed.data.allowDropIn ?? false,
+      dropInPriceCents: parsed.data.dropInPriceCents ?? null,
+      allowWaitlist: parsed.data.allowWaitlist ?? false,
+      publicEnrollment: parsed.data.publicEnrollment ?? false,
       order: nextOrder,
     },
   })
