@@ -4,6 +4,7 @@ import { getActiveClient } from '@/lib/client-context'
 import { todayInTz } from '@/lib/timezone'
 import { slotAppliesOnDate, isBlackoutDate, type AvailabilityRow, type BlackoutRow } from '@/lib/availability'
 import { Clock } from 'lucide-react'
+import { SelfBookCta } from './self-book-cta'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Availability' }
@@ -195,6 +196,8 @@ export default async function MyAvailabilityPage() {
       <p className="text-sm text-slate-500 mt-1">
         Open times from <span className="font-medium text-slate-700">{profile.trainer.businessName}</span> over the next four weeks.
       </p>
+
+      <SelfBookCta />
 
       {!hasAnyOpenTime ? (
         <div className="mt-10 flex flex-col items-center justify-center text-center">

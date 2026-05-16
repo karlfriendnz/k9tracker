@@ -47,6 +47,8 @@ export default async function PackagesPage() {
         dropInPriceCents: p.dropInPriceCents,
         allowWaitlist: p.allowWaitlist,
         publicEnrollment: p.publicEnrollment,
+        clientSelfBook: p.clientSelfBook,
+        selfBookRequiresApproval: p.selfBookRequiresApproval,
         assignments: p._count.assignments,
       }))}
       sessionForms={sessionForms}

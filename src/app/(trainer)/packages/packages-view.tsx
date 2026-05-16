@@ -64,6 +64,8 @@ interface PkgRow {
   dropInPriceCents?: number | null
   allowWaitlist?: boolean
   publicEnrollment?: boolean
+  clientSelfBook?: boolean
+  selfBookRequiresApproval?: boolean
   assignments: number
 }
 
@@ -349,6 +351,9 @@ function PackageModal({
   const [dropInPrice, setDropInPrice] = useState<string>(centsToDollars(existing?.dropInPriceCents ?? null))
   const [allowWaitlist, setAllowWaitlist] = useState<boolean>(existing?.allowWaitlist ?? false)
   const [publicEnrollment, setPublicEnrollment] = useState<boolean>(existing?.publicEnrollment ?? false)
+  // Client self-booking (independent of group classes).
+  const [clientSelfBook, setClientSelfBook] = useState<boolean>(existing?.clientSelfBook ?? false)
+  const [selfBookRequiresApproval, setSelfBookRequiresApproval] = useState<boolean>(existing?.selfBookRequiresApproval ?? true)
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: existing
@@ -389,6 +394,8 @@ function PackageModal({
         dropInPriceCents: isGroup && allowDropIn ? dollarsToCents(dropInPrice) : null,
         allowWaitlist: isGroup && allowWaitlist,
         publicEnrollment: isGroup && publicEnrollment,
+        clientSelfBook,
+        selfBookRequiresApproval,
       }),
     })
     if (!res.ok) { setError('Failed to save.'); return }
@@ -413,6 +420,8 @@ function PackageModal({
         dropInPriceCents: saved.dropInPriceCents ?? null,
         allowWaitlist: saved.allowWaitlist ?? false,
         publicEnrollment: saved.publicEnrollment ?? false,
+        clientSelfBook: saved.clientSelfBook ?? false,
+        selfBookRequiresApproval: saved.selfBookRequiresApproval ?? true,
         assignments: existing?.assignments ?? 0,
       },
       !existing
@@ -602,6 +611,39 @@ function PackageModal({
                 </label>
               )}
             </div>
+          )}
+
+          {/* ─── Client self-booking ─────────────────────────────────── */}
+          <label className="flex items-start gap-3 rounded-xl border border-slate-200 px-3 py-2.5 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={clientSelfBook}
+              onChange={e => setClientSelfBook(e.target.checked)}
+              className="h-4 w-4 mt-0.5"
+            />
+            <span className="flex-1 min-w-0">
+              <span className="block text-sm font-medium text-slate-700">Let clients self-book this from their availability tab</span>
+              <span className="block text-[11px] text-slate-400 mt-0.5">
+                Clients pick a start time from your real openings; the rest auto-place on the package cadence.
+              </span>
+            </span>
+          </label>
+
+          {clientSelfBook && (
+            <label className="flex items-start gap-3 rounded-xl border border-blue-100 bg-blue-50/40 px-3 py-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={selfBookRequiresApproval}
+                onChange={e => setSelfBookRequiresApproval(e.target.checked)}
+                className="h-4 w-4 mt-0.5"
+              />
+              <span className="flex-1 min-w-0">
+                <span className="block text-sm font-medium text-slate-700">Require my approval before it&apos;s booked</span>
+                <span className="block text-[11px] text-slate-400 mt-0.5">
+                  On: the client&apos;s pick is a request you confirm. Off: it books instantly onto your calendar.
+                </span>
+              </span>
+            </label>
           )}
 
           <div>
